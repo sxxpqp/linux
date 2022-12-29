@@ -56,7 +56,34 @@ echo \
 sudo apt-get update
 sudo apt-get install docker-ce
 ```
-Fedora/CentOS/RHEL
+### ubuntu
+
+信任 Docker 的 GPG 公钥:
+
+
+
+```
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+```
+
+添加软件仓库:
+
+
+
+```bash
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.tuna.tsinghua.edu.cn/docker-ce/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+```
+
+最后安装
+
+```
+sudo apt-get update
+sudo apt-get install docker-ce
+```
+
+### Fedora/CentOS/RHEL
 以下内容根据 官方文档 修改而来。
 
 如果你之前安装过 docker，请先删掉
