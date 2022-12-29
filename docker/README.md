@@ -12,18 +12,19 @@ export DOWNLOAD_URL="https://mirrors.tuna.tsinghua.edu.cn/docker-ce"
 ```
 
 
-# 如您使用 curl
+### 如您使用 curl
 ```
 curl -fsSL https://get.docker.com/ | sh
 ```
 
 
-# 如您使用 wget
+### 如您使用 wget
 ```
 wget -O- https://get.docker.com/ | sh
 ```
 
 ### Debian/Ubuntu 用户
+
 以下内容根据 官方文档 修改而来。
 
 如果你过去安装过 docker，先删掉:
@@ -37,6 +38,7 @@ sudo apt-get remove docker docker-engine docker.io containerd runc
 sudo apt-get install apt-transport-https ca-certificates curl gnupg2 software-properties-common
 ```
 ### 根据你的发行版，下面的内容有所不同。你使用的发行版： 
+
 ### Debian
 信任 Docker 的 GPG 公钥:
 

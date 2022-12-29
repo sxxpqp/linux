@@ -1,6 +1,9 @@
 ## 关于centos的日常总结及分享
 
+## 更换yum源
+
 ### 对于 CentOS 7
+
 ```
 sudo sed -e 's|^mirrorlist=|#mirrorlist=|g' -e 's|^#baseurl=http://mirror.centos.org|baseurl=https://mirrors.tuna.tsinghua.edu.cn|g' -i.bak /etc/yum.repos.d/CentOS-*.repo
 ```
