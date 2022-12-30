@@ -1,6 +1,6 @@
 ## 关于docker的日常总结及分享
-## 自动安装
-**Docker 提供了一个自动配置与安装的脚本，支持 Debian、RHEL、SUSE 系列及衍生系统的安装。**
+### 自动安装
+**Docker** 提供了一个自动配置与安装的脚本，支持 Debian、RHEL、SUSE 系列及衍生系统的安装。
 
 以下内容假定
 
@@ -12,18 +12,18 @@ export DOWNLOAD_URL="https://mirrors.tuna.tsinghua.edu.cn/docker-ce"
 ```
 
 
-### 如您使用 curl
+#### 如您使用 curl
 ```
 curl -fsSL https://get.docker.com/ | sh
 ```
 
 
-### 如您使用 wget
+#### 如您使用 wget
 ```
 wget -O- https://get.docker.com/ | sh
 ```
 
-### Debian/Ubuntu 用户
+#### Debian/Ubuntu 用户
 
 以下内容根据 官方文档 修改而来。
 
@@ -37,9 +37,9 @@ sudo apt-get remove docker docker-engine docker.io containerd runc
 ```
 sudo apt-get install apt-transport-https ca-certificates curl gnupg2 software-properties-common
 ```
-### 根据你的发行版，下面的内容有所不同。你使用的发行版： 
+**根据你的发行版，下面的内容有所不同。你使用的发行版：** 
 
-### Debian
+#### Debian
 信任 Docker 的 GPG 公钥:
 
 ```
@@ -58,7 +58,7 @@ echo \
 sudo apt-get update
 sudo apt-get install docker-ce
 ```
-### ubuntu
+#### ubuntu
 
 信任 Docker 的 GPG 公钥:
 
@@ -85,7 +85,7 @@ sudo apt-get update
 sudo apt-get install docker-ce
 ```
 
-### Fedora/CentOS/RHEL
+#### Fedora/CentOS/RHEL
 以下内容根据 官方文档 修改而来。
 
 如果你之前安装过 docker，请先删掉
@@ -99,7 +99,7 @@ sudo yum remove docker docker-client docker-client-latest docker-common docker-l
 sudo yum install -y yum-utils device-mapper-persistent-data lvm2
 ```
 根据你的发行版下载repo文件: 
-### CentOS/RHEL
+#### CentOS/RHEL
 ```
 yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 ```
@@ -114,3 +114,114 @@ sudo sed -i 's+download.docker.com+mirrors.tuna.tsinghua.edu.cn/docker-ce+' /etc
 sudo yum makecache fast
 sudo yum install docker-ce
 ```
+
+
+
+### 配置docker镜像加速器
+
+针对Docker客户端版本大于 1.10.0 的用户
+
+您可以通过修改daemon配置文件/etc/docker/daemon.json来使用加速器
+
+```
+sudo mkdir -p /etc/docker
+sudo tee /etc/docker/daemon.json <<-'EOF'
+{
+"registry-mirrors": ["https://egkr0rl5.mirror.aliyuncs.com"],
+"insecure-registries":["harbor.iot.store:8085"],
+"log-driver":"json-file",
+"log-opts": {"max-size":"500m", "max-file":"3"}
+}
+EOF
+sudo systemctl daemon-reload
+sudo systemctl reload docker
+sudo docker info
+```
+
+### **解决 Docker 日志文件太大的问题**
+
+编辑文件/etc/docker/daemon.json, 增加以下日志的配置
+
+```
+"log-driver":"json-file",
+"log-opts": {"max-size":"500m", "max-file":"3"}
+```
+
+max-size=500m，意味着一个容器日志大小上限是500M，
+max-file=3，意味着一个容器有三个日志，分别是id+.json、id+1.json、id+2.json。
+
+查看docker日志的大小容器的排序
+
+```
+docker system ps
+```
+
+```
+sudo du -d1 -h /var/lib/docker/containers | sort -h
+```
+
+清理容器的日志
+
+```
+echo >xxx.log
+```
+
+### 删除容器镜像
+
+```
+docker image prune
+```
+
+### docker文件目录/var/lib/docker过大 
+
+**迁移数据到/data/**
+
+```
+systemctl stop docker
+systemctl stop docker.socket
+```
+
+```
+mv /var/lib/docker /data/
+```
+
+```
+ln -s /data/docker /var/lib/docker
+```
+
+```
+systemctl start docker
+```
+
+### ssh实现免密登陆
+
+访问主机生产公钥 ~/.ssh/id_rsa.pub
+
+```
+ssh-keygen
+```
+
+复制公钥到被控主机上
+
+```
+ssh-copy-id user@server
+ssh-copy-id -i ~/.ssh/id_rsa.pub user@server
+
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/authorized_keys
+```
+
+### 查看linux的cpu和内存排序
+
+内存排序
+
+```
+ ps aux |grep -v USER | sort -nk +4 | tail 
+```
+
+cpu排序
+
+```
+ ps aux |grep -v USER | sort -nk +3 | tail 
+```
+
