@@ -1,6 +1,8 @@
 ## 关于kubesphere的日常总结及分享
 
-### kubesphere host集群配置文件
+### 多集群管理
+
+#### kubesphere host集群配置文件
 
 ```
 apiVersion: installer.kubesphere.io/v1alpha1
@@ -122,13 +124,13 @@ spec:
 
 ```
 
-### 获取主集群的jwtSecret
+#### 获取主集群的jwtSecret
 
 ```
 kubectl -n kubesphere-system get cm kubesphere-config -o yaml | grep -v "apiVersion" | grep jwtSecret
 ```
 
-### 成员集群添加步骤
+#### 成员集群添加步骤
 
 修改ks-installer配置文件
 
@@ -149,3 +151,4 @@ authentication:
 multicluster:
   clusterRole: member
 ```
+
