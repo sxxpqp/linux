@@ -94,3 +94,5 @@ kubectl completion bash | sudo tee /etc/bash_completion.d/kubectl > /dev/null
 echo 'alias k=kubectl' >>~/.bashrc
 echo 'complete -o default -F __start_kubectl k' >>~/.bashrc
 ```
+
+**env和set的区别是，set命令可以查看所有变量，而env命令只能查看环境变量**
