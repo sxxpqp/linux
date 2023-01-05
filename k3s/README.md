@@ -6,6 +6,8 @@
 
 指定k3s版本，不指定INSTALL_K3S_VERSION就是最新的版本。
 
+k3s的数据目录为data-dir: /var/lib/rancher/k3s
+
 ```
 export INSTALL_K3S_VERSION=v1.21.14-k3s1
 ```
