@@ -152,3 +152,8 @@ multicluster:
   clusterRole: member
 ```
 
+## 部署node-exporter**
+
+```
+docker run -d  --restart=always --name node -p 9100:9100   -v /proc:/host/proc:ro   -v /sys:/host/sys:ro   -v /:/rootfs:ro   -v /etc/localtime:/etc/localtime -v /etc/timezone:/etc/timezone   --net="host"   prom/node-exporter
+```
