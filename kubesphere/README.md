@@ -157,3 +157,37 @@ multicluster:
 ```
 docker run -d  --restart=always --name node -p 9100:9100   -v /proc:/host/proc:ro   -v /sys:/host/sys:ro   -v /:/rootfs:ro   -v /etc/localtime:/etc/localtime -v /etc/timezone:/etc/timezone   --net="host"   prom/node-exporter
 ```
+
+## k8s集群开启ipvs模式
+1.2kube-proxy开启ipvs的前置条件
+ 由于ipvs已经加入到了内核的主干，所以为kube-proxy开启ipvs的前提需要加载以下的内核模块：
+ ip_vs
+ ip_vs_rr
+ ip_vs_wrr
+ ip_vs_sh
+ nf_conntrack_ipv4
+
+在所有的Kubernetes节点node1和node2上执行以下脚本:
+```
+ cat > /etc/sysconfig/modules/ipvs.modules <<EOF
+ #!/bin/bash
+ modprobe  ip_vs
+ modprobe  ip_vs_rr
+ modprobe  ip_vs_wrr
+ modprobe  ip_vs_sh
+ modprobe  nf_conntrack_ipv4
+ EOF
+ ```
+ ```
+ chmod 755 /etc/sysconfig/modules/ipvs.modules && bash /etc/sysconfig/modules/ipvs.modules && lsmod | grep -e ip_vs -e nf_conntrack_ipv4
+ ```
+ 脚本创建了的/etc/sysconfig/modules/ipvs.modules文件，保证在节点重启后能自动加载所需模块。 使用lsmod | grep -e ip_vs -e nf_conntrack_ipv4命令查看是否已经正确加载所需的内核模块。
+ 在所有节点上安装ipset软件包
+ ```
+ yum install ipset -y
+ ```
+ 为了方便查看ipvs规则我们要安装ipvsadm(可选)
+ ```
+ yum install ipvsadm -y
+ ```
+#修改ConfigMap的kube-system/kube-proxy中的config.conf，把 mode: “” 改为mode: “ipvs” 保存退出即可
