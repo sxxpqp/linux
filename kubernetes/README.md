@@ -173,7 +173,7 @@ net.core.wmem_max = 26214400
 # timewait相关优化
 net.ipv4.tcp_max_tw_buckets = 131072 # 这个优化意义不大
 net.ipv4.tcp_timestamps = 1  # 通常默认本身是开启的
-net.ipv4.tcp_tw_reuse = 1 # 仅对客户端有效果，对于高并发客户端，可以复用TIME_WAIT连接端口，避免源端口耗尽建连失败
+#net.ipv4.tcp_tw_reuse = 1 # 仅对客户端有效果，对于高并发客户端，可以复用TIME_WAIT连接端口，避免源端口耗尽建连失败
 net.ipv4.ip_local_port_range="1024 65535" # 对于高并发客户端，加大源端口范围，避免源端口耗尽建连失败（确保容器内不会监听源端口范围的端口)
 net.ipv4.tcp_fin_timeout=30 # 缩短TIME_WAIT时间,加速端口回收
  
@@ -187,4 +187,13 @@ fs.file-max=1048576 # 提升文件句柄上限，像 nginx 这种代理，每个
 fs.inotify.max_user_instances="8192" # 表示同一用户同时最大可以拥有的 inotify 实例 (每个实例可以有很多 watch)
 fs.inotify.max_user_watches="524288" # 表示同一用户同时可以添加的watch数目（watch一般是针对目录，决定了同时同一用户可以监控的目录数量) 默认值 8192 在容器场景下偏小，在某些情况下可能会导致 inotify watch 数量耗尽，使得创建 Pod 不成功或者 kubelet 无法启动成功，将其优化到 524288
 
+### 华为云cce
+vm.swappiness=0
+net.ipv4.tcp_max_tw_buckets=5000
+fs.nr_open=1200000 
+fs.file-max=200000
+### ipvs bug会影响性能
+net.ipv4.vs.conntrack=1
+net.ipv4.vs.conn_reuse_mode=1
+net.ipv4.vs.expire_nodest_conn=1
 ```
