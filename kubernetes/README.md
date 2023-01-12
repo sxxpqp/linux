@@ -147,7 +147,7 @@ net.ipv4.neigh.default.gc_thresh3="8192"
 net.ipv4.tcp_max_orphans="32768"
 vm.max_map_count="262144"
 kernel.threads-max="30058"
-net.ipv4.ip_forward="1"
+net.ipv4.ip_forward=1
 
 # 磁盘 IO 优化: https://www.cnblogs.com/276815076/p/5687814.html
 vm.dirty_background_bytes = 0
@@ -188,6 +188,12 @@ fs.inotify.max_user_instances="8192" # 表示同一用户同时最大可以拥�
 fs.inotify.max_user_watches="524288" # 表示同一用户同时可以添加的watch数目（watch一般是针对目录，决定了同时同一用户可以监控的目录数量) 默认值 8192 在容器场景下偏小，在某些情况下可能会导致 inotify watch 数量耗尽，使得创建 Pod 不成功或者 kubelet 无法启动成功，将其优化到 524288
 
 ### 华为云cce
+net.bridge.bridge-nf-call-iptables=1
+net.bridge.bridge-nf-call-ip6tables=1
+net.bridge.bridge-nf-call-arptables=1
+net.ipv4.ip_local_reserved_ports = 30000-32767
+net.ipv4.ip_forward=1
+
 vm.swappiness=0
 net.ipv4.tcp_max_tw_buckets=5000
 fs.nr_open=1200000 
