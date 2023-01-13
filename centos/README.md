@@ -163,8 +163,6 @@ yum install -y iptables-services
 systemctl status iptables #查看服务状态
 ```
 
-
-
 ```
 systemctl enable iptables #启用服务
 ```
@@ -246,35 +244,67 @@ iptables -A OUTPUT -o lo -j ACCEPT
 
 ##### 4.4. 设置默认的规则
 
-```shell
+```
 iptables -P INPUT DROP # 配置默认的不让进
+```
+
+```
 iptables -P FORWARD DROP # 默认的不允许转发
+```
+
+```
 iptables -P OUTPUT ACCEPT # 默认的可以出去
 ```
 
+
+
 ##### 4.5. 配置白名单
 
-```shell
+```
 iptables -A INPUT -p all -s 192.168.1.0/24 -j ACCEPT  # 允许机房内网机器可以访问
+```
+
+```
 iptables -A INPUT -p all -s 192.168.140.0/24 -j ACCEPT  # 允许机房内网机器可以访问
+```
+
+```
 iptables -A INPUT -p tcp -s 183.121.3.7 --dport 3380 -j ACCEPT # 允许183.121.3.7访问本机的3380端口
 ```
 
+
+
 ##### 4.6. 开启相应的服务端口
 
-```shell
+```
 iptables -A INPUT -p tcp --dport 80 -j ACCEPT # 开启80端口，因为web对外都是这个端口
+```
+
+```
 iptables -A INPUT -p icmp --icmp-type 8 -j ACCEPT # 允许被ping
+```
+
+```
 iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT # 已经建立的连接得让它进来
 ```
 
+
+
 ##### 4.7. 保存规则到配置文件中
 
-```shell
+```
 cp /etc/sysconfig/iptables /etc/sysconfig/iptables.bak # 任何改动之前先备份，请保持这一优秀的习惯
+```
+
+```
 iptables-save > /etc/sysconfig/iptables
+```
+
+```
 cat /etc/sysconfig/iptables
 ```
+
+
 
 ##### 4.8. 列出已设置的规则
 

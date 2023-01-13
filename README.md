@@ -95,3 +95,13 @@ NTP (网络时间协议, network time protocol) 是网络中保持时间同步�
 在“控制面板 > 时钟、语言和区域 > 日期和时间 > Internet时间 > 更改设置”中勾选“与 Internet 时间服务器同步”，在“服务器”一栏填入 `ntp.tuna.tsinghua.edu.cn`。
 
 您也可以通过在命令提示符中使用 `w32tm /config /manualpeerlist:ntp.tuna.tsinghua.edu.cn /syncfromflags:manual /update` 来将此服务器设置为您的时间服务器.
+
+
+
+### 访问github，添加hosts
+
+```
+151.101.1.6 github.global.ssl.fastly.net
+140.82.114.3 github.com
+```
+
