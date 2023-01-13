@@ -96,7 +96,7 @@ echo 'complete -o default -F __start_kubectl k' >>~/.bashrc
 ```
 
 **env和set的区别是，set命令可以查看所有变量，而env命令只能查看环境变量**
-## k8s集群开启ipvs模式
+### k8s集群开启ipvs模式
 1.2kube-proxy开启ipvs的前置条件
  由于ipvs已经加入到了内核的主干，所以为kube-proxy开启ipvs的前提需要加载以下的内核模块：
  ip_vs
@@ -115,7 +115,7 @@ echo 'complete -o default -F __start_kubectl k' >>~/.bashrc
  modprobe  ip_vs_sh
  modprobe  nf_conntrack_ipv4
  EOF
- ```
+```
  ```
  chmod 755 /etc/sysconfig/modules/ipvs.modules && bash /etc/sysconfig/modules/ipvs.modules && lsmod | grep -e ip_vs -e nf_conntrack_ipv4
  ```
@@ -130,7 +130,7 @@ echo 'complete -o default -F __start_kubectl k' >>~/.bashrc
  ```
 #修改ConfigMap的kube-system/kube-proxy中的config.conf，把 mode: “” 改为mode: “ipvs” 保存退出即可
 
-## k8s内核参数优化
+### k8s内核参数优化
 ```
 # conntrack优化
 net.netfilter.nf_conntrack_tcp_be_liberal = 1 # 容器环境下，开启这个参数可以避免 NAT 过的 TCP 连接 带宽上不去。
@@ -160,7 +160,7 @@ vm.dirtytime_expire_seconds = 43200
 
 ```
 
-## Pod 调参汇总
+### Pod 调参汇总
 ```
 # socket buffer优化
 net.ipv4.tcp_wmem = 4096        16384   4194304
@@ -203,3 +203,55 @@ net.ipv4.vs.conntrack=1
 net.ipv4.vs.conn_reuse_mode=1
 net.ipv4.vs.expire_nodest_conn=1
 ```
+
+### kubesnetes证书过期查看
+
+**查看证书情况**
+
+```
+kubeadm certs check-expiration #高版本
+```
+
+
+
+```
+kubeadm  alpha certs check-expiration #低版本
+```
+
+**备份原来的证书**
+
+```
+cp -r /etc/kubernetes /etc/kubernetes.old
+```
+
+
+
+**在每个 Master 节点上执行命令更新证书**
+
+```
+kubeadm certs renew all #高版本
+```
+
+
+
+```
+kubeadm alpha certs renew all #低版本
+```
+
+
+
+**Master 节点上重启相关服务**
+
+```
+docker ps |egrep "k8s_kube-apiserver|k8s_kube-scheduler|k8s_kube-controller"|awk '{print $1}'|xargs docker restart
+```
+
+
+
+**更新 ~/.kube/config 文件**
+
+```
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+```
+
