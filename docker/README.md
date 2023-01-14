@@ -138,22 +138,6 @@ sudo systemctl reload docker
 sudo docker info
 ```
 
-### 安装docker-compose
-
-```
-curl -L https://get.daocloud.io/docker/compose/releases/download/v2.8.0/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
-```
-
-```
-sudo chmod +x /usr/local/bin/docker-compose
-```
-
-```
-sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
-```
-
-
-
 
 
 ### **解决 Docker 日志文件太大的问题**
@@ -241,5 +225,15 @@ cpu排序
 
 ```
  ps aux |grep -v USER | sort -nk +3 | tail 
+```
+
+### netstat和awk命令来统计网络连接数
+
+```
+yum install net-tools -y
+```
+
+```
+netstat -n | awk '/^tcp/ {++state[$NF]} END {for(key in state) print key,state[key]}'
 ```
 
