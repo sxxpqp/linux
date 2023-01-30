@@ -237,3 +237,60 @@ yum install net-tools -y
 netstat -n | awk '/^tcp/ {++state[$NF]} END {for(key in state) print key,state[key]}'
 ```
 
+**查看同时连接服务器 IP **
+
+```
+netstat -an|awk '{print $4}'|sort|uniq -c|sort -nr|head
+```
+
+```
+netstat -an|awk -F: '{print $2}'|sort|uniq -c|sort -nr|head
+```
+
+### 安全加固
+
+**系统中是否存在空密码账户**
+
+```
+awk -F: '($2==""){print $1}' /etc/shadow
+```
+
+**查找uid值为0的用户**
+
+```
+awk -F: '($3==0||$4==0){print $1}' /etc/passwd
+```
+
+**查找gid值为0的用户**
+
+```
+awk -F: '($3==0||$4==0){print $1}' /etc/passwd
+```
+
+
+
+**禁止Control-Alt-Delete 键盘重启系统命令**
+
+```
+ls /usr/lib/systemd/system/ctrl-alt-del.target
+```
+
+
+
+#### **备份配置文件**
+
+```
+cp -a  /usr/lib/systemd/system/ctrl-alt-del.target         /usr/lib/systemd/system/ctrl-alt-del.target.default
+```
+
+```
+rm -rf  /usr/lib/systemd/system/ctrl-alt-del.target
+```
+
+### **隐藏系统版本信息**
+
+```
+#mv /etc/issue /etc/issue.bak
+#mv /etc/issue.net /etc/issue.net.bak
+```
+

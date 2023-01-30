@@ -158,3 +158,11 @@ multicluster:
 docker run -d  --restart=always --name node -p 9100:9100   -v /proc:/host/proc:ro   -v /sys:/host/sys:ro   -v /:/rootfs:ro   -v /etc/localtime:/etc/localtime -v /etc/timezone:/etc/timezone   --net="host"   prom/node-exporter
 ```
 
+
+
+### 要注意获取集群的kubeconfig时，需要在host集群上执行命令
+
+```
+kubectl get cluster [cluster-name] -o jsonpath='{.spec.connection.kubeconfig}' | base64 -d
+```
+

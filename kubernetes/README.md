@@ -1,5 +1,46 @@
 ## 关于k8s的日常总结及分享
 
+### 快速安装高可用 Kubernetes 集群
+
+#### 安装sealos
+
+```
+wget  https://github.com/labring/sealos/releases/download/v4.1.3/sealos_4.1.3_linux_amd64.tar.gz  && \
+>     tar -zxvf sealos_4.1.3_linux_amd64.tar.gz sealos &&  chmod +x sealos && mv sealos /usr/bin 
+```
+
+#### 使用 cri-docker 镜像
+
+```
+sealos run labring/kubernetes-docker:v1.20.5-4.1.3 labring/helm:v3.8.2      --masters 192.168.1.171,192.168.1.172,192.168.1.173      --nodes 192.168.1.174 -p 1
+```
+
+```
+sealos reset #安装错误，恢复后重新安装
+```
+
+```
+sealos run labring/calico:v3.22.1-amd64
+```
+
+```
+sealos run labring/openebs:v1.9.0 # 安装openebs
+```
+
+```
+sealos run labring/minio-operator:v4.4.16 labring/ingress-nginx:4.1.0 
+```
+
+```
+sealos run labring/mysql-operator:8.0.23-14.1 
+```
+
+```
+sealos run labring/redis-operator:3.1.4 # 喜欢的话可以把它们写一起
+```
+
+
+
 ### Kubernetes 镜像使用帮助
 
 Kubernetes 是用于自动部署，扩展和管理容器化应用程序的开源系统。详情可见 [官方介绍](https://kubernetes.io/zh/)。

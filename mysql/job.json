@@ -1,0 +1,40 @@
+{
+    "Job": {
+        "ID": "dtle-demo",
+        "Datacenters": ["dc1"],
+        "TaskGroups": [{
+                "Name": "src",
+                "Tasks": [{
+                    "Name": "src",
+                    "Driver": "dtle",
+                    "Config": {
+                        "Gtid": "",
+                        "ReplicateDoDb": [],
+                        "SrcConnectionConfig": {
+                            "Host": "139.198.123.207",
+                            "Port": 33306,
+                            "User": "root",
+                            "Password": "Iot@123456"
+                        },
+                        "DestConnectionConfig": {
+                            "Host": "192.168.1.175",
+                            "Port": 3306,
+                            "User": "root",
+                            "Password": "Iot@123456"
+                        }
+                    }
+                }]
+            },
+            {
+                "Name": "dest",
+                "Tasks": [{
+                    "Name": "dest",
+                    "Driver": "dtle",
+                    "Config": {
+                        "DestType": "mysql"
+                    }
+                }]
+            }
+        ]
+    }
+}
