@@ -104,3 +104,132 @@ start slave;
 ```
 show slave status
 ```
+
+
+### 主主复制企业级
+```
+mkdir -p /data/master
+cat >docker-compose.yaml<<eof
+version: '3'
+services:
+  mysql:
+    restart: always
+    image: mysql:5.7.30
+    container_name: mysql-master
+    volumes:
+      - /data/master/mydir:/mydir
+      - /data/master/datadir:/var/lib/mysql
+      - /data/master/conf/my.cnf:/etc/mysql/my.cnf
+      # 数据库还原目录 可将需要还原的sql文件放在这里
+      - /data/master/source:/docker-entrypoint-initdb.d
+    environment:
+      - "MYSQL_ROOT_PASSWORD=Iot@123456"
+      - "TZ=Asia/Shanghai"
+    ports:
+      # 使用宿主机的3306端口映射到容器的3306端口
+      # 宿主机：容器
+      - 3306:3306
+  slave:
+    restart: always
+    image: mysql:5.7.30
+    container_name: mysql-slave
+    volumes:
+      - /data/slave/mydir:/mydir
+      - /data/slave/datadir:/var/lib/mysql
+      - /data/slave/conf/my.cnf:/etc/mysql/my.cnf
+      # 数据库还原目录 可将需要还原的sql文件放在这里
+      - /data/slave/source:/docker-entrypoint-initdb.d
+    environment:
+      - "MYSQL_ROOT_PASSWORD=Iot@123456"
+      - "TZ=Asia/Shanghai"
+    ports:
+      # 使用宿主机的3306端口映射到容器的3306端口
+      # 宿主机：容器
+      - 3307:3306
+eof      
+```
+```         
+cat>/data/master/conf/my.cnf<<eof
+[mysqld]
+user=mysql
+default-storage-engine=INNODB
+character-set-server=utf8
+character-set-client-handshake=FALSE
+collation-server=utf8_unicode_ci
+init_connect='SET NAMES utf8'
+server_id = 201                    #这里的ID号与从库上或者主库上的ID必须保证不一样
+log-bin=mysql-bin                    #可以自定义 这里定义为 log-bin=/data/log-bin/log-bin-3310
+binlog_format=row                    #主从复制模式
+log-slave-updates=true                 #slave 更新是否记入日志
+gtid-mode=on                                   # 启用gtid类型，否则就是普通的复制架构
+enforce-gtid-consistency=true          #强制GTID 的一致性 
+master-info-repository=TABLE        #主服信息记录库=表 /文件
+relay-log-info-repository=TABLE    #中继日志信息记录库
+sync-master-info=1                         #同步主库信息
+slave-parallel-workers=10                #从服务器的SQL 线程数，要复制库数目相同
+binlog-checksum=CRC32                   # 校验码 ，可以自定义
+master-verify-checksum=1               #主服校验
+slave-sql-verify-checksum=1             #从服校验
+binlog-rows-query-log_events=1     #二进制日志详细记录事件
+report-port=3307                             #提供复制报告端口，当前实例端口号
+report-host=192.168.1.46                #提供复制报告主机，本机的ip地址
+[client]
+default-character-set=utf8
+[mysql]
+default-character-set=utf8
+eof
+
+mkdir -p /data/slave
+cat>/data/slave/conf/my.cnf<<eof
+[mysqld]
+user=mysql
+default-storage-engine=INNODB
+character-set-server=utf8
+character-set-client-handshake=FALSE
+collation-server=utf8_unicode_ci
+init_connect='SET NAMES utf8'
+server_id=202                    #这里的ID号与从库上或者主库上的ID必须保证不唯一
+log-bin=mysql-bin                    #可以自定义 这里定义为 log-bin=/data/log-bin/log-bin-3310
+binlog_format=row                    #主从复制模式
+log-slave-updates=true                 #slave 更新是否记入日志
+gtid-mode=on                                   # 启用gtid类型，否则就是普通的复制架构
+enforce-gtid-consistency=true          #强制GTID 的一致性 
+master-info-repository=TABLE        #主服信息记录库=表 /文件
+relay-log-info-repository=TABLE    #中继日志信息记录库
+sync-master-info=1                         #同步主库信息
+slave-parallel-workers=10                 #从服务器的SQL 线程数，要复制库数目相同
+binlog-checksum=CRC32                   # 校验码 ，可以自定义
+master-verify-checksum=1               #主服校验
+slave-sql-verify-checksum=1             #从服校验
+binlog-rows-query-log_events=1     #二进制日志详细记录事件
+report-port=3306                            #提供复制报告端口，当前实例端口号
+report-host=192.168.1.46               #提供复制报告主机，本机的ip地址
+replicate-wild-ignore-table=mysql.%
+replicate-wild-ignore-table=information_schema.%
+replicate-wild-ignore-table=sys.%
+replicate-wild-ignore-table=turingcloudx_config.%
+replicate-wild-ignore-table=performance_schema.%
+replicate-wild-ignore-table=turingcloudx_device.device_message_point_data
+[client]
+default-character-set=utf8
+[mysql]
+default-character-set=utf8
+eof
+```
+
+
+```
+grant replication slave,replication client on *.* to slave@'%'identified by 'Iot@123456';
+flush privileges;
+```
+```
+change master to master_host='192.168.1.46',master_port=3306,master_user='slave',master_password='Iot@123456',master_auto_position=1;
+slave start;
+show slave status;
+```
+```
+mysqldump -hhost -uroot -ppassword --single-transaction --all-databases > `date +%F`backup.sql
+```
+```
+mysqldump -h139.198.123.207 -P33306 -uroot -p --single-transaction --all-databases > `date +%F`backup.sql
+```
