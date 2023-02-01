@@ -197,7 +197,7 @@ enforce-gtid-consistency=true          #强制GTID 的一致性
 master-info-repository=TABLE        #主服信息记录库=表 /文件
 relay-log-info-repository=TABLE    #中继日志信息记录库
 sync-master-info=1                         #同步主库信息
-slave-parallel-workers=10                 #从服务器的SQL 线程数，要复制库数目相同
+slave-parallel-workers=13                 #从服务器的SQL 线程数，要复制库数目相同
 binlog-checksum=CRC32                   # 校验码 ，可以自定义
 master-verify-checksum=1               #主服校验
 slave-sql-verify-checksum=1             #从服校验
@@ -207,8 +207,9 @@ report-host=192.168.1.46               #提供复制报告主机，本机的ip�
 replicate-wild-ignore-table=mysql.%
 replicate-wild-ignore-table=information_schema.%
 replicate-wild-ignore-table=sys.%
-replicate-wild-ignore-table=turingcloudx_config.%
 replicate-wild-ignore-table=performance_schema.%
+replicate-wild-ignore-table=turingcloudx_config.%
+replicate-wild-ignore-table=turingcloudx.sys_tenant
 replicate-wild-ignore-table=turingcloudx_device.device_message_point_data
 [client]
 default-character-set=utf8
@@ -231,5 +232,9 @@ show slave status;
 mysqldump -hhost -uroot -ppassword --single-transaction --all-databases > `date +%F`backup.sql
 ```
 ```
-mysqldump -h139.198.123.207 -P33306 -uroot -p --single-transaction --all-databases > `date +%F`backup.sql
+mysqldump -h139.198.123.207 -P33306 -uroot -p --single-transaction --master-data=0 --set-gtid-purged=ON --hex-blob --triggers --routines --events --all-databases > `date +%F`backup.sql
+```
+### 不建议设置支持跳过
+```
+set global slave_exec_mode=IDEMPOTENT;
 ```
