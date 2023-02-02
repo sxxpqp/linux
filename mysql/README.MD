@@ -238,3 +238,10 @@ mysqldump -h139.198.123.207 -P33306 -uroot -p --single-transaction --master-data
 ```
 set global slave_exec_mode=IDEMPOTENT;
 ```
+### 通过show slave status 
+查看到错误的表的信息，在解决数据一致性问题。
+```
+select *  from performance_schema.replication_applier_status_by_worker;
+
+```
+
