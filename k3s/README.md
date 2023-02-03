@@ -15,5 +15,9 @@ export INSTALL_K3S_VERSION=v1.21.14-k3s1
 ```
 curl -sfL https://rancher-mirror.oss-cn-beijing.aliyuncs.com/k3s/k3s-install.sh | INSTALL_K3S_MIRROR=cn sh -
 ```
+### 使用docker安装
+```
+curl -sfL https://rancher-mirror.oss-cn-beijing.aliyuncs.com/k3s/k3s-install.sh | INSTALL_K3S_MIRROR=cn sh - --docker
 
+```
 **安装完毕后可以在安装对应的kubesphere版本**
