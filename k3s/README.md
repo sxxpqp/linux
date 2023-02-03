@@ -17,6 +17,11 @@ curl -sfL https://rancher-mirror.oss-cn-beijing.aliyuncs.com/k3s/k3s-install.sh 
 ```
 ### 使用docker安装
 ```
+curl https://releases.rancher.com/install-docker/19.03.sh | sh
+```
+
+
+```
 curl -sfL https://rancher-mirror.oss-cn-beijing.aliyuncs.com/k3s/k3s-install.sh | INSTALL_K3S_MIRROR=cn sh -s - --docker
 
 
