@@ -194,7 +194,10 @@ ln -s /data/docker /var/lib/docker
 ```
 systemctl start docker
 ```
-
+### 批量打包镜像
+```
+docker save $(docker images | grep -v "REPOSITORY" | awk 'BEGIN{OFS=":";ORS=" "}{print $1,$2}') -o haha.tar
+```
 ### ssh实现免密登陆
 
 访问主机生产公钥 ~/.ssh/id_rsa.pub
