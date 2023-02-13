@@ -232,7 +232,7 @@ show slave status;
 mysqldump -hhost -uroot -ppassword --single-transaction --all-databases > `date +%F`backup.sql
 ```
 ```
-mysqldump -h139.198.123.207 -P33306 -uroot -p --single-transaction --master-data=0 --set-gtid-purged=ON --hex-blob --triggers --routines --events --all-databases > `date +%F`backup.sql
+mysqldump -h139.198.123.207 -P33306 -uroot -p --single-transaction --master-data=0 --set-gtid-purged=OFF --hex-blob --triggers --routines --events --all-databases > `date +%F`backup.sql
 ```
 ### 不建议设置支持跳过
 ```
@@ -244,4 +244,9 @@ set global slave_exec_mode=IDEMPOTENT;
 select *  from performance_schema.replication_applier_status_by_worker;
 
 ```
-
+### 需要同步之前数据库一致
+```
+FLUSH TABLES WITH READ LOCK ;
+UNLOCK TABLES ;
+reset MASTER;
+```
