@@ -34,7 +34,7 @@ https://github.com/cby-chen/Kubernetes/releases
 | Master03 | 192.168.1.49 | master节点 | kube-apiserver、kube-controller-manager、kube-scheduler、etcd、<br />kubelet、kube-proxy、nfs-client、haproxy、keepalived |
 | Node01   | 192.168.1.50 | node节点   | kubelet、kube-proxy、nfs-client                              |
 | Node02   | 192.168.1.51 | node节点   | kubelet、kube-proxy、nfs-client                              |
-|          | 192.168.1.181 | VIP        |                                                              |
+|          | 192.168.1.182 | VIP        |                                                              |
 
 
 | 软件                                                         | 版本                  |
@@ -389,7 +389,7 @@ cat > /etc/hosts <<EOF
 192.168.1.49 k8s-master03
 192.168.1.50 k8s-node01
 192.168.1.51 k8s-node02
-192.168.1.181 lb-vip
+192.168.1.182 lb-vip
 EOF
 ```
 
@@ -1372,7 +1372,7 @@ cfssl gencert   \
 -ca=/etc/kubernetes/pki/ca.pem   \
 -ca-key=/etc/kubernetes/pki/ca-key.pem   \
 -config=ca-config.json   \
--hostname=10.96.0.1,192.168.1.181,127.0.0.1,kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.default.svc.cluster.local,x.oiox.cn,k.oiox.cn,l.oiox.cn,o.oiox.cn,192.168.1.47,192.168.1.48,192.168.1.49,192.168.1.50,192.168.1.51,10.0.0.86,10.0.0.87,10.0.0.88,192.168.1.181,192.168.1.90,192.168.1.40,192.168.1.41   \
+-hostname=10.96.0.1,192.168.1.182,127.0.0.1,kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.default.svc.cluster.local,x.oiox.cn,k.oiox.cn,l.oiox.cn,o.oiox.cn,192.168.1.47,192.168.1.48,192.168.1.49,192.168.1.50,192.168.1.51,10.0.0.86,10.0.0.87,10.0.0.88,192.168.1.182,192.168.1.90,192.168.1.40,192.168.1.41   \
 -profile=kubernetes   apiserver-csr.json | cfssljson -bare /etc/kubernetes/pki/apiserver
 ```
 
@@ -1405,7 +1405,7 @@ cfssl gencert \
 kubectl config set-cluster kubernetes \
      --certificate-authority=/etc/kubernetes/pki/ca.pem \
      --embed-certs=true \
-     --server=https://192.168.1.181:8443 \
+     --server=https://192.168.1.182:8443 \
      --kubeconfig=/etc/kubernetes/controller-manager.kubeconfig
 
 # 设置一个环境项，一个上下文
@@ -1438,7 +1438,7 @@ cfssl gencert \
 kubectl config set-cluster kubernetes \
      --certificate-authority=/etc/kubernetes/pki/ca.pem \
      --embed-certs=true \
-     --server=https://192.168.1.181:8443 \
+     --server=https://192.168.1.182:8443 \
      --kubeconfig=/etc/kubernetes/scheduler.kubeconfig
 
 kubectl config set-credentials system:kube-scheduler \
@@ -1465,7 +1465,7 @@ cfssl gencert \
 kubectl config set-cluster kubernetes     \
   --certificate-authority=/etc/kubernetes/pki/ca.pem     \
   --embed-certs=true     \
-  --server=https://192.168.1.181:8443     \
+  --server=https://192.168.1.182:8443     \
   --kubeconfig=/etc/kubernetes/admin.kubeconfig
 
 kubectl config set-credentials kubernetes-admin  \
@@ -1814,7 +1814,7 @@ vrrp_instance VI_1 {
         auth_pass K8SHA_KA_AUTH
     }
     virtual_ipaddress {
-        192.168.1.181
+        192.168.1.182
     }
     track_script {
       chk_apiserver 
@@ -1855,7 +1855,7 @@ vrrp_instance VI_1 {
         auth_pass K8SHA_KA_AUTH
     }
     virtual_ipaddress {
-        192.168.1.181
+        192.168.1.182
     }
     track_script {
       chk_apiserver 
@@ -1896,7 +1896,7 @@ vrrp_instance VI_1 {
         auth_pass K8SHA_KA_AUTH
     }
     virtual_ipaddress {
-        192.168.1.181
+        192.168.1.182
     }
     track_script {
       chk_apiserver 
@@ -1954,11 +1954,11 @@ systemctl enable --now keepalived
 ```shell
 # 能ping同
 
-[root@k8s-node02 ~]# ping 192.168.1.181
+[root@k8s-node02 ~]# ping 192.168.1.182
 
 # 能telnet访问
 
-[root@k8s-node02 ~]# telnet 192.168.1.181 8443
+[root@k8s-node02 ~]# telnet 192.168.1.182 8443
 
 # 关闭主节点，看vip是否漂移到备节点
 ```
@@ -2256,7 +2256,7 @@ cd /root/Kubernetes/bootstrap
 
 kubectl config set-cluster kubernetes     \
 --certificate-authority=/etc/kubernetes/pki/ca.pem     \
---embed-certs=true     --server=https://192.168.1.181:8443     \
+--embed-certs=true     --server=https://192.168.1.182:8443     \
 --kubeconfig=/etc/kubernetes/bootstrap-kubelet.kubeconfig
 
 kubectl config set-credentials tls-bootstrap-token-user     \
@@ -2469,7 +2469,7 @@ K8S_DIR=/etc/kubernetes
 kubectl config set-cluster kubernetes \
 --certificate-authority=/etc/kubernetes/pki/ca.pem \
 --embed-certs=true \
---server=https://192.168.1.181:8443 \
+--server=https://192.168.1.182:8443 \
 --kubeconfig=${K8S_DIR}/kube-proxy.kubeconfig
 
 kubectl config set-credentials kubernetes \
