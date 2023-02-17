@@ -191,7 +191,7 @@ pool ntp.aliyun.com iburst
 driftfile /var/lib/chrony/drift
 makestep 1.0 3
 rtcsync
-allow 10.0.0.8/8
+allow 192.168.1.0/24
 local stratum 10
 keyfile /etc/chrony.keys
 leapsectz right/UTC
@@ -1845,7 +1845,7 @@ vrrp_script chk_apiserver {
 vrrp_instance VI_1 {
     state BACKUP
     interface ens160
-    mcast_src_ip 192.168.1.82
+    mcast_src_ip 192.168.1.48
     virtual_router_id 51
     priority 50
     nopreempt
@@ -1886,7 +1886,7 @@ vrrp_script chk_apiserver {
 vrrp_instance VI_1 {
     state BACKUP
     interface ens160
-    mcast_src_ip 192.168.1.83
+    mcast_src_ip 192.168.1.49
     virtual_router_id 51
     priority 30
     nopreempt
