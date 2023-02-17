@@ -295,4 +295,7 @@ docker ps |egrep "k8s_kube-apiserver|k8s_kube-scheduler|k8s_kube-controller"|awk
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```
-
+##修改master的角色
+```
+kubectl label  nodes k8s-master01 node-role.kubernetes.io/master=
+```
