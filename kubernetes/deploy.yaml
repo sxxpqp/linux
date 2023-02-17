@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  MYAPP #myapp 修改为自己的名字  mysapp所有的都需要修改呀
+  namespace: default #修改为自己的namespace
+  labels:
+    app:  MYAPP
+spec:
+  selector:
+    matchLabels:
+      app: MYAPP
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app:  MYAPP
+    spec:
+      containers:
+      - name:  MYAPP
+        image:  MYAPP:latest #修改容器的镜像
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 100m
+            memory: 100Mi
+        livenessProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 5
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /_status/healthz
+            port: 80
+          initialDelaySeconds: 5
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 3
+          periodSeconds: 10
+        ports:
+        - containerPort:  80
+          name:  MYAPP
+        volumeMounts:
+        - name: localtime
+          mountPath: /etc/localtime
+        - name: tf3
+          mountPath: /tf/models  
+      volumes:
+        - name: localtime
+          hostPath:
+            path: /usr/share/zoneinfo/Asia/Shanghai
+        - name: tf3
+          nfs:
+            server: 10.15.150.4  #修改实际nfs的主机地址
+            path: /ksnfs07    #修改共享的路径
+      restartPolicy: Always
