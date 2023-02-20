@@ -299,3 +299,11 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```
 kubectl label  nodes k8s-master01 node-role.kubernetes.io/master=
 ```
+label 可以在工作负载和server、pod、pvc、pv中使用到，如nodeselector affinity使用到
+##service 模式
+clusterIP #含headless服务clusterip:None,可以设置为clusterip有ip地址,但没有使用selector，就不会自动创建endpoint，可以自己设置创建ep，实现反代的效果。
+nodePort #宿主机上暴露端口
+loadBlancer #使用云上的负载均衡，或者本地使用openelb
+externalName #通过代理到域名上，会出现跨域问题，需要处理。
+hostPort #pod的port使用宿主机的端口
+hostNetwork #pod使用宿主机的ip
