@@ -198,6 +198,25 @@ systemctl start docker
 ```
 docker save $(docker images | grep -v "REPOSITORY" | awk 'BEGIN{OFS=":";ORS=" "}{print $1,$2}') -o haha.tar
 ```
+### 批量拉取镜像推到自己的阿里云仓库上
+sxxpqp:仓库名称 修改成自己的仓库名称，需要先登陆
+```
+docker login --username=1019466494@qq.com registry.cn-hangzhou.aliyuncs.com
+```
+```
+#!/bin/bash
+for image in $(cat images.txt)
+do
+docker pull $image
+strA=`echo $image|awk 'BEGIN{FS="/";OFS="/"}{print $1,$2}'`
+result=$(echo $image | grep "${strA}")
+if [[ "$result" != "" ]];then
+docker tag ${image} registry.cn-hangzhou.aliyuncs.com/sxxpqp${image#$strA}
+docker push registry.cn-hangzhou.aliyuncs.com/sxxpqp${image#$strA}
+fi
+done
+```
+
 ### ssh实现免密登陆
 
 访问主机生产公钥 ~/.ssh/id_rsa.pub
