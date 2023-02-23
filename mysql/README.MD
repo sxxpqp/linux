@@ -250,3 +250,22 @@ FLUSH TABLES WITH READ LOCK ;
 UNLOCK TABLES ;
 reset MASTER;
 ```
+
+### 主从复制处理删除不存在的错误
+```
+show slave STATUS;
+
+SELECT * FROM performance_schema.replication_applier_status_by_worker;
+
+stop slave;set global sql_slave_skip_counter=1;start slave;
+
+show master logs
+
+show slave status ;
+STOP SLAVE;
+SET @@SESSION.GTID_NEXT='c0472aef-a3a5-11ed-9eaf-22b1696e778a:251669';
+BEGIN; COMMIT;
+SET SESSION GTID_NEXT = AUTOMATIC;
+START SLAVE;
+
+```
