@@ -63,4 +63,3 @@ spec:
           nfs:
             server: 10.15.150.4  #修改实际nfs的主机地址
             path: /ksnfs07    #修改共享的路径
-      restartPolicy: Always
