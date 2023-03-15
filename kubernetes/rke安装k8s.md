@@ -1,17 +1,17 @@
-在安装master、worker节点上添加docker的用户组，
-```bash
-useradd dockeruser
-usermod -aG docker dockeruser
-password dockeruser
-```
-
-## 2. 在安装master、worker安装docker
+## 1. 在安装master、worker安装docker
 ```bash
 curl https://releases.rancher.com/install-docker/20.10.sh | sh
 systemctl enable docker
 systemctl start docker
 systemctl status docker
 systemctl daemon-reload
+```
+
+## 2.在安装master、worker节点上添加docker的用户组，
+```bash
+useradd dockeruser
+usermod -aG docker dockeruser
+passwd dockeruser
 ```
 ## 3.在安装master、worker关闭防火墙
 ```bash
@@ -55,14 +55,11 @@ EOF
 ##  7. ssh免密登录
 ```bash
 ssh-keygen -t rsa -P '' -f ~/.ssh/id_rsa
-cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
-chmod 0600 ~/.ssh/authorized_keys
-scp ~/.ssh/authorized_keys rke-master01:~/.ssh/authorized_keys
-scp ~/.ssh/authorized_keys rke-master02:~/.ssh/authorized_keys
-scp ~/.ssh/authorized_keys rke-master03:~/.ssh/authorized_keys
-scp ~/.ssh/authorized_keys rke-node01:~/.ssh/authorized_keys
-scp ~/.ssh/authorized_keys rke-node02:~/.ssh/authorized_keys
-scp ~/.ssh/authorized_keys rke-node03:~/.ssh/authorized_keys
+ssh-copy-id dockeruser@rke-master01
+ssh-copy-id dockeruser@rke-master02
+ssh-copy-id dockeruser@rke-master03
+ssh-copy-id dockeruser@rke-node01
+ssh-copy-id dockeruser@rke-node02
 ```
 
 ## 8. 创建集群配置文件
