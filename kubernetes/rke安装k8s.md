@@ -58,7 +58,7 @@ EOF
 ```bash
 ssh-keygen -t rsa -P '' -f ~/.ssh/id_rsa
 ssh-copy-id rancher@rke-master01
-ssh-copy-id rancherr@rke-master02
+ssh-copy-id rancher@rke-master02
 ssh-copy-id rancher@rke-master03
 ssh-copy-id rancher@rke-node01
 ssh-copy-id rancher@rke-node02
