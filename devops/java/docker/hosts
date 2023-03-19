@@ -1,0 +1,7 @@
+#192.168.0.16 turingcloud-register turingcloud-gateway turingcloud-redis turingcloud-zookeeper turingcloud-mysql
+#192.168.0.122 turingcloud-register turingcloud-gateway turingcloud-redis turingcloud-zookeeper turingcloud-mysql
+#huawei cloud
+10.21.0.38 turingcloud-register turingcloud-gateway turingcloud-redis turingcloud-zookeeper turingcloud-mysql turingcloud-auth turingcloud-admin turingcloud-device turingcloud-vmonitor turingcloud-daily turingcloud-dataanalysis turingcloud-video turingcloud-tx-manager turingcloud-daemon turingcloud-activiti
+#tsl product
+#172.16.203.144   turingcloud-mysql turingcloud-redis turingcloud-auth turingcloud-admin turingcloud-device turingcloud-vmonitor turingcloud-daily turingcloud-dataanalysis turingcloud-video turingcloud-tx-manager turingcloud-daemon turingcloud-activiti
+#172.16.203.146  turingcloud-gateway turingcloud-register

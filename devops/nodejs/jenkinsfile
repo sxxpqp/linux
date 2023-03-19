@@ -1,0 +1,171 @@
+pipeline {
+  agent {
+    node {
+      label 'nodejs'
+    }
+
+  }
+  stages {
+    stage('拉取代码') {
+      agent none
+      steps {
+        git(url: 'https://gitee.com/internet_of_things_software/platform_of_things.git', credentialsId: 'gitee-web', branch: '$BRANCH_NAME', changelog: true, poll: false)
+      }
+    }
+
+    stage('代码编译') {
+      agent none
+      steps {
+        container('nodejs') {
+          sh '''node -v
+npm install -g nrm
+nrm ls
+nrm use  taobao
+#npm install  --save chimee-helper
+#npm install --save chimee-kernel-hls
+npm install --save 
+npm run build'''
+        }
+
+      }
+    }
+
+    stage('构建并推送镜像') {
+      agent none
+      steps {
+        container('nodejs') {
+          sh 'docker build -f Dockerfile -t $REGISTRY/$DOCKERHUB_NAMESPACE/turingcloud-web-$BRANCH_NAME:SNAPSHOT-$BUILD_NUMBER .'
+          withCredentials([usernamePassword(credentialsId : 'harbor-2021' ,passwordVariable : 'DOCKER_PASSWORD' ,usernameVariable : 'DOCKER_USERNAME' ,)]) {
+            sh 'echo "$DOCKER_PASSWORD" | docker login $REGISTRY -u "$DOCKER_USERNAME" --password-stdin'
+            sh 'docker push $REGISTRY/$DOCKERHUB_NAMESPACE/turingcloud-web-$BRANCH_NAME:SNAPSHOT-$BUILD_NUMBER'
+            sh 'docker tag $REGISTRY/$DOCKERHUB_NAMESPACE/turingcloud-web-$BRANCH_NAME:SNAPSHOT-$BUILD_NUMBER $REGISTRY/$DOCKERHUB_NAMESPACE/turingcloud-web-$BRANCH_NAME:latest'
+            sh 'docker push $REGISTRY/$DOCKERHUB_NAMESPACE/turingcloud-web-$BRANCH_NAME:latest'
+          }
+
+        }
+
+      }
+    }
+
+    stage('default-2') {
+      parallel {
+        stage('判断前端代码分支，发布到特致珈') {
+          when {
+            environment name: 'BRANCH_NAME', value: 'tezhijia'
+          }
+          steps {
+            kubernetesDeploy(enableConfigSubstitution: true, deleteResource: false, kubeconfigId: 'test-kubeconfig', configs: 'deploy/tzj/**')
+          }
+        }
+
+        stage('判断前端代码分支，发布到中天网信') {
+          when {
+            environment name: 'BRANCH_NAME', value: 'ztwx'
+            environment name: 'stop', value: '1'
+          }
+          steps {
+            kubernetesDeploy(enableConfigSubstitution: true, deleteResource: false, kubeconfigId: 'ztwx-kubeconfig', configs: 'deploy/ztwx/**')
+          }
+        }
+
+        stage('判断前端代码分支，发布到贡嘎机场') {
+          when {
+            environment name: 'BRANCH_NAME', value: 'gongga'
+          }
+          steps {
+            kubernetesDeploy(enableConfigSubstitution: true, deleteResource: false, kubeconfigId: 'huawei-saas-kubeconfig', configs: 'deploy/gongga/**')
+          }
+        }
+
+        stage('判断前端代码分支') {
+          agent none
+          when {
+            environment name: 'BRANCH_NAME', value: 'zktl'
+          }
+          steps {
+            echo '发布测试线'
+          }
+        }
+
+        stage('判断前端代码分支，发布到特斯联') {
+          when {
+            environment name: 'BRANCH_NAME', value: 'tsl'
+          }
+          steps {
+            kubernetesDeploy(enableConfigSubstitution: true, deleteResource: false, kubeconfigId: 'tsl-kubeconfig', configs: 'deploy/tsl/**')
+          }
+        }
+
+      }
+    }
+
+    stage('判断前端代码分支，发布到测试线') {
+      agent none
+      when {
+        environment name: 'BRANCH_NAME', value: 'zktl'
+      }
+      steps {
+        kubernetesDeploy(enableConfigSubstitution: true, deleteResource: false, kubeconfigId: 'test-kubeconfig', configs: 'deploy/test/**')
+      }
+    }
+
+    stage('判断前端代码分支，发布到本地测试线') {
+      agent none
+      when {
+        environment name: 'BRANCH_NAME', value: 'zktl'
+      }
+      steps {
+        container('nodejs') {
+          withCredentials([kubeconfigContent(credentialsId : 'gs-kubeconfig' ,variable : 'KUBECONFIG_CONTENT' ,)]) {
+            sh '''mkdir ~/.kube
+echo "$KUBECONFIG_CONTENT" > ~/.kube/config
+envsubst < deploy/gstest/pod-saas.yaml | kubectl apply -f -'''
+          }
+
+        }
+
+      }
+    }
+
+    stage('测试主管审核-是否发布到saas线') {
+      when {
+        environment name: 'BRANCH_NAME', value: 'zktl'
+      }
+      steps {
+        input(message: '@duanqq', submitter: 'duanqq')
+      }
+    }
+
+    stage('发布到saas线') {
+      when {
+        environment name: 'BRANCH_NAME', value: 'zktl'
+      }
+      steps {
+        kubernetesDeploy(enableConfigSubstitution: true, deleteResource: false, kubeconfigId: 'test-kubeconfig', configs: 'deploy/saas/**')
+        kubernetesDeploy(enableConfigSubstitution: true, deleteResource: false, kubeconfigId: 'huawei-saas-kubeconfig', configs: 'deploy/huawei-saas/**')
+      }
+    }
+
+    stage('测试主管审核-是否同步到zktl分支的其他线') {
+      when {
+        environment name: 'BRANCH_NAME', value: 'zktl'
+      }
+      steps {
+        input(message: '@duanqq', submitter: 'duanqq')
+      }
+    }
+
+    stage('发布zktl分支前端') {
+      when {
+        environment name: 'BRANCH_NAME', value: 'zktl'
+      }
+      steps {
+        kubernetesDeploy(enableConfigSubstitution: true, deleteResource: false, kubeconfigId: 'test-kubeconfig', configs: 'deploy/saas/**')
+        kubernetesDeploy(enableConfigSubstitution: true, deleteResource: false, kubeconfigId: 'test-kubeconfig', configs: 'deploy/sd/**')
+        kubernetesDeploy(enableConfigSubstitution: true, deleteResource: false, kubeconfigId: 'huawei-saas-kubeconfig', configs: 'deploy/huawei-saas/**')
+        kubernetesDeploy(enableConfigSubstitution: true, deleteResource: false, kubeconfigId: 'test-kubeconfig', configs: 'deploy/whrr/**')
+      }
+    }
+
+  }
+}

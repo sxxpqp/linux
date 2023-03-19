@@ -1,0 +1,17 @@
+apiVersion: v1 # 指定api版本，此值必须在kubectl api-versions中 
+kind: Service # 指定创建资源的角色/类型 
+metadata: # 资源的元数据/属性
+  name: demo # 资源的名字，在同一个namespace中必须唯一
+  namespace: default # 部署在哪个namespace中
+  labels: # 设定资源的标签
+    app: demo
+spec: # 资源规范字段
+  type: ClusterIP #类型有： ClusterIP、NodePort、LoadBalancer。
+  ports:
+    - port: 8080 # service 端口
+      targetPort: http # 容器暴露的端口
+      protocol: TCP # 协议
+      name: http # 端口名称
+  selector: # 选择器
+    app: demo
+  # ClusterIP: None #headless配置  
