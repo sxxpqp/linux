@@ -1,0 +1,17 @@
+version: "2"
+services:
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: always
+    hostname: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./server.conf:/etc/nginx/conf.d/server.conf
+      - ./html:/usr/share/nginx/html/
+    networks:
+      - nginx-net     
+networks:
+  nginx-net:
+    driver: bridge
