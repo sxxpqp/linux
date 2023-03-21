@@ -174,3 +174,12 @@ systemctl start rke2-agent
 systemctl status rke2-agent
 ```
 
+
+出现无法访问6643端口情况，可以查看防火墙规则：  
+
+
+```
+规则比较多，您试着直接加下放行6443端口的规则再访问试下：
+iptables -I INPUT -p tcp --dport 6443 -j ACCEPT
+iptables-save
+```
