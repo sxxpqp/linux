@@ -1,0 +1,40 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: mysql-backup
+spec:
+  schedule: "27 18 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          initContainers:
+          - name: init-mysql-backup
+            image: busybox
+            command: ['sh', '-c', 'if [ ! -f /tmp/mysql_backup.sh ]; then cp /mysql_backup.sh /tmp/mysql_backup.sh;chmod +x /tmp/mysql_backup.sh fi']
+            volumeMounts:
+            - name: mysql-backup
+              mountPath: /mysql_backup.sh
+              subPath: mysql_backup.sh
+            - name: shared-data
+              mountPath: /tmp
+          containers:
+          - name: mysql-backup
+            image: mysql:5.7
+            volumeMounts:
+            - name: backup
+              mountPath: /home/backup
+            - name: shared-data
+              mountPath: /tmp  
+            command: ["/bin/sh", "-c"]
+            args: ["/tmp/mysql_backup.sh"]
+          volumes:
+          - name: backup
+            persistentVolumeClaim:
+              claimName: backup
+          - name: mysql-backup
+            configMap:
+              name: mysql-backup
+          - name: shared-data
+            emptyDir: {}          
+          restartPolicy: OnFailure

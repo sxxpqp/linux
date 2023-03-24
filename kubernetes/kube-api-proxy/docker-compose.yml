@@ -1,0 +1,10 @@
+version: '3'
+services:
+  nginx:
+    image: nginx:latest
+    ports:
+      - "6443:6443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      # - ./hosts:/etc/
+    restart: always
