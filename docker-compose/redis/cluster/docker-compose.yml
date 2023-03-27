@@ -1,0 +1,113 @@
+name: cluster
+services:
+  redis-node-0:
+    image: docker.io/bitnami/redis-cluster:7.0
+    volumes:
+      - redis-cluster_data-0:/bitnami/redis/data
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_PORT_NUMBER=7000
+      - REDIS_CLUSTER_ANNOUNCE_PORT=7000
+      - REDIS_CLUSTER_ANNOUNCE_IP=10.150.36.72 # 主机IP或公网IP，不要使用127.0.0.1或localhost
+      - REDIS_CLUSTER_ANNOUNCE_BUS_PORT=17000
+      - REDIS_CLUSTER_DYNAMIC_IPS=no
+      - REDIS_NODES=redis-node-0:7000 redis-node-1:7001 redis-node-2:7002 redis-node-3:7003 redis-node-4:7004 redis-node-5:7005
+    ports:
+      - 7000:7000
+      - 17000:17000
+
+  redis-node-1:
+    image: docker.io/bitnami/redis-cluster:7.0
+    volumes:
+      - redis-cluster_data-1:/bitnami/redis/data
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_PORT_NUMBER=7001
+      - REDIS_CLUSTER_ANNOUNCE_PORT=7001
+      - REDIS_CLUSTER_ANNOUNCE_BUS_PORT=17001
+      - REDIS_CLUSTER_ANNOUNCE_IP=10.150.36.72
+      - REDIS_CLUSTER_DYNAMIC_IPS=no
+      - REDIS_NODES=redis-node-0:7000 redis-node-1:7001 redis-node-2:7002 redis-node-3:7003 redis-node-4:7004 redis-node-5:7005
+    ports:
+      - 7001:7001
+      - 17001:17001
+
+  redis-node-2:
+    image: docker.io/bitnami/redis-cluster:7.0
+    volumes:
+      - redis-cluster_data-2:/bitnami/redis/data
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_PORT_NUMBER=7002
+      - REDIS_CLUSTER_ANNOUNCE_PORT=7002
+      - REDIS_CLUSTER_ANNOUNCE_BUS_PORT=17002
+      - REDIS_CLUSTER_ANNOUNCE_IP=10.150.36.72
+      - REDIS_CLUSTER_DYNAMIC_IPS=no
+      - REDIS_NODES=redis-node-0:7000 redis-node-1:7001 redis-node-2:7002 redis-node-3:7003 redis-node-4:7004 redis-node-5:7005
+    ports:
+      - 7002:7002
+      - 17002:17002
+
+  redis-node-3:
+    image: docker.io/bitnami/redis-cluster:7.0
+    volumes:
+      - redis-cluster_data-3:/bitnami/redis/data
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_PORT_NUMBER=7003
+      - REDIS_CLUSTER_ANNOUNCE_PORT=7003
+      - REDIS_CLUSTER_ANNOUNCE_BUS_PORT=17003
+      - REDIS_CLUSTER_ANNOUNCE_IP=10.150.36.72
+      - REDIS_CLUSTER_DYNAMIC_IPS=no
+      - REDIS_NODES=redis-node-0:7000 redis-node-1:7001 redis-node-2:7002 redis-node-3:7003 redis-node-4:7004 redis-node-5:7005
+    ports:
+      - 7003:7003
+      - 17003:17003
+
+  redis-node-4:
+    image: docker.io/bitnami/redis-cluster:7.0
+    volumes:
+      - redis-cluster_data-4:/bitnami/redis/data
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_PORT_NUMBER=7004
+      - REDIS_CLUSTER_ANNOUNCE_PORT=7004
+      - REDIS_CLUSTER_ANNOUNCE_BUS_PORT=17004
+      - REDIS_CLUSTER_ANNOUNCE_IP=10.150.36.72
+      - REDIS_CLUSTER_DYNAMIC_IPS=no
+      - REDIS_NODES=redis-node-0:7000 redis-node-1:7001 redis-node-2:7002 redis-node-3:7003 redis-node-4:7004 redis-node-5:7005
+    ports:
+      - 7004:7004
+      - 17004:17004
+
+  redis-node-5:
+    image: docker.io/bitnami/redis-cluster:7.0
+    volumes:
+      - redis-cluster_data-5:/bitnami/redis/data
+    depends_on:
+      - redis-node-0
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_CLUSTER_REPLICAS=1
+      - REDIS_PORT_NUMBER=7005
+      - REDIS_CLUSTER_ANNOUNCE_PORT=7005
+      - REDIS_CLUSTER_ANNOUNCE_BUS_PORT=17005
+      - REDIS_CLUSTER_ANNOUNCE_IP=10.150.36.72
+      - REDIS_CLUSTER_DYNAMIC_IPS=no
+      - REDIS_NODES=redis-node-0:7000 redis-node-1:7001 redis-node-2:7002 redis-node-3:7003 redis-node-4:7004 redis-node-5:7005
+      - REDIS_CLUSTER_CREATOR=yes
+    ports:
+      - 7005:7005
+      - 17005:17005
+
+volumes:
+  redis-cluster_data-0:
+  redis-cluster_data-1:
+  redis-cluster_data-2:
+  redis-cluster_data-3:
+  redis-cluster_data-4:
+  redis-cluster_data-5:
