@@ -1,0 +1,90 @@
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: turingcloud-elasticsearch
+  namespace: tmc-v2-test
+  labels:
+    app: turingcloud-elasticsearch
+  annotations:
+    kubesphere.io/creator: sxx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: turingcloud-elasticsearch
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: turingcloud-elasticsearch
+      annotations:
+        kubesphere.io/restartedAt: '2023-03-27T06:56:14.712Z'
+        logging.kubesphere.io/logsidecar-config: '{}'
+    spec:
+      initContainers:
+        - name: init-chmod-data
+          image: 'docker.io/bitnami/minideb:buster'
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              chown -R 1001:1001 /bitnami/elasticsearch/data
+          resources: {}
+          volumeMounts:
+            - name: turingcloud-elasticsearch
+              mountPath: /bitnami/elasticsearch/data
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent 
+      containers:
+        - name: turingcloud-elasticsearch
+          image: 'docker.io/bitnami/elasticsearch:8'
+          ports:
+            - name: http-9200
+              containerPort: 9200
+              protocol: TCP
+            - name: http-9300
+              containerPort: 9300
+              protocol: TCP
+          env:
+            - name: discovery.type
+              value: single-node
+          resources: {}
+          volumeMounts:
+            - name: turingcloud-elasticsearch
+              mountPath: /bitnami/elasticsearch/data
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      serviceAccountName: default
+      serviceAccount: default
+      securityContext: {}
+      affinity: {}
+      schedulerName: default-scheduler
+  volumeClaimTemplates:
+    - kind: PersistentVolumeClaim
+      apiVersion: v1
+      metadata:
+        name: turingcloud-elasticsearch
+        namespace: tmc-v2-test
+        creationTimestamp: null
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: csi-standard
+        volumeMode: Filesystem
+      status:
+        phase: Pending
+  serviceName: turingcloud-elasticsearch-9mxd
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+  revisionHistoryLimit: 10
