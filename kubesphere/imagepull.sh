@@ -14,7 +14,10 @@ done
 
 
 //同步镜像
-docker save minio/minio:RELEASE.2019-08-07T01-59-21Z -o minio.tar
 
-rsync -e "ssh -p 12121" -avz minio.tar node1:/root/minio.tar
-docker load -i minio.tar
+node=(node1 node2 node3 node4)
+for i in ${node[@]}; do
+    rsync -e "ssh -p 12121" -avz k8s-device-plugin.tar $i:/root/k8s-device-plugin.tar
+done
+
+docker load -i /root/k8s-device-plugin.tar
