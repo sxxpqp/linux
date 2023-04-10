@@ -306,4 +306,14 @@ nodePort #宿主机上暴露端口
 loadBlancer #使用云上的负载均衡，或者本地使用openelb
 externalName #通过代理到域名上，会出现跨域问题，需要处理。
 hostPort #pod的port使用宿主机的端口
-hostNetwork #pod使用宿主机的ip
+hostNetwork #pod使用宿主机的ip触发了systemd的bug，执行systemctl daemon-reexec 重新加载一下。
+
+
+pod无法正常启动 、删除等操作，可能是因为kubelet的systemd配置文件有问题，导致kubelet无法正常启动，可以通过以下命令查看kubelet的状态：
+```
+systemctl status kubelet
+```
+触发了systemd的bug,可以通过以下命令解决：
+```
+执行systemctl daemon-reexec 重新加载一下。
+```
