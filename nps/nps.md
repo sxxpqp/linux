@@ -9,8 +9,7 @@ touch /opt/nps/conf/clients.json
 touch /opt/nps/conf/tasks.json
 touch /opt/nps/conf/hosts.json
 ```
-```
-创建配置文件
+创建nps.conf配置文件
 ```
 cat >/opt/nps/conf/nps.conf<<EOF
 appname = nps
