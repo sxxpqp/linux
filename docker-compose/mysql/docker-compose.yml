@@ -9,7 +9,7 @@ services:
       - mysql-data:/var/lib/mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: test
+      MYSQL_DATABASE: gin_demo
     ports:
       - "3306:3306"
     networks:
@@ -20,7 +20,7 @@ services:
     restart: always
     hostname: phpmyadmin
     ports:
-      - "8080:80"
+      - "80:80"
     environment:
       PMA_HOST: mysql
       PMA_PORT: 3306
