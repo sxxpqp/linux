@@ -92,7 +92,8 @@ vi /etc/frpc/frpc.ini
 server_addr = zkturing.imwork.net
 server_port = 7000
 token = zkturing.imwork.net
-tls_enable = true
+protocol = kcp
+<!-- tls_enable = true -->
 
 [web1_xxxxx]
 type = http

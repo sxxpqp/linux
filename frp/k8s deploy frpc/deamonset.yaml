@@ -74,7 +74,7 @@ data:
     server_addr = zkturing.imwork.net
     server_port = 7000
     token = zkturing.imwork.net
-    tls_enable = true
+    protocol = kcp
     [tcp1_mengniu]
     type = tcp
     local_ip = 127.0.0.1
