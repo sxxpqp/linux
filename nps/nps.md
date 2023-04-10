@@ -19,7 +19,7 @@ runmode = dev
 #HTTP(S) proxy port, no startup if empty
 http_proxy_ip=0.0.0.0
 http_proxy_port=80
-https_proxy_port=4430
+https_proxy_port=443
 https_just_proxy=true
 #default https certificate setting
 https_default_cert_file=conf/server.pem
@@ -103,5 +103,5 @@ EOF
 
 
 ```bash
-docker run -d --name=nps --restart=always --net=host -v /opt/nps/conf:/conf sxxpqp/nps
+docker run -d --name=nps  --privileged --restart=always --net=host -v /opt/nps/conf:/conf sxxpqp/nps
 ```
