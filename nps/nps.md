@@ -1,7 +1,18 @@
 ### install nps on docker 特权模式
-
+创建目录
 ```
-cat >>/opt/nps/conf/nps.conf<<EOF
+mkdir -p /opt/nps/conf
+```
+创建配置文件
+```
+touch /opt/nps/conf/clients.json
+touch /opt/nps/conf/tasks.json
+touch /opt/nps/conf/hosts.json
+```
+```
+创建配置文件
+```
+cat >/opt/nps/conf/nps.conf<<EOF
 appname = nps
 #Boot mode(dev|pro)
 runmode = dev
@@ -9,7 +20,7 @@ runmode = dev
 #HTTP(S) proxy port, no startup if empty
 http_proxy_ip=0.0.0.0
 http_proxy_port=80
-https_proxy_port=443
+https_proxy_port=4430
 https_just_proxy=true
 #default https certificate setting
 https_default_cert_file=conf/server.pem
