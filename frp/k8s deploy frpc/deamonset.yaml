@@ -77,6 +77,6 @@ data:
     protocol = kcp
     [tcp1_mengniu]
     type = tcp
-    local_ip = 127.0.0.1
-    local_port = 3306
-    remote_port = 30306
+    local_ip = 192.168.1.1
+    local_port = 443
+    remote_port = 38443
