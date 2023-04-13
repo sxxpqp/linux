@@ -22,7 +22,7 @@ spec:
     - protocol: TCP
         port: 80
         targetPort: 80
-    ```
+```
 
 #### ClusterIP创建服务 通过endpoints指定服务的endpoint
 ```yaml
@@ -172,7 +172,7 @@ spec:
             image: nginx:1.7.9
             ports:
             - containerPort: 80
-    ```
+```
 #### hostNetwork创建statefulset
 ```yaml
 apiVersion: apps/v1
@@ -197,4 +197,4 @@ spec:
             image: nginx:1.7.9
             ports:
             - containerPort: 80
-    ```
+```
