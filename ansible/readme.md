@@ -33,3 +33,9 @@ ansible -i inventory all -m systemd -a "name=cron state=started enabled=yes"
 ansible -i inventory all -m yum_repository -a "name=epel description='Extra Packages for Enterprise Linux 7 - $basearch' baseurl=http://mirrors.aliyun.com/epel/7/$basearch/ gpgcheck=0 enabled=1"
 ### yum 模块 安装nginx
 ansible -i inventory all -m yum -a "name=nginx state=present"
+### yum 模块 卸载nginx
+ansible -i inventory all -m yum -a "name=nginx state=absent"
+
+### wget 模块 下载文件
+ansible -i inventory all -m wget -a "url=http://mirrors.aliyun.com/epel/7/x86_64/Packages/e/epel-release-7-11.noarch.rpm dest=/tmp/epel-release-7-11.noarch.rpm"
+

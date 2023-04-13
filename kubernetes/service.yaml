@@ -15,3 +15,4 @@ spec: # 资源规范字段
   selector: # 选择器
     app: demo
   # ClusterIP: None #headless配置  
+
