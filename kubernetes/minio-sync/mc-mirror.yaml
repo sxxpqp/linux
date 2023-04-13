@@ -1,0 +1,120 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: turingcloud-mc
+  namespace: tmc-v2-saas
+  labels:
+    app: turingcloud-mc
+  annotations:
+    deployment.kubernetes.io/revision: '2'
+    kubesphere.io/creator: sxx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: turingcloud-mc
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: turingcloud-mc
+        pod-template-hash: 69d8685f4b
+      annotations:
+        kubesphere.io/restartedAt: '2023-04-13T08:20:42.781Z'
+        logging.kubesphere.io/logsidecar-config: '{}'
+    spec:
+      volumes:
+        - name: volume-r2vlx6
+          configMap:
+            name: config
+            defaultMode: 420
+      containers:
+        - name: container-gckh2s
+          image: 'minio/mc:latest'
+          command:
+            - /bin/bash
+          args:
+            - '-c'
+            - mc mirror --remove --overwrite --watch minio1/model minio2/model
+          resources: {}
+          volumeMounts:
+            - name: volume-r2vlx6
+              readOnly: true
+              mountPath: /root/.mc/config.json
+              subPath: config.json
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      serviceAccountName: default
+      serviceAccount: default
+      securityContext: {}
+      affinity: {}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: config
+  namespace: tmc-v2-saas
+  annotations:
+    kubesphere.io/alias-name: mc
+    kubesphere.io/creator: sxx
+data:
+  config.json: |-
+    {
+            "version": "10",
+            "aliases": {
+                    "gcs": {
+                            "url": "https://storage.googleapis.com",
+                            "accessKey": "YOUR-ACCESS-KEY-HERE",
+                            "secretKey": "YOUR-SECRET-KEY-HERE",
+                            "api": "S3v2",
+                            "path": "dns"
+                    },
+                    "local": {
+                            "url": "http://localhost:9000",
+                            "accessKey": "",
+                            "secretKey": "",
+                            "api": "S3v4",
+                            "path": "auto"
+                    },
+                    "minio1": {
+                            "url": "http://test.iot.store:9000",
+                            "accessKey": "minio",
+                            "secretKey": "Iot@123456",
+                            "api": "s3v4",
+                            "path": "auto"
+                    },
+                    "minio2": {
+                            "url": "http://turingcloud-minio:9000",
+                            "accessKey": "turing",
+                            "secretKey": "Turing2020",
+                            "api": "s3v4",
+                            "path": "auto"
+                    },
+                    "play": {
+                            "url": "https://play.min.io",
+                            "accessKey": "Q3AM3UQ867SPQQA43P2F",
+                            "secretKey": "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG",
+                            "api": "S3v4",
+                            "path": "auto"
+                    },
+                    "s3": {
+                            "url": "https://s3.amazonaws.com",
+                            "accessKey": "YOUR-ACCESS-KEY-HERE",
+                            "secretKey": "YOUR-SECRET-KEY-HERE",
+                            "api": "S3v4",
+                            "path": "dns"
+                    }
+            }
+    }
