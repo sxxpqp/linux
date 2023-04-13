@@ -98,13 +98,7 @@ NTP (网络时间协议, network time protocol) 是网络中保持时间同步�
 
 
 
-### 访问github，添加hosts
-
-```
-151.101.1.6 github.global.ssl.fastly.net
-140.82.114.3 github.com
-```
-一键安装trojan-go 科学代理
+### 一键安装trojan-go 科学代理
 ```
 bash <(curl -sSL "https://raw.githubusercontent.com/veip007/hj/main/trojan-go.sh") 
 ```
