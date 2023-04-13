@@ -149,7 +149,7 @@ spec:
             image: nginx:1.7.9
             ports:
             - containerPort: 80
-    ```
+```
 #### hostNetwork创建daemonset
 ```yaml
 apiVersion: apps/v1
