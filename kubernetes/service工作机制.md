@@ -1,14 +1,14 @@
 ---
 ### 八种服务类型 
 
-#1. ClusterIP：默认类型，只能在集群内部访问，通过集群内部的IP地址访问\n
-#2. NodePort：通过集群内部的IP地址和端口访问\n
-#3. LoadBalancer：通过云服务商提供的负载均衡器访问\n
-#4. ExternalName：通过CNAME记录访问\n
-#5. Headless：不创建ClusterIP，只创建Endpoints\n 
-#6. ExternalIPs：通过外部IP访问\n
-#7. hostPort：通过宿主机IP和端口访问\n
-#8. hostNetwork：通过宿主机IP访问\n
+##### 1. ClusterIP：默认类型，只能在集群内部访问，通过集群内部的IP地址访问
+##### 2. NodePort：通过集群内部的IP地址和端口访问
+##### 3. LoadBalancer：通过云服务商提供的负载均衡器访问
+##### 4. ExternalName：通过CNAME记录访问
+##### 5. Headless：不创建ClusterIP，只创建Endpoints
+##### 6. ExternalIPs：通过外部IP访问
+##### 7. hostPort：通过宿主机IP和端口访问
+##### 8. hostNetwork：通过宿主机IP访问
 #### ClusterIP创建服务 通过selector选择器创建服务，通过label标签选择器选择pod,并创建endpoint。
 ```yaml
 apiVersion: v1
