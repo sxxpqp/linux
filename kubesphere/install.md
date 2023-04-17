@@ -110,88 +110,24 @@ sed -i 's/^SELINUX=enforcing$/SELINUX=disabled/' /etc/selinux/config
 
 ### 创建集群
 
-#### 快速开始
-
-快速入门使用 `all-in-one` 安装，这是熟悉 KubeSphere 的良好开始。
-
-> 注意： 由于 Kubernetes 暂不支持大写 NodeName， hostname 中包含大写字母将导致后续安装过程无法正常结束
-
-##### 命令
-
-> 如果无法访问 `https://storage.googleapis.com`, 请先执行 `export KKZONE=cn`.
+#### 快速开始 (all-in-one)
 
 ```shell
-./kk create cluster [--with-kubernetes version] [--with-kubesphere version]
+./kk create cluster
 ```
-
-##### 例子
-
-* 使用默认版本创建一个纯 Kubernetes 集群
-
-  ```shell
-  ./kk create cluster
-  ```
-* 创建指定一个（[支持的版本](#KubernetesVersions)）的 Kubernetes 集群
-
-  ```shell
-  ./kk create cluster --with-kubernetes v1.19.8
-  ```
-* 创建一个部署了 KubeSphere 的 Kubernetes 集群 （例如 `--with-kubesphere v3.1.0`）
-
-  ```shell
-  ./kk create cluster --with-kubesphere [version]
-  ```
-* 创建一个指定的 container runtime 的 Kubernetes 集群（docker, crio, containerd and isula）
-
-  ```shell
-  ./kk create  cluster --container-manager containerd
-  ```
-
-#### 高级用法
-
-您可以使用高级安装来控制自定义参数或创建多节点集群。具体来说，通过指定配置文件来创建集群。
-
-> 如果无法访问 `https://storage.googleapis.com`, 请先执行 `export KKZONE=cn`.
-
-1. 首先，创建一个示例配置文件
-
-   ```shell
-   ./kk create config [--with-kubernetes version] [--with-kubesphere version] [(-f | --filename) path]
-   ```
-
-   **例子：**
-
-   * 使用默认配置创建一个示例配置文件。您也可以指定文件名称或文件所在的文件夹。
-
-     ```shell
-     ./kk create config [-f ~/myfolder/config-sample.yaml]
-     ```
-   * 同时安装 KubeSphere
-
-     ```shell
-     ./kk create config --with-kubesphere
-     ```
-2. 根据您的环境修改配置文件 config-sample.yaml
-
-> 注意： 由于 Kubernetes 暂不支持大写 NodeName， worker 节点名中包含大写字母将导致后续安装过程无法正常结束
->
-> 当指定安装KubeSphere时，要求集群中有可用的持久化存储。默认使用localVolume，如果需要使用其他持久化存储，请参阅 [addons](./docs/addons.md) 配置。
-
-3. 使用配置文件创建集群。
-
-   ```shell
-   ./kk create cluster -f ~/myfolder/config-sample.yaml
-   ```
-
-### 启用多集群管理
-
-默认情况下，Kubekey 将仅安装一个 Solo 模式的单集群，即未开启 Kubernetes 多集群联邦。如果您希望将 KubeSphere 作为一个支持多集群集中管理的中央面板，您需要在 [config-example.yaml](docs/config-example.md) 中设置 `ClusterRole`。关于多集群的使用文档，请参考 [如何启用多集群](https://github.com/kubesphere/community/blob/master/sig-multicluster/how-to-setup-multicluster-on-kubesphere/README_zh.md)。
-
-### 开启可插拔功能组件
-
-KubeSphere 从 2.1.0 版本开始对 Installer 的各功能组件进行了解耦，快速安装将默认仅开启最小化安装（Minimal Installation），Installer 支持在安装前或安装后自定义可插拔的功能组件的安装。使最小化安装更快速轻量且资源占用更少，也方便不同用户按需选择安装不同的功能组件。
-
-KubeSphere 有多个可插拔功能组件，功能组件的介绍可参考 [配置示例](docs/config-example.md)。您可以根据需求，选择开启安装 KubeSphere 的可插拔功能组件。我们非常建议您开启这些功能组件来体验 KubeSphere 完整的功能以及端到端的解决方案。请在安装前确保您的机器有足够的 CPU 与内存资源。开启可插拔功能组件可参考 [开启可选功能组件](https://github.com/kubesphere/ks-installer/blob/master/README_zh.md#%E5%AE%89%E8%A3%85%E5%8A%9F%E8%83%BD%E7%BB%84%E4%BB%B6)。
+###  多节点安装 创建config
+  
+```shell
+  ./kk create config --with-kubernetes v1.21.16 --with-kubesphere v3.3.2
+```
+### 修改配置后安装
+```shell
+  ./kk create cluster -f config-sample.yaml
+```
+### 查看日志出现如下信息后，访问 https://ip:30880，表示安装成功
+```shell
+ kubectl logs -n kubesphere-system $(kubectl get pod -n kubesphere-system -l 'app in (ks-install, ks-installer)' -o jsonpath='{.items[0].metadata.name}') -f
+```
 
 ### 添加节点
 
