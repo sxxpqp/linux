@@ -46,10 +46,12 @@ KubeKey 可以同时安装 Kubernetes 和 KubeSphere。在版本1.18之后，安
   * 确保 `/etc/resolv.conf` 中的 DNS 地址可用。否则，可能会导致集群中出现某些 DNS 问题。
   * 如果您的网络配置使用防火墙或安全组，则必须确保基础结构组件可以通过特定端口相互通信。建议您关闭防火墙或遵循链接配置：[网络访问](docs/network-access.md)。
 ## centos 安装依赖
-### 设置主机名
+### 关闭防火墙
 ```shell
-hostnamectl set-hostname master
+systemctl stop firewalld
+systemctl disable firewalld
 ```
+
 ### 所有节点的时间同步 chrony
 ```shell
 yum install chrony -y
@@ -72,9 +74,10 @@ sed -i 's/^SELINUX=enforcing$/SELINUX=disabled/' /etc/selinux/config
 yum install -y socat conntrack-tools ebtables ipset ipvsadm
 ```
 ## ubuntu 安装依赖
-### 设置主机名
+### 关闭防火墙
 ```shell
-hostnamectl set-hostname master
+systemctl stop ufw
+systemctl disable ufw
 ```
 ### 所有节点的时间同步 chrony
 ```shell
