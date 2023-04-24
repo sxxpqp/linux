@@ -227,6 +227,16 @@ net.ipv4.vs.conn_reuse_mode=1
 net.ipv4.vs.expire_nodest_conn=1
 ```
 
+### 设置ulimit
+```bash
+cat >> /etc/security/limits.conf <<EOF
+* soft nofile 1280000
+* hard nofile 1280000
+* soft nproc 1280000
+* hard nproc 1280000
+EOF
+```
+
 ### kubesnetes证书过期查看及更新
 
 **查看证书情况**
