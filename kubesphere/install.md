@@ -118,7 +118,7 @@ sed -i 's/^SELINUX=enforcing$/SELINUX=disabled/' /etc/selinux/config
 ###  多节点安装 创建config
   
 ```shell
-  ./kk create config --with-kubernetes v1.21.16 --with-kubesphere v3.3.2
+  ./kk create config --with-kubernetes v1.21.6 --with-kubesphere v3.3.2
 ```
 ### 修改配置后安装
 ```shell
