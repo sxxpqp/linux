@@ -181,6 +181,8 @@ net.ipv4.tcp_fin_timeout = 30
 #net.ipv4.tcp_tw_reuse = 1
 #net.ipv4.tcp_tw_recycle = 1
 net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-arptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
 ```
 #### 提高文件打开数及提高文件系统性能
 ```bash
