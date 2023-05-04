@@ -174,6 +174,7 @@ echo 'complete -o default -F __start_kubectl k' >>~/.bashrc
 ### k8s内核参数优化
 #### 提高网络性能
 ```bash
+net.ipv4.ip_forward = 1
 net.core.somaxconn = 65535
 net.ipv4.tcp_max_syn_backlog = 8192
 net.core.netdev_max_backlog = 16384
