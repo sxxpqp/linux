@@ -186,13 +186,14 @@ net.bridge.bridge-nf-call-ip6tables = 1
 ```
 #### 提高文件打开数及提高文件系统性能
 ```bash
+fs.inotify.max_user_instances = 1048576
 fs.inotify.max_user_watches = 1048576
 fs.file-max = 1280000
-vm.max_map_count = 262144
 fs.nr_open = 1280000
 ```
 #### 提高内存管理性能
 ```bash
+vm.max_map_count = 262144
 vm.swappiness = 0
 vm.overcommit_memory = 1
 vm.panic_on_oom = 0
