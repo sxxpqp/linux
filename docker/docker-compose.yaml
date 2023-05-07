@@ -1,0 +1,276 @@
+version: '3'
+services:
+    mysql:
+        restart: always
+        image: mysql:8.0
+        container_name: turingcloud-mysql
+        hostname: turingcloud-mysql
+        ports:
+          - 3386:3306
+        environment:
+          TZ: Asia/Shanghai
+          MYSQL_ROOT_PASSWORD: Turing2020 #如果挂载的data文件夹中不为空，则此项设置失效，需要使用data文件中数据库对应root密码访问
+        command:
+          --default-authentication-plugin=mysql_native_password
+          --character-set-server=utf8mb4
+          --collation-server=utf8mb4_general_ci
+          --explicit_defaults_for_timestamp=true
+          --lower_case_table_names=1
+          --max_allowed_packet=128M
+        #挂载文件&文件夹
+        volumes:
+           #- /root/mysql8/conf/my.cnf:/etc/mysql/my.cnf
+           - /home/admin/mysql8/logs:/var/log/mysql
+           - /home/admin/mysql8/data:/var/lib/mysql
+           #- /root/mysql8/initdb:/docker-entrypoint-initdb.d
+        security_opt:
+        - seccomp:unconfined
+        deploy:
+          resources:
+            limits:
+              cpus: '2'
+              memory: 4G
+            reservations:
+              cpus: '1'
+              memory: 2G
+        healthcheck:
+          test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+          interval: 30s
+          timeout: 10s
+          retries: 5      
+
+    redis:
+        image: redis:5.0.0
+        container_name: turingcloud-redis
+        hostname: turingcloud-redis
+        restart: always
+        command: redis-server /usr/local/etc/redis/redis.conf
+        environment:
+          - TZ=Asia/Shanghai
+        volumes:
+          - /home/admin/redis/localtime:/etc/localtime:ro # 设置容器时区与宿主机保持一致
+          - /home/admin/redis/redis.conf:/usr/local/etc/redis/redis.conf
+          - /home/admin/redis/data:/data
+          - /home/admin/redis/logs:/logs
+          - /home/admin/hosts:/etc/hosts
+        deploy:
+          resources:
+            limits:
+              cpus: '2'
+              memory: 60G
+            reservations:
+              cpus: '1'
+              memory: 40G
+        ports:
+          - 6379:6379
+    rabbitmq:
+        image: rabbitmq:3.8.9-management
+        container_name: turingcloud-rabbitmq
+        hostname: turingcloud-rabbitmq
+        ports:
+          - "5672:5672"
+          - "15672:15672"
+        environment:
+          RABBITMQ_DEFAULT_VHOST: /
+          RABBITMQ_DEFAULT_USER: turing
+          RABBITMQ_DEFAULT_PASS: Turing2020
+          TZ: Asia/Shanghai
+        volumes:
+          - /home/admin/rabbitmq:/var/lib/rabbitmq
+        deploy:
+          resources:
+            limits:
+              cpus: '2'
+              memory: 2G
+            reservations:
+              cpus: '1'
+              memory: 1G
+        restart: always
+    minio:
+      image: minio/minio
+      #容器名
+      container_name: turingcloud-minio
+      hostname: turingcloud-minio
+      ports:
+        - "9000:9000"
+        - "9009:9009"
+      volumes:
+        - /home/minioFiles:/data
+        - /home/minioFiles/config:/root/.minio
+      environment:
+        MINIO_ACCESS_KEY: "turing"
+        MINIO_SECRET_KEY: "Turing2020"
+      command: server /data --console-address ":9009"
+      logging:
+        driver: "json-file"
+        options:
+          max-size: "1m"
+      restart: always
+
+    turingcloud-register:
+      build:
+        context: ./turingcloud-register
+      volumes:
+          - /root/turing_service/hosts:/etc/hosts
+      #networks:
+      #  - turingwork_default
+      restart: always
+      container_name: turingcloud-register
+      image: turingcloud-register
+      ports:
+        - 8848:8848
+      depends_on:
+        mysql:
+          condition: service_healthy
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://turingcloud-register:8848/nacos"]
+        interval: 30s 
+        timeout: 10s
+        retries: 5
+
+    turingcloud-gateway:
+      build:
+        context: ./turingcloud-gateway
+      volumes:
+        - /root/turing_service/hosts:/etc/hosts
+      #networks:
+      #  - turingwork_default
+      restart: always
+      container_name: turingcloud-gateway
+      image: turingcloud-gateway
+      ports:
+        - 9999:9999
+      depends_on:
+        turingcloud-register:
+          condition: service_healthy
+        turingcloud-auth:
+          condition: service_healthy 
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://turingcloud-gateway:9999/admin/tenant/list"]
+        interval: 30s
+        timeout: 10s
+        retries: 10
+        
+    turingcloud-auth:
+      build:
+        context: ./turingcloud-auth
+      volumes:
+        - /root/turing_service/hosts:/etc/hosts
+      #networks:
+      #  - turingwork_default
+      restart: always
+      container_name: turingcloud-auth
+      image: turingcloud-auth
+      depends_on:
+          turingcloud-register:
+            condition: service_healthy
+      ports:
+        - 3000:3000  
+      #没有nc命令，用curl代替  
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://turingcloud-auth:3000/"]
+        interval: 30s
+        timeout: 10s
+        retries: 10
+    turingcloud-upms:
+      build:
+        context: ./turingcloud-upms/turingcloud-upms-biz
+      ports:
+        - 4000:4000  
+      volumes:
+        - /root/turing_service/hosts:/etc/hosts
+      #networks:
+      #  - turingwork_default
+      restart: always
+      container_name: turingcloud-upms
+      image: turingcloud-upms
+      depends_on:
+          turingcloud-register:
+            condition: service_healthy
+    kt-model-medicine:
+      build:
+        context: ./kt-model-medicine/kt-model-medicine-biz
+      volumes:
+        - /root/turing_service/hosts:/etc/hosts
+      #networks:
+      #  - turingwork_default
+      restart: always
+      container_name: kt-model-medicine
+      image: kt-model-medicine
+      depends_on:
+          turingcloud-register:
+            condition: service_healthy
+
+    kt-model-water:
+      build:
+        context: ./kt-model-water/kt-model-water-biz
+      volumes:
+        - /root/turing_service/hosts:/etc/hosts
+      #networks:
+      #  - turingwork_default
+      restart: always
+      container_name: kt-model-water
+      image: kt-model-water
+      depends_on:
+          turingcloud-register:
+            condition: service_healthy
+
+    kt-model-disembark:
+      build:
+        context: ./kt-model-disembark/kt-model-disembark-biz
+      volumes:
+        - /root/turing_service/hosts:/etc/hosts
+      #networks:
+      #  - turingwork_default
+      restart: always
+      container_name: kt-model-disembark
+      image: kt-model-disembark
+      depends_on:
+          turingcloud-register:
+            condition: service_healthy
+
+    turingcloud-daemon-quartz:
+      build:
+        context: ./turingcloud-visual/turingcloud-daemon-quartz
+      volumes:
+        - /root/turing_service/hosts:/etc/hosts
+      #networks:
+      #  - turingwork_default
+      restart: always
+      image: turingcloud-daemon-quartz
+      container_name: turingcloud-daemon-quartz
+      depends_on:
+          turingcloud-register:
+            condition: service_healthy
+
+
+    turingcloud-codegen:
+      build:
+        context: ./turingcloud-visual/turingcloud-codegen
+      volumes:
+        - /root/turing_service/hosts:/etc/hosts
+      #networks:
+      # - turingwork_default
+      restart: always
+      image: turingcloud-codegen
+      container_name: turingcloud-codegen
+      depends_on:
+          turingcloud-register:
+            condition: service_healthy
+
+
+#    turingcloud-ansys-interactive:
+#      build:
+#        context: ./kt-ansys-interactive/kt-ansys-interactive-biz
+#      volumes:
+#        - /root/turing_service/hosts:/etc/hosts
+#        - /home:/home
+      #networks:
+      # - turingwork_default
+#      restart: always
+#      image: turingcloud-ansys-interactive
+#      container_name: turingcloud-ansys-interactive
+networks:
+  default:
+    external:
+      name: turingwork_default

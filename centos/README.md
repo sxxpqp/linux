@@ -454,3 +454,22 @@ iptables -A INPUT -p tcp --syn -m limit --limit 5/second -j ACCEPT
 
 - https://wiki.archlinux.org/index.php/iptables_(%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87)
 - https://wangchujiang.com/linux-command/c/iptables.html
+
+### 进程 数量及文件描述符
+```shell
+cat >> /etc/security/limits.conf << EOF
+* soft nofile 1280000
+* hard nofile 1280000
+* soft nproc 1280000
+* hard nproc 1280000
+EOF
+```
+```shell
+cat >>/etc/sysctl.conf <<EOF
+fs.file-max = 1280000
+fs.nr_open = 1280000
+EOF
+```
+```shell
+sysctl -p
+```
