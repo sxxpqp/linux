@@ -203,6 +203,10 @@ sxxpqp:仓库名称 修改成自己的仓库名称，需要先登陆
 ```
 docker login --username=1019466494@qq.com registry.cn-hangzhou.aliyuncs.com
 ```
+#第一列和第二列是镜像名称和版本号，可以根据自己的需求修改
+```
+docker images|grep -v REPOSITORY|grep ^gji|awk '{print $1":"$2}' > images.txt
+```
 ```
 #!/bin/bash
 for image in $(cat images.txt)

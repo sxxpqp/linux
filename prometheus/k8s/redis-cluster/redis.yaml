@@ -18,6 +18,12 @@ spec:
         image: redis:latest
         ports:
         - containerPort: 6379
+        args:
+          - redis-server
+          - "--maxmemory"
+          - "1000mb"
+          - "--maxmemory-policy"
+          - "volatile-ttl"
       - name: redis-exporter
         image: oliver006/redis_exporter:v1.12.1-alpine
         ports:
