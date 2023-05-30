@@ -1,0 +1,54 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: tensorflowgpu-test-sf
+  namespace: gitlab
+  labels:
+    app.kubernetes.io/instance: tensorflowgpu-ro-ym6i4h
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: tensorflowgpu-test-sf
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app.kubernetes.io/instance: tensorflowgpu-test-sf
+    spec:
+      volumes:
+        - name: tf4
+          nfs:
+            server: 10.15.150.4
+            path: /ksnfs07
+      containers:
+        - name: tensorflowgpu-rocm
+          image: 'rocm/tensorflow:rocm4.1-tf2.4-dev'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - while true; do echo hello; sleep 3600;done
+          resources:
+            limits:
+              amd.com/gpu: '1'
+          volumeMounts:
+            - name: tf4
+              mountPath: /tf/models
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
