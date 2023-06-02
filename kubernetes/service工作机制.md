@@ -7,8 +7,8 @@
 ##### 4. ExternalName：通过CNAME记录访问
 ##### 5. Headless：不创建ClusterIP，只创建Endpoints
 ##### 6. ExternalIPs：通过外部IP访问
-##### 7. hostPort：通过宿主机IP和端口访问
-##### 8. hostNetwork：通过宿主机IP访问
+##### 7. hostPort：通过宿主机IP和端口访问 通过iptables转发到pod 
+##### 8. hostNetwork：通过宿主机IP和端口访问 通过修改pod的网络命名空间，让pod的网络命名空间和宿主机共享，让pod的网络直接使用宿主机的网络，pod的ip地址就是宿主机的ip地址。
 #### ClusterIP创建服务 通过selector选择器创建服务，通过label标签选择器选择pod,并创建endpoint。
 ```yaml
 apiVersion: v1
@@ -88,7 +88,7 @@ metadata:
   name: nginx-service
 spec:
     externalIPs:
-    - 192.168.1.100
+    - 192.168.1.100 #指定外部IP 就是宿主机IP
     ports:
     - protocol: TCP
         port: 80
@@ -98,18 +98,28 @@ spec:
 ```
 #### hostPort创建服务 通过宿主机IP和端口访问
 ```yaml
-apiVersion: v1
-kind: Service
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: nginx-service
+  name: nginx-deployment
 spec:
-    ports:
-    - protocol: TCP
-        port: 80
-        targetPort: 80
-        hostPort: 30080 #指定宿主机端口跟nodeport一样 区别是nodeport是动态分配的，hostport是固定的。缺点是宿主机端口只能有一个pod使用。
+    replicas: 2 #副本不可以大于宿主机端口的数量
     selector:
+        matchLabels:
         app: nginx
+    template:
+        metadata:
+        labels:
+            app: nginx
+        spec:
+        containers:
+        - name: nginx
+            image: nginx:1.7.9
+            ports:
+            - containerPort: 80
+              hostport: 80 #指定hostport为80，通过宿主机IP访问 80端口可以访问到pod的80端口
+        nodeSelector: #指定nodeSelector为node01，pod只能调度到node01节点上
+            kubernetes.io/hostname: node01      
 ```
 #### hostNetwork创建deployment
 ```yaml
@@ -127,7 +137,7 @@ spec:
         labels:
             app: nginx
         spec:
-        dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，通过宿主机IP访问 80端口可以访问到pod的80端口
+        dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，clusterFirstWithHostNet表示使用宿主机的dns，clusterFirst表示先使用k8s的dns.
         hostNetwork: true #指定hostNetwork为true，通过宿主机IP访问 80端口可以访问到pod的80端口 使用hostNetwork时，pod的ip地址就是宿主机的ip地址。
         containers:
         - name: nginx
@@ -135,7 +145,7 @@ spec:
             ports:
             - containerPort: 80
 ```
-#### hostNetwork创建daemonset
+#### hostNetwork创建daemonset 
 ```yaml
 apiVersion: apps/v1
 kind: DaemonSet
@@ -150,7 +160,7 @@ spec:
         labels:
             app: nginx
         spec:
-        dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，通过宿主机IP访问 80端口可以访问到pod的80端口
+        dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet. clusterFirstWithHostNet表示使用宿主机的dns，clusterFirst表示先使用k8s的dns.
         hostNetwork: true #指定hostNetwork为true，通过宿主机IP访问 80端口可以访问到pod的80端口 使用hostNetwork时，pod的ip地址就是宿主机的ip地址。
         containers:
         - name: nginx
@@ -175,7 +185,7 @@ spec:
         labels:
             app: nginx
         spec:
-        dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，通过宿主机IP访问 80端口可以访问到pod的80端口
+        dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，clusterFirstWithHostNet表示使用宿主机的dns，clusterFirst表示先使用k8s的dns.
         hostNetwork: true #指定hostNetwork为true，通过宿主机IP访问 80端口可以访问到pod的80端口 使用hostNetwork时，pod的ip地址就是宿主机的ip地址。
         containers:
         - name: nginx
