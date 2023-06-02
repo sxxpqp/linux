@@ -1,0 +1,67 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: omvs-ingress
+  namespace: ${NAMESPACE}
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      rewrite ^/api(/|$)(.*) /$2 break; 
+      rewrite ^/uc-api(/|$)(.*) /$2 break;
+      rewrite ^/monitor-api(/|$)(.*) /$2 break;
+      rewrite ^/omei-api(/|$)(.*) /$2 break;
+      rewrite ^/omvision-api(/|$)(.*) /$2 break;
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: omvs-web-svc
+            port: 
+              number: 80
+      - path: /uc-api 
+        pathType: Prefix
+        backend:
+          service:
+            name: uc-api-svc
+            port: 
+              number: 8103
+      - path: /monitor-api
+        pathType: Prefix
+        backend:
+          service:
+            name: omvision-api-svc
+            port: 
+              number: 8081
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: uc-api-svc
+            port: 
+              number: 8103
+      - path: /rtp
+        pathType: Prefix
+        backend:
+          service:
+            name: keeper-svc
+            port: 
+              number: 30080
+      - path: /omei-api
+        pathType: Prefix
+        backend:
+          service:
+            name: omei-cloud-api-svc
+            port:
+              number: 8080
+      - path: /omvision-api
+        pathType: Prefix
+        backend:
+          service:
+            name: omvision-api-svc
+            port:
+              number: 8081
