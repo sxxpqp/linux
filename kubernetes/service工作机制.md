@@ -33,8 +33,8 @@ metadata:
 spec:
     ports:
     - protocol: TCP
-        port: 80
-        targetPort: 80
+      port: 80
+      targetPort: 80
     endpoints:
     - ip:
       - 192.168.1.100
