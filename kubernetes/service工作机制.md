@@ -37,7 +37,8 @@ subsets:
       - name: http #指定端口名称跟service的端口名称一致
         port: 80
         protocol: TCP
----
+```
+```yaml
 apiVersion: v1
 kind: Service
 metadata:
