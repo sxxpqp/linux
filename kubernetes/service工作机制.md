@@ -114,23 +114,29 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-    replicas: 2 #副本不可以大于宿主机端口的数量
-    selector:
-        matchLabels:
+  replicas: 2 #副本不可以大于宿主机端口的数量
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
         app: nginx
-    template:
-        metadata:
-        labels:
-            app: nginx
-        spec:
-        containers:
-        - name: nginx
-            image: nginx:1.7.9
-            ports:
-            - containerPort: 80
-              hostport: 80 #指定hostport为80，通过宿主机IP访问 80端口可以访问到pod的80端口
-        nodeSelector: #指定nodeSelector为node01，pod只能调度到node01节点上
-            kubernetes.io/hostname: node01      
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+          name: ngpt
+          hostPort: 31200
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi   
 ```
 #### hostNetwork创建deployment
 ```yaml
