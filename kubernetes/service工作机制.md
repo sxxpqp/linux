@@ -20,8 +20,8 @@ spec:
         app: nginx
     ports:
     - protocol: TCP
-        port: 80
-        targetPort: 80
+      port: 80
+      targetPort: 80
 ```
 
 #### ClusterIP创建服务 通过endpoints指定服务的endpoint
