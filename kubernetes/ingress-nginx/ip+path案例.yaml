@@ -65,3 +65,66 @@ spec:
             name: omvision-api-svc
             port:
               number: 8081
+--- 
+#或者通过rewrite方式
+kind: Ingress
+apiVersion: extensions/v1beta1
+metadata:
+  name: omvs-web-svc
+  namespace: omvs
+  annotations:
+    kubesphere.io/creator: sxx
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+            backend:
+              serviceName: omvs-web-svc
+              servicePort: 80
+---
+kind: Ingress
+apiVersion: extensions/v1beta1
+metadata:
+  name: omvs-ingress
+  namespace: omvs
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: >
+      {"apiVersion":"networking.k8s.io/v1","kind":"Ingress","metadata":{"annotations":{},"name":"omvs-ingress","namespace":"omvs"},"spec":{"ingressClassName":"nginx","rules":[{"http":{"paths":[{"backend":{"service":{"name":"omvs-web-svc","port":{"number":80}}},"path":"/","pathType":"Prefix"},{"backend":{"service":{"name":"uc-api-svc","port":{"number":8103}}},"path":"/uc-api","pathType":"Prefix"},{"backend":{"service":{"name":"omvision-api-svc","port":{"number":8081}}},"path":"/monitor-api","pathType":"Prefix"},{"backend":{"service":{"name":"uc-api-svc","port":{"number":8103}}},"path":"/api","pathType":"Prefix"},{"backend":{"service":{"name":"keeper-svc","port":{"number":30080}}},"path":"/rtp","pathType":"Prefix"},{"backend":{"service":{"name":"omei-cloud-api-svc","port":{"number":8080}}},"path":"/omei-api","pathType":"Prefix"},{"backend":{"service":{"name":"omvision-api-svc","port":{"number":8081}}},"path":"/omvision-api","pathType":"Prefix"}]}}]}}
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /uc-api(/|$)(.*)
+            pathType: Prefix
+            backend:
+              serviceName: uc-api-svc
+              servicePort: 8103
+          - path: /monitor-api(/|$)(.*)
+            pathType: Prefix
+            backend:
+              serviceName: omvision-api-svc
+              servicePort: 8081
+          - path: /api(/|$)(.*)
+            pathType: Prefix
+            backend:
+              serviceName: uc-api-svc
+              servicePort: 8103
+          - path: /rtp(/|$)(.*)
+            pathType: Prefix
+            backend:
+              serviceName: keeper-svc
+              servicePort: 30080
+          - path: /omei-api(/|$)(.*)
+            pathType: Prefix
+            backend:
+              serviceName: omei-cloud-api-svc
+              servicePort: 8080
+          - path: /omvision-api(/|$)(.*)
+            pathType: Prefix
+            backend:
+              serviceName: omvision-api-svc
+              servicePort: 8081
