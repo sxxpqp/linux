@@ -25,7 +25,7 @@ spec:
 ```
 
 #### ClusterIP创建服务 通过endpoints指定服务的endpoint
-````
+```
 apiVersion: v1
 kind: Endpoints
 metadata:
