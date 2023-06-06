@@ -25,19 +25,28 @@ spec:
 ```
 
 #### ClusterIP创建服务 通过endpoints指定服务的endpoint
-```yaml
+````
 apiVersion: v1
 kind: Endpoints
 metadata:
   name: my-service
 subsets:
   - addresses:
-      - ip: 192.168.1.100
+      - ip: 192.168.1.54 #手动指定endpoint的ip地址可以是pod的ip地址，也可以是宿主机的ip地址或者外部ip地址
     ports:
-      - name: http
+      - name: http #指定端口名称跟service的端口名称一致
         port: 80
         protocol: TCP
-
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+spec:
+    ports:
+    - protocol: TCP
+      port: 80
+      name: http #指定端口名称跟service的端口名称一致
 ```
 #### nodePort创建服务 LoadBalancer创建服务
 ```yaml
