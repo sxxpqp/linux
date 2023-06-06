@@ -145,22 +145,30 @@ kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-    replicas: 2 #副本不可以大于宿主机端口的数量
-    selector:
-        matchLabels:
+  replicas: 2 #副本不可以大于宿主机端口的数量
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
         app: nginx
-    template:
-        metadata:
-        labels:
-            app: nginx
-        spec:
-        dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，clusterFirstWithHostNet表示使用宿主机的dns，clusterFirst表示先使用k8s的dns.
-        hostNetwork: true #指定hostNetwork为true，通过宿主机IP访问 80端口可以访问到pod的80端口 使用hostNetwork时，pod的ip地址就是宿主机的ip地址。
-        containers:
-        - name: nginx
-            image: nginx:1.7.9
-            ports:
-            - containerPort: 80
+    spec:
+      dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，clusterFirstWithHostNet表示使用宿主机的dns，clusterFirst表示先使用k8s的dns.
+      hostNetwork: true #指定hostNetwork为true，通过宿主机IP访问 80端口可以访问到pod的80端口 使用hostNetwork时，pod的ip地址就是宿主机的ip地址。 
+      containers:
+      - name: nginx
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+          name: ngpt
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi 
 ```
 #### hostNetwork创建daemonset 
 ```yaml
@@ -169,21 +177,29 @@ kind: DaemonSet
 metadata:
   name: nginx-daemonset
 spec:
-    selector:
-        matchLabels:
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
         app: nginx
-    template:
-        metadata:
-        labels:
-            app: nginx
-        spec:
-        dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet. clusterFirstWithHostNet表示使用宿主机的dns，clusterFirst表示先使用k8s的dns.
-        hostNetwork: true #指定hostNetwork为true，通过宿主机IP访问 80端口可以访问到pod的80端口 使用hostNetwork时，pod的ip地址就是宿主机的ip地址。
-        containers:
-        - name: nginx
-            image: nginx:1.7.9
-            ports:
-            - containerPort: 80
+    spec:
+      dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，clusterFirstWithHostNet表示使用宿主机的dns，clusterFirst表示先使用k8s的dns.
+      hostNetwork: true #指定hostNetwork为true，通过宿主机IP访问 80端口可以访问到pod的80端口 使用hostNetwork时，pod的ip地址就是宿主机的ip地址。 
+      containers:
+      - name: nginx
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+          name: ngpt
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi 
 ```
 #### hostNetwork创建statefulset
 ```yaml
@@ -192,21 +208,29 @@ kind: StatefulSet
 metadata:
   name: nginx-statefulset
 spec:
-    serviceName: "nginx"
-    replicas: 2 #副本不可以大于宿主机端口的数量
-    selector:
-        matchLabels:
+  serviceName: nginx-service-headless #指定服务名称 
+  replicas: 1 #副本不可以大于宿主机端口的数量
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
         app: nginx
-    template:
-        metadata:
-        labels:
-            app: nginx
-        spec:
-        dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，clusterFirstWithHostNet表示使用宿主机的dns，clusterFirst表示先使用k8s的dns.
-        hostNetwork: true #指定hostNetwork为true，通过宿主机IP访问 80端口可以访问到pod的80端口 使用hostNetwork时，pod的ip地址就是宿主机的ip地址。
-        containers:
-        - name: nginx
-            image: nginx:1.7.9
-            ports:
-            - containerPort: 80
+    spec:
+      dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，clusterFirstWithHostNet表示使用宿主机的dns，clusterFirst表示先使用k8s的dns.
+      hostNetwork: true #指定hostNetwork为true，通过宿主机IP访问 80端口可以访问到pod的80端口 使用hostNetwork时，pod的ip地址就是宿主机的ip地址。 
+      containers:
+      - name: nginx
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+          name: ngpt
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi 
 ```
