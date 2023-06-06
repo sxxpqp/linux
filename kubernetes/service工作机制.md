@@ -27,18 +27,17 @@ spec:
 #### ClusterIP创建服务 通过endpoints指定服务的endpoint
 ```yaml
 apiVersion: v1
-kind: Service
+kind: Endpoints
 metadata:
-  name: nginx-service
-spec:
+  name: my-service
+subsets:
+  - addresses:
+      - ip: 192.168.1.100
     ports:
-    - protocol: TCP
+      - name: http
         port: 80
-        targetPort: 80
-    endpoints:
-    - ip:
-      - 192.168.1.100
-      - 192.168.1.101
+        protocol: TCP
+
 ```
 #### nodePort创建服务 LoadBalancer创建服务
 ```yaml
