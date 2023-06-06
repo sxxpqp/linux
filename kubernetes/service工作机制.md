@@ -29,7 +29,7 @@ spec:
 apiVersion: v1
 kind: Endpoints
 metadata:
-  name: my-service
+  name: my-service-manual-endpoints
 subsets:
   - addresses:
       - ip: 192.168.1.54 #手动指定endpoint的ip地址可以是pod的ip地址，也可以是宿主机的ip地址或者外部ip地址
@@ -42,7 +42,7 @@ subsets:
 apiVersion: v1
 kind: Service
 metadata:
-  name: my-service
+  name: my-service-manual-endpoints
 spec:
     ports:
     - protocol: TCP
@@ -54,38 +54,40 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginx-service
+  name: nginx-service-nodeport
 spec:
-    type: NodePort #指定服务类型为NodePort、LoadBalancer、
-        app: nginx
+    type: NodePort #指定服务类型为NodePort、LoadBalancer、ClusterIP
     ports:
     - protocol: TCP
-        port: 80
-        targetPort: 80
-        nodePort: 30080      
+      port: 80
+      targetPort: 80
+      nodePort: 30080  
 ```
 #### ExternalName创建服务 通过CNAME记录访问
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginx-service
+  name: nginx-service-externalname
 spec:
     type: ExternalName #指定服务类型为ExternalName
     externalName: www.baidu.com
+    ports:
+    - port: 443
+      targetPort: 443
 ```
 #### Headless创建服务 不创建ClusterIP，只创建Endpoints
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginx-service
+  name: nginx-service-headless
 spec:
     clusterIP: None #指定服务类型为Headless
     ports:
     - protocol: TCP
-        port: 80
-        targetPort: 80
+      port: 80
+      targetPort: 80
     selector:
         app: nginx    
 ```
@@ -94,14 +96,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginx-service
+  name: nginx-service-exrernalips
 spec:
     externalIPs:
-    - 192.168.1.100 #指定外部IP 就是宿主机IP
+    - 192.168.1.100 #指定外部IP 就是宿主机IP,创建kube-ipvs0网卡.
     ports:
     - protocol: TCP
-        port: 80
-        targetPort: 80
+      port: 80
+      targetPort: 80
     selector:
         app: nginx    
 ```
