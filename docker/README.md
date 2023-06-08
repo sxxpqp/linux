@@ -1,4 +1,22 @@
 ## 关于docker的日常总结及分享
+
+### docker 拉取国外镜像慢的问题解决 通过clash代理
+
+```
+vi /etc/systemd/system/docker.service 
+```
+添加env
+```
+[Service]
+Environment="HTTP_PROXY=http://192.168.2.173:1080/" "HTTPS_PROXY=http://192.168.2.173:1080/"
+```
+```
+systemctl daemon-reload
+systemctl restart docker
+```
+```
+
+```bash
 ### 自动安装
 **Docker** 提供了一个自动配置与安装的脚本，支持 Debian、RHEL、SUSE 系列及衍生系统的安装。
 
