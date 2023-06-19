@@ -1,0 +1,1 @@
+docker run --privileged -d --net=host  --name=clash sxxpqp/clash:v1
