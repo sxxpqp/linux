@@ -31,7 +31,7 @@ spec:
             defaultMode: 420
       containers:
         - name: container-q2cnta
-          image: stilleshan/frpc
+          image: harbor.iot.store:8085/turing-kubesphere/frpc:v1
           resources: {}
           volumeMounts:
             - name: volume-kgjoln
@@ -50,6 +50,8 @@ spec:
       dnsPolicy: ClusterFirst
       serviceAccountName: default
       serviceAccount: default
+      imagePullSecrets:
+        - name: harbor-repository
       hostNetwork: true
       securityContext: {}
       affinity: {}

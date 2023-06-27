@@ -1,0 +1,93 @@
+# Strip prefix /foobar and /fiibar
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: stripprefix
+  namespace: ${NAMESPACE}
+spec:
+  stripPrefix:
+    forceSlash: true
+    prefixes:
+      - /omvs-web
+      - /api
+      - /uc-api
+      - /monitor-api
+      - /omei-api
+      - /omvision-api
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: replacepath-regex-monitor
+  namespace: ${NAMESPACE}
+spec:
+  replacePathRegex:
+    regex:  ^/monitor-(api/.*)
+    replacement: /${1}
+
+
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: omvs-ingress
+  namespace: ${NAMESPACE}
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    traefik.ingress.kubernetes.io/router.middlewares: ${NAMESPACE}-stripprefix@kubernetescrd,${NAMESPACE}-replacepath-regex-monitor@kubernetescrd
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: omvs-web-svc
+            port: 
+              number: 80
+      - path: /uc-api
+        pathType: Prefix
+        backend:
+          service:
+            name: uc-api-svc
+            port: 
+              number: 8103
+      - path: /monitor-api
+        pathType: Prefix
+        backend:
+          service:
+            name: omvision-api-svc
+            port: 
+              number: 8081
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: uc-api-svc
+            port: 
+              number: 8103
+      - path: /rtp
+        pathType: Prefix
+        backend:
+          service:
+            name: keeper-svc
+            port: 
+              number: 30080
+      - path: /omei-api
+        pathType: Prefix
+        backend:
+          service:
+            name: omei-cloud-api-svc
+            port:
+              number: 8080
+
+      - path: /omvision-api
+        pathType: Prefix
+        backend:
+          service:
+            name: omvision-api-svc
+            port:
+              number: 8081
