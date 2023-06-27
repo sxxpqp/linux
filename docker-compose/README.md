@@ -1,7 +1,11 @@
 ## 关于docker-compose的日常总结及分享
 
 ### 自动安装
+#### 安装docker
 
+```
+curl https://releases.rancher.com/install-docker/19.03.sh | sh
+```
 #### 安装docker-compose
 
 ```
