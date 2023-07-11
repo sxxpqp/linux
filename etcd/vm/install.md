@@ -154,12 +154,12 @@ systemctl restart etcd
 etcdctl cluster-health
 ```
 
-# 查找etcd中所有的key
+### 查找etcd中所有的key
 ```
 ETCDCTL_API=3 etcdctl --endpoints=http://192.168.1.43:2379 get / --prefix --keys-only 
 ```
 
-# 设置etcd的key
+### 设置etcd的key
 ```
 ETCDCTL_API=3 etcdctl --endpoints=http://192.168.1.43:2379 put pqp "sxx"
 ```
