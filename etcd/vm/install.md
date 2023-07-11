@@ -147,7 +147,7 @@ ETCDCTL_API=3 etcdctl snapshot restore /tmp/etcd-backup/etcd-snapshot.db \
   --initial-advertise-peer-urls http://192.168.1.45:2380 \
   --data-dir=/var/lib/etcd/default.etcd
 ```
-
+```
 sed -i 's/ETCD_INITIAL_CLUSTER_STATE="new"/ETCD_INITIAL_CLUSTER_STATE="existing"/g' /etc/etcd/etcd.conf
 chown etcd:etcd -R /var/lib/etcd/default.etcd
 systemctl restart etcd
