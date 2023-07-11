@@ -1,123 +1,211 @@
 user www-data;
-worker_processes 8;
-pid /run/nginx.pid;
+worker_processes auto;
+
+worker_rlimit_nofile 51200;
 
 events {
-    worker_connections 1024;
-    multi_accept on;
+
+  use epoll;
+  worker_connections 51200;
+  multi_accept on;
 }
 
 http {
+    include       mime.types;
+    default_type  application/octet-stream;
 
-    ##
-    # Basic Settings
-    ##
+    server_names_hash_bucket_size   128;
 
-    sendfile on;
-    tcp_nopush on;
+    client_header_buffer_size   32k;
+
+    large_client_header_buffers 4 32k;
+    log_format access '$remote_addr - $remote_user [$time_local] "$request" '
+            '$status $body_bytes_sent "$http_referer" '
+            '"$http_user_agent" "$http_x_forwarded_for"';
+    access_log  /var/log/nginx/access.log   access;
+    sendfile    on;
+    tcp_nopush  on;
     tcp_nodelay on;
-    keepalive_timeout 15;
-    types_hash_max_size 2048;
-    # server_tokens off;
+    keepalive_timeout   65;
+    server_tokens   off;
+    client_body_buffer_size 1024k;
 
-    # server_names_hash_bucket_size 64;
-    # server_name_in_redirect off;
+    proxy_connect_timeout   150s;
+    proxy_send_timeout      150s;
+    proxy_read_timeout      150s;
 
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
-
-    ##
-    # Logging Settings
-    ##
-
-    access_log off;
-    error_log /var/log/nginx/error.log;
-
-    ##
-    # Gzip Settings
-    ##
-
-    gzip on;
-    gzip_disable "msie6";
-
-     gzip_vary on;
-     gzip_proxied any;
-     gzip_comp_level 9;
-     gzip_buffers 16 8k;
-     gzip_http_version 1.1;
-     gzip_types text/plain text/css application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript;
-
-    ##
-    # nginx-naxsi config
-    ##
-    # Uncomment it if you installed nginx-naxsi
-    ##
-
-    #include /etc/nginx/naxsi_core.rules;
-
-    ##
-    # nginx-passenger config
-    ##
-    # Uncomment it if you installed nginx-passenger
-    ##
-
-    #passenger_root /usr;
-    #passenger_ruby /usr/bin/ruby;
-
-    ##
-    # Virtual Host Configs
-    ##
-
-    include /etc/nginx/conf.d/*.conf;
-    include /etc/nginx/sites-enabled/*;
-}
+    proxy_buffer_size       512k;
+    proxy_buffers           64 64k;
+    proxy_busy_buffers_size 2048k;
+    proxy_temp_file_write_size 2048k;
 
 
-# mail {
-#   # See sample authentication script at:
-#   # http://wiki.nginx.org/ImapAuthenticateWithApachePhpScript
-#
-#   # auth_http localhost/auth.php;
-#   # pop3_capabilities "TOP" "USER";
-#   # imap_capabilities "IMAP4rev1" "UIDPLUS";
-#
-#   server {
-#       listen     localhost:110;
-#       protocol   pop3;
-#       proxy      on;
-#   }
-#
-#   server {
-#       listen     localhost:143;
-#       protocol   imap;
-#       proxy      on;
-#   }
-#}
-### 以下是配置文件Certbot自动生成的配置文件，不要修改，否则会导致证书无法自动更新
-server {
-    server_name nps.sxxpqp.top;
-    listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/nps.sxxpqp.top/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/nps.sxxpqp.top/privkey.pem; # managed by Certbot
-    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
-    location / {
-        proxy_pass http://127.0.0.1:800;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    gzip    on;
+    gzip_min_length 1k;
+    gzip_buffers 4 16k;
+    gzip_http_version 1.1;
+    gzip_comp_level 2;
+    gzip_types text/plain application/x-javascript text/css application/xml application/glb;
+    gzip_vary   on;
+
+    client_header_timeout 120s;
+    client_body_timeout 120s;
+
+    client_max_body_size 1000M;
+
+    upstream local {
+        server turingcloud-gateway;
+        keepalive 300;
     }
-}
+    upstream ms {
+        server turingcloud-gateway:9999;
+        keepalive 300;
+    }
 
-server {
-    if ($host = nps.sxxpqp.top) {
-        return 301 https://$host$request_uri;
-    } # managed by Certbot
+    server {
+        listen 80;
+        server_name _;
+        root  /usr/share/nginx/html;
+        access_log /var/log/nginx/tsl.iot.store_access.log access;
+        error_log /var/log/nginx/tsl.iot.store_error.log;
+        index  index.html index.htm;
 
 
-    listen 80;
-    server_name nps.sxxpqp.top;
-    return 404; # managed by Certbot
 
+        location /swagger {
+            rewrite  ^/swagger/?(.*)$ /$1 break;
+            proxy_pass http://ms;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_connect_timeout 1500s;
+            proxy_send_timeout 1500s;
+            proxy_read_timeout 1500s;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+
+        location /tmc/ {
+            proxy_pass http://local/;
+            proxy_next_upstream http_502 http_504 error timeout invalid_header;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP   $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+
+        location /zkturing/ {
+            proxy_pass http://local/;
+
+            proxy_next_upstream http_502 http_504 error timeout invalid_header;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP   $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+
+        location /preview {
+            proxy_pass http://turingcloud-kkfileview:8012;
+            proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+
+
+        error_page   500 502 503 504  /50x.html;
+          location = /50x.html {
+          root   /usr/share/nginx/html;
+        }
+
+
+        location ~* ^/(code|auth|admin|device|video|daily|monitor|test|job|visual|light|safety|dataanalysis|data|act|ground) {
+            proxy_pass http://ms;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_connect_timeout 1500s;
+            proxy_send_timeout 1500s;
+            proxy_read_timeout 1500s;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            if ($request_uri ~* "\.(glb|gltf)$") {
+               expires 1d;
+               add_header Cache-Control public;
+            }
+        }
+
+#        location ^~/ly-bigscreen {
+#            alias /usr/share/nginx/bigscreen/ly;
+#            try_files $uri $uri/ /index.html;
+#            index  index.html index.htm;
+#        }
+#
+        location ^~/test-bigscreen {
+            alias /usr/share/nginx/bigscreen/test;
+            try_files $uri $uri/ /index.html;
+            index  index.html index.htm;
+        }
+
+        location ^~/wuruan-bigscreen {
+            alias /usr/share/nginx/bigscreen/wuruan;
+            try_files $uri $uri/ /index.html;
+            index  index.html index.htm;
+        }
+
+        location ~* ^/(tongheng) {
+            proxy_pass http://61.136.180.57:83;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_connect_timeout 1500s;
+            proxy_send_timeout 1500s;
+            proxy_read_timeout 1500s;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+
+        location ~* ^/(jichang) {
+
+            add_header Access-Control-Allow-Origin *;
+            #蒙牛
+#           proxy_pass http://221.199.14.100:9780;
+            #贡嘎
+#          proxy_pass http://219.151.43.125:9780;
+            #测试线
+            proxy_pass https://ls.iot.store:9781;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_connect_timeout 1500s;
+            proxy_send_timeout 1500s;
+            proxy_read_timeout 1500s;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            rewrite ^/jichang/(.*)$ /$1 break;
+            # 开启log日志
+            access_log  /var/log/nginx/jichang.log  access;
+        }
+
+                location ~ /ISAPI|SDK/ {
+                    if ($http_cookie ~ "webVideoCtrlProxy=(.+)") {
+                        proxy_pass http://$cookie_webVideoCtrlProxy;
+                        break;
+                    }
+                }
+                location ^~ /webSocketVideoCtrlProxy {
+                    #web socket
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade $http_upgrade;
+                    proxy_set_header Connection "upgrade";
+                    proxy_set_header Host $host;
+                    proxy_set_header X-real-ip $remote_addr;
+                    proxy_set_header X-Forwarded-For $remote_addr;
+
+                    if ($http_cookie ~ "webVideoCtrlProxyWs=(.+)") {
+                        proxy_pass http://$cookie_webVideoCtrlProxyWs/$cookie_webVideoCtrlProxyWsChannel?$args;
+                        break;
+                    }
+                    if ($http_cookie ~ "webVideoCtrlProxyWss=(.+)") {
+                        proxy_pass http://$cookie_webVideoCtrlProxyWss/$cookie_webVideoCtrlProxyWsChannel?$args;
+                        break;
+                    }
+                }
+
+
+    }
 
 }
