@@ -109,7 +109,7 @@ ETCDCTL_API=3 etcdctl  --endpoints=http://192.168.1.43:2379 snapshot save  /tmp/
 ## 恢复备份
 ```
 systemctl stop etcd
-rm -rf /var/lib/etcd/default.etcd
+#rm -rf /var/lib/etcd/default.etcd/ #如果有数据，先备份
 mv /var/lib/etcd/default.etcd /var/lib/etcd/default.etcd.bak
 ```
 
