@@ -31,7 +31,7 @@ spec:
           volumes:
           - name: backup
             persistentVolumeClaim:
-              claimName: backup
+              claimName: mysql-backup
           - name: mysql-backup
             configMap:
               name: mysql-backup

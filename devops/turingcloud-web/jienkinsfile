@@ -129,7 +129,13 @@ envsubst < deploy/test/pod-saas.yaml | kubectl apply -f -'''
         environment name: 'BRANCH_NAME', value: 'zktl'
       }
       steps {
-        kubernetesDeploy(enableConfigSubstitution: true, deleteResource: false, kubeconfigId: 'test-kubeconfig', configs: 'deploy/test/**')
+        container('nodejs') {
+          withCredentials([kubeconfigContent(credentialsId : 'test-kubeconfig' ,variable : 'KUBECONFIG_CONTENT' ,)]) {
+            sh '''[ -d ~/.kube ] || mkdir ~/.kube
+echo "$KUBECONFIG_CONTENT" > ~/.kube/config
+envsubst < deploy/test/pod-saas.yaml | kubectl apply -f -'''
+          }
+        
       }
     }
 
@@ -141,7 +147,7 @@ envsubst < deploy/test/pod-saas.yaml | kubectl apply -f -'''
       steps {
         container('nodejs') {
           withCredentials([kubeconfigContent(credentialsId : 'gs-kubeconfig' ,variable : 'KUBECONFIG_CONTENT' ,)]) {
-            sh '''mkdir ~/.kube
+            sh '''[ -d ~/.kube ] || mkdir ~/.kube
 echo "$KUBECONFIG_CONTENT" > ~/.kube/config
 envsubst < deploy/gstest/pod-saas.yaml | kubectl apply -f -'''
           }
