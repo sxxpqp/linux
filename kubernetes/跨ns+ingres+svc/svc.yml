@@ -1,0 +1,37 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: pinganjia
+  namespace: zhengshang
+  annotations:
+    kubesphere.io/creator: sxx
+spec:
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ExternalName
+  sessionAffinity: None
+  externalName: turingcloud-web.kubesphere-system.svc.cluster.local
+---
+  apiVersion: extensions/v1beta1
+  kind: Ingress
+  metadata:
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-body-size: 1000m
+    generation: 6
+    name: pinganjia
+    namespace: zhengshang
+  spec:
+    rules:
+    - host: paj.9ancore.com
+      http:
+        paths:
+        - backend:
+            serviceName: pinganjia
+            servicePort: 80
+          path: /
+    tls:
+    - hosts:
+      - paj.9ancore.com
+      secretName: pinganjia
