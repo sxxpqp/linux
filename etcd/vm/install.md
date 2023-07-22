@@ -163,6 +163,49 @@ ETCDCTL_API=3 etcdctl --endpoints=http://192.168.1.43:2379 get / --prefix --keys
 ```
 ETCDCTL_API=3 etcdctl --endpoints=http://192.168.1.43:2379 put pqp "sxx"
 ```
+## tls配置
+###  获取etcd备份
+#### 设置环境变量
+```
+ETCDCTL_PATH='/usr/local/bin/etcdctl'
+ENDPOINTS='https://192.168.1.57:2379'
+ETCD_DATA_DIR="/var/lib/etcd"
+BACKUP_DIR="/var/backups/kube_etcd/etcd-$(date +%Y-%m-%d-%H-%M-%S)"
+#KEEPBACKUPNUMBER='6'
+#ETCDBACKUPSCIPT='/usr/local/bin/kube-scripts'#
+
+ETCDCTL_CERT="/etc/ssl/etcd/ssl/admin-node1.pem"
+ETCDCTL_KEY="/etc/ssl/etcd/ssl/admin-node1-key.pem"
+ETCDCTL_CA_FILE="/etc/ssl/etcd/ssl/ca.pem"
+```
+```
+export ETCDCTL_API=3;$ETCDCTL_PATH --endpoints="$ENDPOINTS" snapshot save $BACKUP_DIR/snapshot.db \
+                                   --cacert="$ETCDCTL_CA_FILE" \
+                                   --cert="$ETCDCTL_CERT" \
+                                   --key="$ETCDCTL_KEY"
+```
+
+###  tls获取member list
+```
+export ETCDCTL_API=3;$ETCDCTL_PATH --endpoints="$ENDPOINTS" member list \
+                                   --cacert="$ETCDCTL_CA_FILE" \
+                                   --cert="$ETCDCTL_CERT" \
+                                   --key="$ETCDCTL_KEY"
+```
+
+### 查看etcd集群状态
+```
+ETCDCTL_API=3 etcdctl --endpoints=https://192.168.1.57:2379,https://192.168.1.58:2379,https://192.168.1.59:2379 --cacert=/etc/ssl/etcd/ssl/ca.pem --cert=/etc/ssl/etcd/ssl/admin-node1.pem --key=/etc/ssl/etcd/ssl/admin-node1-key.pem endpoint status
+```
+### 删除etcd集群故障节点
+```
+ETCDCTL_API=3 etcdctl --endpoints=https://192.168.1.57:2379,https://192.168.1.58:2379,https://192.168.1.59:2379 --cacert=/etc/ssl/etcd/ssl/ca.pem --cert=/etc/ssl/etcd/ssl/admin-node1.pem --key=/etc/ssl/etcd/ssl/admin-node1-key.pem member remove 2c4e2f7b4f2b4e2a
+```
+### 添加etcd集群故障节点
+```
+ETCDCTL_API=3 etcdctl --endpoints=https://192.168.1.57:2379,https://192.168.1.58:2379,https://192.168.1.59:2379 --cacert=/etc/ssl/etcd/ssl/ca.pem --cert=/etc/ssl/etcd/ssl/admin-node1.pem --key=/etc/ssl/etcd/ssl/admin-node1-key.pem member add  etcd-node3 --peer-urls=https://192.168.1.59:2380
+```
+
 
 
 
