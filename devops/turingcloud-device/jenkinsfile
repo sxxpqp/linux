@@ -40,9 +40,7 @@ stage('发布本地测试线') {
       steps {
         container('maven') {
           withCredentials([kubeconfigContent(credentialsId : 'gs-config' ,variable : 'KUBECONFIG_CONTENT' ,)]) {
-            sh '''if( ! -d ~/.kube ) {
-              sh 'mkdir ~/.kube'
-            }
+            sh '''[ -d ~/.kube ] || mkdir ~/.kube
 echo "$KUBECONFIG_CONTENT" > ~/.kube/config
 envsubst < devops/host-cluster/gstest/pod-test.yaml | kubectl  apply -f -'''
           }
@@ -56,9 +54,8 @@ envsubst < devops/host-cluster/gstest/pod-test.yaml | kubectl  apply -f -'''
       steps {
         container('maven') {
           withCredentials([kubeconfigContent(credentialsId : 'tsl-kubeconfig' ,variable : 'KUBECONFIG_CONTENT' ,)]) {
-            // 判断~/.kube/ 目录是否存在，不存在则创建
-            [ -d ~/.kube ] || mkdir ~/.kube
-            sh '''
+         
+            sh '''[ -d ~/.kube ] || mkdir ~/.kube
 echo "$KUBECONFIG_CONTENT" > ~/.kube/config
 envsubst < devops/host-cluster/test/pod-test.yaml | kubectl  apply -f -'''
           }
