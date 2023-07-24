@@ -1,0 +1,60 @@
+version: '3'
+services:
+
+  ms_tengine:
+    image: modstart/tengine:1.0.0
+    ports:
+      - "20080:80"
+    volumes:
+      - "./docker_config/tengine.conf:/etc/nginx/nginx.conf"
+      - "./modstart:/data/website/modstart:rw"
+    links:
+      - ms_php56
+
+  ms_php56:
+    image: modstart/php56:1.0.0
+    volumes:
+      - "./modstart:/data/website/modstart:rw"
+    links:
+      - ms_mysql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  ms_tengine
+  labels:
+    app: ms_tengine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ms_tengine
+  template:
+    metadata:
+      labels:
+        app: ms_tengine
+    spec:
+      volumes:
+      - name: ms_tengine
+        persistentVolumeClaim:
+          claimName: modtartcms
+      - name: ms_tengine
+        image: modstart/tengine:1.0.0
+        # 设置hostname 为 ms_tengine
+        hostname: ms_php56
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: ms_tengine
+          mountPath: /data/website/modstart
+          # 访问ms_php56 host:9000
+        env:
+        - name: ms_php56
+          value: "127.0.0.1"  
+      - name: ms_php56
+        image: modstart/php56:1.0.0
+        ports:
+        - containerPort: 9000
+        volumeMounts:
+        - name: ms_tengine
+          mountPath: /data/website/modstart    
