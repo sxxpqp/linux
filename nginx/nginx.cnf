@@ -77,7 +77,8 @@ http {
             proxy_pass http://ms;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
-            proxy_connect_timeout 1500s;
+            proxy_connect_timeout 1500s; //连接超时时间 1500秒是不是太长了？ 15秒不够吗？
+
             proxy_send_timeout 1500s;
             proxy_read_timeout 1500s;
             proxy_set_header X-Real-IP $remote_addr;
@@ -160,14 +161,15 @@ http {
         }
 
         location ~* ^/(jichang) {
-
             add_header Access-Control-Allow-Origin *;
             #蒙牛
 #           proxy_pass http://221.199.14.100:9780;
             #贡嘎
 #          proxy_pass http://219.151.43.125:9780;
             #测试线
-            proxy_pass https://ls.iot.store:9781;
+            resolver 223.5.5.5  valid=10s;
+            set $proxy_url "ls.iot.store";
+            proxy_pass https://$proxy_url:9781;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
             proxy_connect_timeout 1500s;

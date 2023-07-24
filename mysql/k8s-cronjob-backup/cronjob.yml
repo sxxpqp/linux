@@ -23,7 +23,7 @@ spec:
             image: mysql:5.7
             volumeMounts:
             - name: backup
-              mountPath: /home/backup
+              mountPath: /home/database
             - name: shared-data
               mountPath: /tmp  
             command: ["/bin/sh", "-c"]
