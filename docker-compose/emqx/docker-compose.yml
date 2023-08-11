@@ -1,0 +1,12 @@
+version: "3.7"
+services:
+  emqx:
+     image: emqx/emqx:v4.2.0
+     container_name: emqx
+     restart: always
+     ports:
+        - 1883:1883
+        - 8083:8083
+        - 8883:8883
+        - 8084:8084
+        - 18083:18083

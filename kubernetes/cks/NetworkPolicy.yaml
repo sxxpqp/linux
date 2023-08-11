@@ -1,0 +1,58 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: test-network-policy
+  namespace: default
+spec:
+  # podSelector: {} 表示选择所有 pod 应用 NetworkPolicy
+  podSelector: # 表示选择包含标签 role=db 的 pod 应用下面的 NetworkPolicy
+    matchLabels:
+      role: db
+  policyTypes: # 表示 NetworkPolicy 包含 ingress 和 egress 流量规则
+  - Ingress
+  - Egress
+  ingress: 
+  # ingress 规则白名单列表，每条规则包括 from 和 ports 两个属性。
+  # 如果不设置 ingress 或者 ingress 为空值，将禁止该类型流量。
+  # from 和 ports 属性如果没有设置或者为空{}，表示匹配所有，这一点同 podSelector 一样。
+  # inress 规则是数组，多条规则之间是 or 关系。
+  # 以下示例中，第1条白名单，包含 from + ports 的组合规则，允许来自172.17网段(172.17.1除外)、或标签 project=myproject 的命名空间的所 有 pod 、或 default 命名空间下标签 role=frontend 的 pod 访问（限 tcp 6379 端口）
+  - from: 
+    - ipBlock:
+        cidr: 172.17.0.0/16
+        except:
+        - 172.17.1.0/24
+    - namespaceSelector:
+        matchLabels:
+          project: myproject
+    - podSelector:
+        matchLabels:
+          role: frontend
+    ports:
+    - protocol: TCP
+      port: 6379
+  # 第二条白名单，只包含 from 规则，允许来自所有命名空间包含 environment=testing 标签的 pod 访问（不限端口）
+  - from:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          environment: testing
+  egress: 
+  # egress 规则白名单列表，同 ingress 规则一样，包含 to 和 ports 两个属性。
+  # 如果不设置 egress 或者 egress 为空值，将禁止该类型流量。
+  # to 和 ports 属性如果没有设置或者为空{}，表示匹配所有，这一点同 podSelector 一样。
+  # egress 规则是数组，多条规则之间是 or 关系。
+  # {} 代表全部放行
+  # 以下示例中，第1条白名单，包含 to + ports 的组合规则，允许访问10.0.0.0/24网段（限 tcp 5978 端口）
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/24
+    ports:
+    - protocol: TCP
+      port: 5978
+  # 第二条白名单，只包含 to 规则，允许访问所有命名空间包含 environment=testing 标签的 pod（不限端口）
+  - to:
+    - namespaceSelector: {}
+      podSelector:
+        matchLabels:
+          environment: testing    
