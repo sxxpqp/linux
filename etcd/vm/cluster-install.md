@@ -1,4 +1,4 @@
-# 设置节点对应变量 需要在每台设备执行 
+## 设置节点对应变量 需要在每台设备执行 
 ```
 TOKEN=token-01
 CLUSTER_STATE=new
@@ -10,8 +10,8 @@ HOST_2=192.168.1.44
 HOST_3=192.168.1.45
 CLUSTER=${NAME_1}=http://${HOST_1}:2380,${NAME_2}=http://${HOST_2}:2380,${NAME_3}=http://${HOST_3}:2380
 ```
-
-# For machine 1
+## 命令部署etcd集群(测试使用)
+### For machine 1
 ```
 THIS_NAME=${NAME_1}
 THIS_IP=${HOST_1}
@@ -21,7 +21,7 @@ etcd --data-dir=data.etcd --name ${THIS_NAME} \
 	--initial-cluster ${CLUSTER} \
 	--initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
 ```
-# For machine 2
+### For machine 2
 ```
 THIS_NAME=${NAME_2}
 THIS_IP=${HOST_2}
@@ -31,7 +31,7 @@ etcd --data-dir=data.etcd --name ${THIS_NAME} \
 	--initial-cluster ${CLUSTER} \
 	--initial-cluster-state ${CLUSTER_STATE} --initial-cluster-token ${TOKEN}
 ```
-# For machine 3
+### For machine 3
 ```
 THIS_NAME=${NAME_3}
 THIS_IP=${HOST_3}
@@ -43,7 +43,7 @@ etcd --data-dir=data.etcd --name ${THIS_NAME} \
 ```
 
 
-## 查看集群状态
+### 查看etcd集群状态
 ```
 export ETCDCTL_API=3
 HOST_1=192.168.1.43
@@ -55,7 +55,7 @@ etcdctl --endpoints=$ENDPOINTS member list
 etcdctl  --endpoints=$ENDPOINTS endpoint health 
 etcdctl --write-out=table --endpoints=$ENDPOINTS endpoint status
 ```
-## ssl证书查看集群
+### ssl证书查看集群状态
 ```
 ETCDCTL_ENDPOINTS=https://127.0.0.1:2379
 ETCDCTL_CA_FILE=/etc/ssl/etcd/ssl/ca.pem
@@ -70,8 +70,8 @@ endpoint status
 ```
 
 
-# systemcd 部署集群
-## 创建数据与配置目录
+## systemcd启动方式部署集群
+### 创建数据与配置目录
 ```
 mkdir -p /var/lib/etcd
 mkdir -p /etc/etcd
@@ -85,7 +85,7 @@ HOST_2=192.168.1.44
 HOST_3=192.168.1.45
 CLUSTER=${NAME_1}=http://${HOST_1}:2380,${NAME_2}=http://${HOST_2}:2380,${NAME_3}=http://${HOST_3}:2380
 ```
-## 下载etcd etcdctl 放在/usr/local/bin下。
+### 下载etcd etcdctl 放在/usr/local/bin下。
 ```
 ETCD_VER=v3.4.27
 
@@ -107,7 +107,7 @@ cp /tmp/etcd-download-test/etcd  /usr/local/bin/
 cp /tmp/etcd-download-test/etcdctl /usr/local/bin/
 ```
 
-## 配置etcd配置文件 node1
+### 配置etcd配置文件 machine 1
 ```
 THIS_NAME=${NAME_1}
 THIS_IP=${HOST_1}
@@ -123,7 +123,7 @@ ETCD_INITIAL_CLUSTER="${CLUSTER}"
 ETCD_INITIAL_CLUSTER_STATE=${CLUSTER_STATE}
 eof
 ```
-## 配置etcd配置文件 node2
+### 配置etcd配置文件 machine 2
 ```
 THIS_NAME=${NAME_2}
 THIS_IP=${HOST_2}
@@ -140,7 +140,7 @@ ETCD_INITIAL_CLUSTER_STATE=${CLUSTER_STATE}
 eof
 ```
 
-## 配置etcd配置文件 node3
+### 配置etcd配置文件 machine 3
 ```
 THIS_NAME=${NAME_3}
 THIS_IP=${HOST_3}
@@ -157,7 +157,7 @@ ETCD_INITIAL_CLUSTER_STATE=${CLUSTER_STATE}
 eof
 ```
 
-## 配置systemd启动 (全部node配置)
+### 配置systemd启动 (全部node配置)
 ```
 source /etc/etcd/etcd.conf
 cat >/usr/lib/systemd/system/etcd.service<<eof
@@ -183,14 +183,14 @@ systemctl status etcd
 ```
 
 
-# 备份与恢复 snapshot  save | snapshot restore
-## 备份 其中一个节点(需要集群正常)
-### 备份 node1
+## 备份与恢复 snapshot  save | snapshot restore
+
+### 备份 machine 1 其中一个节点(需要集群正常)
+```
 etcdctl --endpoints=${THIS_IP}:2379 snapshot save snapshot.db   
-
-
-## 恢复 所有节点都需要执行
-### 节点node1
+```
+### 恢复 所有节点都需要执行
+#### 节点machine 1
 ```
 THIS_NAME=${NAME_1}
 THIS_IP=${HOST_1}
@@ -199,7 +199,7 @@ etcdctl --endpoints=${THIS_IP}:2379 snapshot restore snapshot.db   --name $ETCD_
 systemctl restart etcd
 ```
 
-### 节点node2
+#### 节点machine 2
 ```
 THIS_NAME=${NAME_2}
 THIS_IP=${HOST_2}
@@ -208,7 +208,7 @@ etcdctl --endpoints=${THIS_IP}:2379 snapshot restore snapshot.db   --name $ETCD_
 systemctl restart etcd
 ```
 
-### 节点node3
+#### 节点machine 3
 ```
 THIS_NAME=${NAME_3}
 THIS_IP=${HOST_3}
