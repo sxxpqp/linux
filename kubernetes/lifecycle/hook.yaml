@@ -1,0 +1,86 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: turingcloud-web
+  namespace: gs-xiaofang
+  labels:
+    app: turingcloud-web
+    app.kubernetes.io/managed-by: Helm
+    app.kubesphere.io/instance: gsxiaof-vy70x7
+  annotations:
+    deployment.kubernetes.io/revision: '276'
+    kubectl.kubernetes.io/last-applied-configuration: >
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"app":"turingcloud-web"},"name":"turingcloud-web","namespace":"gs-xiaofang"},"spec":{"progressDeadlineSeconds":600,"replicas":1,"selector":{"matchLabels":{"app":"turingcloud-web"}},"template":{"metadata":{"labels":{"app":"turingcloud-web"}},"spec":{"containers":[{"image":"harbor.iot.store:8085/turing-kubesphere/turingcloud-web-zktl:SNAPSHOT-1280","imagePullPolicy":"Always","livenessProbe":{"failureThreshold":5,"initialDelaySeconds":30,"periodSeconds":10,"successThreshold":1,"tcpSocket":{"port":80},"timeoutSeconds":3},"name":"turingcloud-web","ports":[{"containerPort":80,"name":"http-1280","protocol":"TCP"}],"readinessProbe":{"failureThreshold":5,"initialDelaySeconds":30,"periodSeconds":10,"successThreshold":1,"tcpSocket":{"port":80},"timeoutSeconds":3},"resources":{"limits":{"cpu":"1","memory":"1Gi"},"requests":{"cpu":"250m","memory":"100Mi"}},"terminationMessagePath":"/dev/termination-log","terminationMessagePolicy":"File"}],"dnsPolicy":"ClusterFirst","imagePullSecrets":[{"name":"harbor-repository"}],"restartPolicy":"Always","terminationGracePeriodSeconds":30}}}}
+    kubesphere.io/creator: sxx
+    meta.helm.sh/release-name: gsxiaof-vy70x7
+    meta.helm.sh/release-namespace: gs-xiaofang
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: turingcloud-web
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: turingcloud-web
+      annotations:
+        kubesphere.io/creator: sxx
+        kubesphere.io/restartedAt: '2023-08-29T10:37:22.565Z'
+    spec:
+      containers:
+        - name: turingcloud-web
+          image: >-
+            harbor.iot.store:8085/turing-kubesphere/turingcloud-web-zktl:SNAPSHOT-1280
+          ports:
+            - name: http-1280
+              containerPort: 80
+              protocol: TCP
+          resources:
+            limits:
+              cpu: '1'
+              memory: 1Gi
+            requests:
+              cpu: 250m
+              memory: 100Mi
+          livenessProbe:
+            tcpSocket:
+              port: 80
+            initialDelaySeconds: 30
+            timeoutSeconds: 3
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 5
+          readinessProbe:
+            tcpSocket:
+              port: 80
+            initialDelaySeconds: 30
+            timeoutSeconds: 3
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 5
+          lifecycle:
+            postStart:
+            # 检测httpget是否正常
+              httpGet:
+                path: /
+                localhost: baidu.com
+                port: 443
+                scheme: HTTPS   
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: Always
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      imagePullSecrets:
+        - name: harbor-repository
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
