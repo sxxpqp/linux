@@ -13,4 +13,6 @@ spec:
             image: mysql:5.7
             args: ['/bin/sh', '-c', 'mysqladmin -u root -p$MYSQL_ROOT_PASSWORD -h $turingcloud-mysql -P 3306 flush-hosts;echo "flush hosts done"']
           restartPolicy: OnFailure
-### 或者直接开启mysql的binlog skip-host-cache          
+### 或者直接开启mysql的binlog skip-host-cache
+skip-host-cache
+skip-name-resolve          

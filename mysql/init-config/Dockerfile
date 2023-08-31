@@ -43,6 +43,7 @@
 
 # EXPOSE 8888
 # ENTRYPOINT ./server -c config.docker.yaml
+# image harbor.iot.store:8085/turing-kubesphere/init-sql-import:v4.2.3
 FROM mysql:5.7
 WORKDIR /opt
 COPY . .
