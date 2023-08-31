@@ -216,3 +216,68 @@ source /etc/etcd/etcd.conf
 etcdctl --endpoints=${THIS_IP}:2379 snapshot restore snapshot.db   --name $ETCD_NAME --initial-cluster $ETCD_INITIAL_CLUSTER  --initial-cluster-token $ETCD_INITIAL_CLUSTER_TOKEN --initial-advertise-peer-urls $ETCD_INITIAL_ADVERTISE_PEER_URLS --data-dir=$ETCD_DATA_DIR
 systemctl restart etcd
 ```
+
+
+### ssl 备份
+```
+ ETCDCTL_API=3 etcdctl --cacert=/opt/kubernetes/ssl/ca.pem --cert=/opt/kubernetes/ssl/server.pem --key=/opt/kubernetes/ssl/server-key.pem --endpoints=https://192.168.1.36:2379 snapshot save /data/etcd_backup_dir/etcd-snapshot-`date +%Y%m%d`.db
+```
+
+
+### ssl恢复备份
+
+```bash
+# k8s-master1 机器上操作
+$ ETCDCTL_API=3 etcdctl snapshot restore /data/etcd_backup_dir/etcd-snapshot-20191222.db \
+  --name etcd-0 \
+  --initial-cluster "etcd-0=https://192.168.1.36:2380,etcd-1=https://192.168.1.37:2380,etcd-2=https://192.168.1.38:2380" \
+  --initial-cluster-token etcd-cluster \
+  --initial-advertise-peer-urls https://192.168.1.36:2380 \
+  --data-dir=/var/lib/etcd/default.etcd
+  
+# k8s-master2 机器上操作
+$ ETCDCTL_API=3 etcdctl snapshot restore /data/etcd_backup_dir/etcd-snapshot-20191222.db \
+  --name etcd-1 \
+  --initial-cluster "etcd-0=https://192.168.1.36:2380,etcd-1=https://192.168.1.37:2380,etcd-2=https://192.168.1.38:2380"  \
+  --initial-cluster-token etcd-cluster \
+  --initial-advertise-peer-urls https://192.168.1.37:2380 \
+  --data-dir=/var/lib/etcd/default.etcd
+  
+# k8s-master3 机器上操作
+$ ETCDCTL_API=3 etcdctl snapshot restore /data/etcd_backup_dir/etcd-snapshot-20191222.db \
+  --name etcd-2 \
+  --initial-cluster "etcd-0=https://192.168.1.36:2380,etcd-1=https://192.168.1.37:2380,etcd-2=https://192.168.1.38:2380"  \
+  --initial-cluster-token etcd-cluster \
+  --initial-advertise-peer-urls https://192.168.1.38:2380 \
+  --data-dir=/var/lib/etcd/default.etcd
+```
+
+上面三台 ETCD 都恢复完成后，依次登陆三台机器启动 ETCD
+
+```bash
+$ systemctl start etcd
+```
+
+三台 ETCD 启动完成，检查 ETCD 集群状态
+
+```bash
+$ ETCDCTL_API=3 etcdctl --cacert=/opt/kubernetes/ssl/ca.pem --cert=/opt/kubernetes/ssl/server.pem --key=/opt/kubernetes/ssl/server-key.pem --endpoints=https://192.168.1.36:2379,https://192.168.1.37:2379,https://192.168.1.38:2379 endpoint health
+```
+
+三台 ETCD 全部健康，分别到每台 Master 启动 kube-apiserver
+
+```bash
+$ systemctl start kube-apiserver
+```
+
+检查 Kubernetes 集群是否恢复正常
+
+```bash
+$ kubectl get cs
+```
+
+## 总结
+
+Kubernetes 集群备份主要是备份 ETCD 集群。而恢复时，主要考虑恢复整个顺序：
+
+`停止kube-apiserver --> 停止ETCD --> 恢复数据 --> 启动ETCD --> 启动kube-apiserve`
