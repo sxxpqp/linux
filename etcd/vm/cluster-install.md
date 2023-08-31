@@ -197,6 +197,7 @@ THIS_IP=${HOST_1}
 source /etc/etcd/etcd.conf
 etcdctl --endpoints=${THIS_IP}:2379 snapshot restore snapshot.db   --name $ETCD_NAME --initial-cluster $ETCD_INITIAL_CLUSTER  --initial-cluster-token $ETCD_INITIAL_CLUSTER_TOKEN --initial-advertise-peer-urls $ETCD_INITIAL_ADVERTISE_PEER_URLS --data-dir=$ETCD_DATA_DIR
 systemctl restart etcd
+sed -i "s/new/existing/g" /etc/etcd/etcd.conf
 ```
 
 #### 节点machine 2
@@ -206,6 +207,7 @@ THIS_IP=${HOST_2}
 source /etc/etcd/etcd.conf
 etcdctl --endpoints=${THIS_IP}:2379 snapshot restore snapshot.db   --name $ETCD_NAME --initial-cluster $ETCD_INITIAL_CLUSTER  --initial-cluster-token $ETCD_INITIAL_CLUSTER_TOKEN --initial-advertise-peer-urls $ETCD_INITIAL_ADVERTISE_PEER_URLS --data-dir=$ETCD_DATA_DIR
 systemctl restart etcd
+sed -i "s/new/existing/g" /etc/etcd/etcd.conf
 ```
 
 #### 节点machine 3
@@ -215,6 +217,7 @@ THIS_IP=${HOST_3}
 source /etc/etcd/etcd.conf
 etcdctl --endpoints=${THIS_IP}:2379 snapshot restore snapshot.db   --name $ETCD_NAME --initial-cluster $ETCD_INITIAL_CLUSTER  --initial-cluster-token $ETCD_INITIAL_CLUSTER_TOKEN --initial-advertise-peer-urls $ETCD_INITIAL_ADVERTISE_PEER_URLS --data-dir=$ETCD_DATA_DIR
 systemctl restart etcd
+sed -i "s/new/existing/g" /etc/etcd/etcd.conf
 ```
 
 
@@ -224,7 +227,7 @@ systemctl restart etcd
 ```
 
 
-### ssl恢复备份
+### ssl恢复备份 (集群) 单节点只需要执行节点
 
 ```bash
 # k8s-master1 机器上操作
