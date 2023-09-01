@@ -29,12 +29,12 @@ https://github.com/cby-chen/Kubernetes/releases
 
 | 主机名称 | IP地址    | 说明       | 软件                                                         |
 | -------- | --------- | ---------- | ------------------------------------------------------------ |
-| Master01 | 192.168.1.47 | master节点 | kube-apiserver、kube-controller-manager、kube-scheduler、etcd、<br />kubelet、kube-proxy、nfs-client、haproxy、keepalived |
-| Master02 | 192.168.1.48 | master节点 | kube-apiserver、kube-controller-manager、kube-scheduler、etcd、<br />kubelet、kube-proxy、nfs-client、haproxy、keepalived |
-| Master03 | 192.168.1.49 | master节点 | kube-apiserver、kube-controller-manager、kube-scheduler、etcd、<br />kubelet、kube-proxy、nfs-client、haproxy、keepalived |
-| Node01   | 192.168.1.50 | node节点   | kubelet、kube-proxy、nfs-client                              |
-| Node02   | 192.168.1.51 | node节点   | kubelet、kube-proxy、nfs-client                              |
-|          | 192.168.1.182 | VIP        |                                                              |
+| Master01 | 192.168.1.12 | master节点 | kube-apiserver、kube-controller-manager、kube-scheduler、etcd、<br />kubelet、kube-proxy、nfs-client、haproxy、keepalived |
+| Master02 | 192.168.1.13 | master节点 | kube-apiserver、kube-controller-manager、kube-scheduler、etcd、<br />kubelet、kube-proxy、nfs-client、haproxy、keepalived |
+| Master03 | 192.168.1.14 | master节点 | kube-apiserver、kube-controller-manager、kube-scheduler、etcd、<br />kubelet、kube-proxy、nfs-client、haproxy、keepalived |
+| Node01   | 192.168.1.15 | node节点   | kubelet、kube-proxy、nfs-client                              |
+| Node02   | 192.168.1.16 | node节点   | kubelet、kube-proxy、nfs-client                              |
+|          | 10.0.0.89 | VIP        |                                                              |
 
 
 | 软件                                                         | 版本                  |
@@ -65,17 +65,17 @@ pod：172.16.0.0/12
 ### 1.2.配置IP
 
 ```shell
-ssh root@10.1.1.112 "nmcli con mod ens32 ipv4.addresses 192.168.1.47/8; nmcli con mod ens32 ipv4.gateway 10.0.0.1; nmcli con mod ens32 ipv4.method manual; nmcli con mod ens32 ipv4.dns "8.8.8.8"; nmcli con up ens32"
-ssh root@10.1.1.102 "nmcli con mod ens32 ipv4.addresses 192.168.1.48/8; nmcli con mod ens32 ipv4.gateway 10.0.0.1; nmcli con mod ens32 ipv4.method manual; nmcli con mod ens32 ipv4.dns "8.8.8.8"; nmcli con up ens32"
-ssh root@10.1.1.104 "nmcli con mod ens32 ipv4.addresses 192.168.1.49/8; nmcli con mod ens32 ipv4.gateway 10.0.0.1; nmcli con mod ens32 ipv4.method manual; nmcli con mod ens32 ipv4.dns "8.8.8.8"; nmcli con up ens32"
-ssh root@10.1.1.105 "nmcli con mod ens32 ipv4.addresses 192.168.1.50/8; nmcli con mod ens32 ipv4.gateway 10.0.0.1; nmcli con mod ens32 ipv4.method manual; nmcli con mod ens32 ipv4.dns "8.8.8.8"; nmcli con up ens32"
-ssh root@10.1.1.106 "nmcli con mod ens32 ipv4.addresses 192.168.1.51/8; nmcli con mod ens32 ipv4.gateway 10.0.0.1; nmcli con mod ens32 ipv4.method manual; nmcli con mod ens32 ipv4.dns "8.8.8.8"; nmcli con up ens32"
+ssh root@10.1.1.112 "nmcli con mod ens160 ipv4.addresses 192.168.1.12/8; nmcli con mod ens160 ipv4.gateway 10.0.0.1; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "8.8.8.8"; nmcli con up ens160"
+ssh root@10.1.1.102 "nmcli con mod ens160 ipv4.addresses 192.168.1.13/8; nmcli con mod ens160 ipv4.gateway 10.0.0.1; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "8.8.8.8"; nmcli con up ens160"
+ssh root@10.1.1.104 "nmcli con mod ens160 ipv4.addresses 192.168.1.14/8; nmcli con mod ens160 ipv4.gateway 10.0.0.1; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "8.8.8.8"; nmcli con up ens160"
+ssh root@10.1.1.105 "nmcli con mod ens160 ipv4.addresses 192.168.1.15/8; nmcli con mod ens160 ipv4.gateway 10.0.0.1; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "8.8.8.8"; nmcli con up ens160"
+ssh root@10.1.1.106 "nmcli con mod ens160 ipv4.addresses 192.168.1.16/8; nmcli con mod ens160 ipv4.gateway 10.0.0.1; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "8.8.8.8"; nmcli con up ens160"
 
-ssh root@192.168.1.47 "nmcli con mod ens32 ipv6.addresses 2408:8207:78ca:9fa1:181c::10; nmcli con mod ens32 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens32 ipv6.method manual; nmcli con mod ens32 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens32"
-ssh root@192.168.1.48 "nmcli con mod ens32 ipv6.addresses 2408:8207:78ca:9fa1:181c::20; nmcli con mod ens32 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens32 ipv6.method manual; nmcli con mod ens32 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens32"
-ssh root@192.168.1.49 "nmcli con mod ens32 ipv6.addresses 2408:8207:78ca:9fa1:181c::30; nmcli con mod ens32 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens32 ipv6.method manual; nmcli con mod ens32 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens32"
-ssh root@192.168.1.50 "nmcli con mod ens32 ipv6.addresses 2408:8207:78ca:9fa1:181c::40; nmcli con mod ens32 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens32 ipv6.method manual; nmcli con mod ens32 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens32"
-ssh root@192.168.1.51 "nmcli con mod ens32 ipv6.addresses 2408:8207:78ca:9fa1:181c::50; nmcli con mod ens32 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens32 ipv6.method manual; nmcli con mod ens32 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens32"
+ssh root@192.168.1.12 "nmcli con mod ens160 ipv6.addresses 2408:8207:78ca:9fa1:181c::10; nmcli con mod ens160 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens160 ipv6.method manual; nmcli con mod ens160 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens160"
+ssh root@192.168.1.13 "nmcli con mod ens160 ipv6.addresses 2408:8207:78ca:9fa1:181c::20; nmcli con mod ens160 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens160 ipv6.method manual; nmcli con mod ens160 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens160"
+ssh root@192.168.1.14 "nmcli con mod ens160 ipv6.addresses 2408:8207:78ca:9fa1:181c::30; nmcli con mod ens160 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens160 ipv6.method manual; nmcli con mod ens160 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens160"
+ssh root@192.168.1.15 "nmcli con mod ens160 ipv6.addresses 2408:8207:78ca:9fa1:181c::40; nmcli con mod ens160 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens160 ipv6.method manual; nmcli con mod ens160 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens160"
+ssh root@192.168.1.16 "nmcli con mod ens160 ipv6.addresses 2408:8207:78ca:9fa1:181c::50; nmcli con mod ens160 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens160 ipv6.method manual; nmcli con mod ens160 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens160"
 ```
 
 ### 1.3.设置主机名
@@ -191,7 +191,7 @@ pool ntp.aliyun.com iburst
 driftfile /var/lib/chrony/drift
 makestep 1.0 3
 rtcsync
-allow 192.168.1.0/24
+allow 10.0.0.8/8
 local stratum 10
 keyfile /etc/chrony.keys
 leapsectz right/UTC
@@ -206,7 +206,7 @@ systemctl enable chronyd
 yum install chrony -y
 
 cat > /etc/chrony.conf << EOF 
-pool 192.168.1.47 iburst
+pool 192.168.1.12 iburst
 driftfile /var/lib/chrony/drift
 makestep 1.0 3
 rtcsync
@@ -242,7 +242,7 @@ EOF
 ```shell
 yum install -y sshpass
 ssh-keygen -f /root/.ssh/id_rsa -P ''
-export IP="192.168.1.47 192.168.1.48 192.168.1.49 192.168.1.50 192.168.1.51"
+export IP="192.168.1.12 192.168.1.13 192.168.1.14 192.168.1.15 192.168.1.16"
 export SSHPASS=123123
 for HOST in $IP;do
      sshpass -e ssh-copy-id -o StrictHostKeyChecking=no $HOST
@@ -384,12 +384,12 @@ cat > /etc/hosts <<EOF
 2408:8207:78ca:9fa1:181c::40 k8s-node01
 2408:8207:78ca:9fa1:181c::50 k8s-node02
 
-192.168.1.47 k8s-master01
-192.168.1.48 k8s-master02
-192.168.1.49 k8s-master03
-192.168.1.50 k8s-node01
-192.168.1.51 k8s-node02
-192.168.1.182 lb-vip
+192.168.1.12 k8s-master01
+192.168.1.13 k8s-master02
+192.168.1.14 k8s-master03
+192.168.1.15 k8s-node01
+192.168.1.16 k8s-node02
+10.0.0.89 lb-vip
 EOF
 ```
 
@@ -1336,7 +1336,7 @@ cfssl gencert \
    -ca=/etc/etcd/ssl/etcd-ca.pem \
    -ca-key=/etc/etcd/ssl/etcd-ca-key.pem \
    -config=ca-config.json \
-   -hostname=127.0.0.1,k8s-master01,k8s-master02,k8s-master03,192.168.1.47,192.168.1.48,192.168.1.49 \
+   -hostname=127.0.0.1,k8s-master01,k8s-master02,k8s-master03,192.168.1.12,192.168.1.13,192.168.1.14 \
    -profile=kubernetes \
    etcd-csr.json | cfssljson -bare /etc/etcd/ssl/etcd
 ```
@@ -1372,7 +1372,7 @@ cfssl gencert   \
 -ca=/etc/kubernetes/pki/ca.pem   \
 -ca-key=/etc/kubernetes/pki/ca-key.pem   \
 -config=ca-config.json   \
--hostname=10.96.0.1,192.168.1.182,127.0.0.1,kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.default.svc.cluster.local,x.oiox.cn,k.oiox.cn,l.oiox.cn,o.oiox.cn,192.168.1.47,192.168.1.48,192.168.1.49,192.168.1.50,192.168.1.51,10.0.0.86,10.0.0.87,10.0.0.88,192.168.1.182,192.168.1.90,192.168.1.40,192.168.1.41   \
+-hostname=10.96.0.1,10.0.0.89,127.0.0.1,kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.default.svc.cluster.local,x.oiox.cn,k.oiox.cn,l.oiox.cn,o.oiox.cn,192.168.1.12,192.168.1.13,192.168.1.14,192.168.1.15,192.168.1.16,192.168.1.250,10.0.0.87,10.0.0.88,10.0.0.89,192.168.1.90,192.168.1.40,192.168.1.41   \
 -profile=kubernetes   apiserver-csr.json | cfssljson -bare /etc/kubernetes/pki/apiserver
 ```
 
@@ -1405,7 +1405,7 @@ cfssl gencert \
 kubectl config set-cluster kubernetes \
      --certificate-authority=/etc/kubernetes/pki/ca.pem \
      --embed-certs=true \
-     --server=https://192.168.1.182:8443 \
+     --server=https://10.0.0.89:8443 \
      --kubeconfig=/etc/kubernetes/controller-manager.kubeconfig
 
 # 设置一个环境项，一个上下文
@@ -1438,7 +1438,7 @@ cfssl gencert \
 kubectl config set-cluster kubernetes \
      --certificate-authority=/etc/kubernetes/pki/ca.pem \
      --embed-certs=true \
-     --server=https://192.168.1.182:8443 \
+     --server=https://10.0.0.89:8443 \
      --kubeconfig=/etc/kubernetes/scheduler.kubeconfig
 
 kubectl config set-credentials system:kube-scheduler \
@@ -1465,7 +1465,7 @@ cfssl gencert \
 kubectl config set-cluster kubernetes     \
   --certificate-authority=/etc/kubernetes/pki/ca.pem     \
   --embed-certs=true     \
-  --server=https://192.168.1.182:8443     \
+  --server=https://10.0.0.89:8443     \
   --kubeconfig=/etc/kubernetes/admin.kubeconfig
 
 kubectl config set-credentials kubernetes-admin  \
@@ -1525,18 +1525,18 @@ snapshot-count: 5000
 heartbeat-interval: 100
 election-timeout: 1000
 quota-backend-bytes: 0
-listen-peer-urls: 'https://192.168.1.47:2380'
-listen-client-urls: 'https://192.168.1.47:2379,http://127.0.0.1:2379'
+listen-peer-urls: 'https://192.168.1.12:2380'
+listen-client-urls: 'https://192.168.1.12:2379,http://127.0.0.1:2379'
 max-snapshots: 3
 max-wals: 5
 cors:
-initial-advertise-peer-urls: 'https://192.168.1.47:2380'
-advertise-client-urls: 'https://192.168.1.47:2379'
+initial-advertise-peer-urls: 'https://192.168.1.12:2380'
+advertise-client-urls: 'https://192.168.1.12:2379'
 discovery:
 discovery-fallback: 'proxy'
 discovery-proxy:
 discovery-srv:
-initial-cluster: 'k8s-master01=https://192.168.1.47:2380,k8s-master02=https://192.168.1.48:2380,k8s-master03=https://192.168.1.49:2380'
+initial-cluster: 'k8s-master01=https://192.168.1.12:2380,k8s-master02=https://192.168.1.13:2380,k8s-master03=https://192.168.1.14:2380'
 initial-cluster-token: 'etcd-k8s-cluster'
 initial-cluster-state: 'new'
 strict-reconfig-check: false
@@ -1578,18 +1578,18 @@ snapshot-count: 5000
 heartbeat-interval: 100
 election-timeout: 1000
 quota-backend-bytes: 0
-listen-peer-urls: 'https://192.168.1.48:2380'
-listen-client-urls: 'https://192.168.1.48:2379,http://127.0.0.1:2379'
+listen-peer-urls: 'https://192.168.1.13:2380'
+listen-client-urls: 'https://192.168.1.13:2379,http://127.0.0.1:2379'
 max-snapshots: 3
 max-wals: 5
 cors:
-initial-advertise-peer-urls: 'https://192.168.1.48:2380'
-advertise-client-urls: 'https://192.168.1.48:2379'
+initial-advertise-peer-urls: 'https://192.168.1.13:2380'
+advertise-client-urls: 'https://192.168.1.13:2379'
 discovery:
 discovery-fallback: 'proxy'
 discovery-proxy:
 discovery-srv:
-initial-cluster: 'k8s-master01=https://192.168.1.47:2380,k8s-master02=https://192.168.1.48:2380,k8s-master03=https://192.168.1.49:2380'
+initial-cluster: 'k8s-master01=https://192.168.1.12:2380,k8s-master02=https://192.168.1.13:2380,k8s-master03=https://192.168.1.14:2380'
 initial-cluster-token: 'etcd-k8s-cluster'
 initial-cluster-state: 'new'
 strict-reconfig-check: false
@@ -1631,18 +1631,18 @@ snapshot-count: 5000
 heartbeat-interval: 100
 election-timeout: 1000
 quota-backend-bytes: 0
-listen-peer-urls: 'https://192.168.1.49:2380'
-listen-client-urls: 'https://192.168.1.49:2379,http://127.0.0.1:2379'
+listen-peer-urls: 'https://192.168.1.14:2380'
+listen-client-urls: 'https://192.168.1.14:2379,http://127.0.0.1:2379'
 max-snapshots: 3
 max-wals: 5
 cors:
-initial-advertise-peer-urls: 'https://192.168.1.49:2380'
-advertise-client-urls: 'https://192.168.1.49:2379'
+initial-advertise-peer-urls: 'https://192.168.1.14:2380'
+advertise-client-urls: 'https://192.168.1.14:2379'
 discovery:
 discovery-fallback: 'proxy'
 discovery-proxy:
 discovery-srv:
-initial-cluster: 'k8s-master01=https://192.168.1.47:2380,k8s-master02=https://192.168.1.48:2380,k8s-master03=https://192.168.1.49:2380'
+initial-cluster: 'k8s-master01=https://192.168.1.12:2380,k8s-master02=https://192.168.1.13:2380,k8s-master03=https://192.168.1.14:2380'
 initial-cluster-token: 'etcd-k8s-cluster'
 initial-cluster-state: 'new'
 strict-reconfig-check: false
@@ -1712,13 +1712,13 @@ systemctl enable --now etcd
 
 ```shell
 export ETCDCTL_API=3
-etcdctl --endpoints="192.168.1.49:2379,192.168.1.48:2379,192.168.1.47:2379" --cacert=/etc/kubernetes/pki/etcd/etcd-ca.pem --cert=/etc/kubernetes/pki/etcd/etcd.pem --key=/etc/kubernetes/pki/etcd/etcd-key.pem  endpoint status --write-out=table
+etcdctl --endpoints="192.168.1.14:2379,192.168.1.13:2379,192.168.1.12:2379" --cacert=/etc/kubernetes/pki/etcd/etcd-ca.pem --cert=/etc/kubernetes/pki/etcd/etcd.pem --key=/etc/kubernetes/pki/etcd/etcd-key.pem  endpoint status --write-out=table
 +-------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
 |     ENDPOINT      |        ID        | VERSION | DB SIZE | IS LEADER | IS LEARNER | RAFT TERM | RAFT INDEX | RAFT APPLIED INDEX | ERRORS |
 +-------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
-| 192.168.1.49:2379 | 7cb7be3df5c81965 |   3.5.2 |   20 kB |     false |      false |         2 |          9 |                  9 |        |
-| 192.168.1.48:2379 | c077939949ab3f8b |   3.5.2 |   20 kB |     false |      false |         2 |          9 |                  9 |        |
-| 192.168.1.47:2379 | 2ee388f67565dac9 |   3.5.2 |   20 kB |      true |      false |         2 |          9 |                  9 |        |
+| 192.168.1.14:2379 | 7cb7be3df5c81965 |   3.5.2 |   20 kB |     false |      false |         2 |          9 |                  9 |        |
+| 192.168.1.13:2379 | c077939949ab3f8b |   3.5.2 |   20 kB |     false |      false |         2 |          9 |                  9 |        |
+| 192.168.1.12:2379 | 2ee388f67565dac9 |   3.5.2 |   20 kB |      true |      false |         2 |          9 |                  9 |        |
 +-------------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
 [root@k8s-master01 pki]# 
 ```
@@ -1777,9 +1777,9 @@ backend k8s-master
  option tcp-check
  balance roundrobin
  default-server inter 10s downinter 5s rise 2 fall 2 slowstart 60s maxconn 250 maxqueue 256 weight 100
- server  k8s-master01  192.168.1.47:6443 check
- server  k8s-master02  192.168.1.48:6443 check
- server  k8s-master03  192.168.1.49:6443 check
+ server  k8s-master01  192.168.1.12:6443 check
+ server  k8s-master02  192.168.1.13:6443 check
+ server  k8s-master03  192.168.1.14:6443 check
 EOF
 ```
 
@@ -1803,8 +1803,8 @@ vrrp_script chk_apiserver {
 }
 vrrp_instance VI_1 {
     state MASTER
-    interface ens32
-    mcast_src_ip 192.168.1.47
+    interface ens160
+    mcast_src_ip 192.168.1.12
     virtual_router_id 51
     priority 100
     nopreempt
@@ -1814,7 +1814,7 @@ vrrp_instance VI_1 {
         auth_pass K8SHA_KA_AUTH
     }
     virtual_ipaddress {
-        192.168.1.182
+        10.0.0.89
     }
     track_script {
       chk_apiserver 
@@ -1844,8 +1844,8 @@ vrrp_script chk_apiserver {
 }
 vrrp_instance VI_1 {
     state BACKUP
-    interface ens32
-    mcast_src_ip 192.168.1.48
+    interface ens160
+    mcast_src_ip 192.168.1.82
     virtual_router_id 51
     priority 50
     nopreempt
@@ -1855,7 +1855,7 @@ vrrp_instance VI_1 {
         auth_pass K8SHA_KA_AUTH
     }
     virtual_ipaddress {
-        192.168.1.182
+        10.0.0.89
     }
     track_script {
       chk_apiserver 
@@ -1885,8 +1885,8 @@ vrrp_script chk_apiserver {
 }
 vrrp_instance VI_1 {
     state BACKUP
-    interface ens32
-    mcast_src_ip 192.168.1.49
+    interface ens160
+    mcast_src_ip 192.168.1.83
     virtual_router_id 51
     priority 30
     nopreempt
@@ -1896,7 +1896,7 @@ vrrp_instance VI_1 {
         auth_pass K8SHA_KA_AUTH
     }
     virtual_ipaddress {
-        192.168.1.182
+        10.0.0.89
     }
     track_script {
       chk_apiserver 
@@ -1954,11 +1954,11 @@ systemctl enable --now keepalived
 ```shell
 # 能ping同
 
-[root@k8s-node02 ~]# ping 192.168.1.182
+[root@k8s-node02 ~]# ping 10.0.0.89
 
 # 能telnet访问
 
-[root@k8s-node02 ~]# telnet 192.168.1.182 8443
+[root@k8s-node02 ~]# telnet 10.0.0.89 8443
 
 # 关闭主节点，看vip是否漂移到备节点
 ```
@@ -1991,11 +1991,11 @@ ExecStart=/usr/local/bin/kube-apiserver \
       --bind-address=0.0.0.0  \
       --secure-port=6443  \
       --insecure-port=0  \
-      --advertise-address=192.168.1.47 \
-      --service-cluster-ip-range=10.96.0.0/12,fd00::/108  \
+      --advertise-address=192.168.1.12 \
+      --service-cluster-ip-range=10.96.0.0/12,fd00:1111::/112  \
       --feature-gates=IPv6DualStack=true \
       --service-node-port-range=30000-32767  \
-      --etcd-servers=https://192.168.1.47:2379,https://192.168.1.48:2379,https://192.168.1.49:2379 \
+      --etcd-servers=https://192.168.1.12:2379,https://192.168.1.13:2379,https://192.168.1.14:2379 \
       --etcd-cafile=/etc/etcd/ssl/etcd-ca.pem  \
       --etcd-certfile=/etc/etcd/ssl/etcd.pem  \
       --etcd-keyfile=/etc/etcd/ssl/etcd-key.pem  \
@@ -2048,11 +2048,11 @@ ExecStart=/usr/local/bin/kube-apiserver \
       --bind-address=0.0.0.0  \
       --secure-port=6443  \
       --insecure-port=0  \
-      --advertise-address=192.168.1.48 \
-      --service-cluster-ip-range=10.96.0.0/12,fd00::/108  \
+      --advertise-address=192.168.1.13 \
+      --service-cluster-ip-range=10.96.0.0/12,fd00:1111::/112  \
       --feature-gates=IPv6DualStack=true \
       --service-node-port-range=30000-32767  \
-      --etcd-servers=https://192.168.1.47:2379,https://192.168.1.48:2379,https://192.168.1.49:2379 \
+      --etcd-servers=https://192.168.1.12:2379,https://192.168.1.13:2379,https://192.168.1.14:2379 \
       --etcd-cafile=/etc/etcd/ssl/etcd-ca.pem  \
       --etcd-certfile=/etc/etcd/ssl/etcd.pem  \
       --etcd-keyfile=/etc/etcd/ssl/etcd-key.pem  \
@@ -2106,11 +2106,11 @@ ExecStart=/usr/local/bin/kube-apiserver \
       --bind-address=0.0.0.0  \
       --secure-port=6443  \
       --insecure-port=0  \
-      --advertise-address=192.168.1.49 \
-      --service-cluster-ip-range=10.96.0.0/12,fd00::/108  \
+      --advertise-address=192.168.1.14 \
+      --service-cluster-ip-range=10.96.0.0/12,fd00:1111::/112  \
       --feature-gates=IPv6DualStack=true \
       --service-node-port-range=30000-32767  \
-      --etcd-servers=https://192.168.1.47:2379,https://192.168.1.48:2379,https://192.168.1.49:2379 \
+      --etcd-servers=https://192.168.1.12:2379,https://192.168.1.13:2379,https://192.168.1.14:2379 \
       --etcd-cafile=/etc/etcd/ssl/etcd-ca.pem  \
       --etcd-certfile=/etc/etcd/ssl/etcd.pem  \
       --etcd-keyfile=/etc/etcd/ssl/etcd-key.pem  \
@@ -2186,8 +2186,8 @@ ExecStart=/usr/local/bin/kube-controller-manager \
       --pod-eviction-timeout=2m0s \
       --controllers=*,bootstrapsigner,tokencleaner \
       --allocate-node-cidrs=true \
-      --service-cluster-ip-range=10.96.0.0/12,fd00::/108 \
-      --cluster-cidr=172.16.0.0/12,fc00::/48 \
+      --service-cluster-ip-range=10.96.0.0/12,fd00:1111::/112 \
+      --cluster-cidr=172.16.0.0/12,fc00:2222::/112 \
       --node-cidr-mask-size-ipv4=24 \
       --node-cidr-mask-size-ipv6=64 \
       --requestheader-client-ca-file=/etc/kubernetes/pki/front-proxy-ca.pem \
@@ -2256,7 +2256,7 @@ cd /root/Kubernetes/bootstrap
 
 kubectl config set-cluster kubernetes     \
 --certificate-authority=/etc/kubernetes/pki/ca.pem     \
---embed-certs=true     --server=https://192.168.1.182:8443     \
+--embed-certs=true     --server=https://10.0.0.89:8443     \
 --kubeconfig=/etc/kubernetes/bootstrap-kubelet.kubeconfig
 
 kubectl config set-credentials tls-bootstrap-token-user     \
@@ -2469,7 +2469,7 @@ K8S_DIR=/etc/kubernetes
 kubectl config set-cluster kubernetes \
 --certificate-authority=/etc/kubernetes/pki/ca.pem \
 --embed-certs=true \
---server=https://192.168.1.182:8443 \
+--server=https://10.0.0.89:8443 \
 --kubeconfig=${K8S_DIR}/kube-proxy.kubeconfig
 
 kubectl config set-credentials kubernetes \
@@ -2526,7 +2526,7 @@ clientConnection:
   contentType: application/vnd.kubernetes.protobuf
   kubeconfig: /etc/kubernetes/kube-proxy.kubeconfig
   qps: 5
-clusterCIDR: 172.16.0.0/12,fc00::/48 
+clusterCIDR: 172.16.0.0/12,fc00:2222::/112 
 configSyncPeriod: 15m0s
 conntrack:
   max: null
@@ -2589,7 +2589,7 @@ vim calico-ipv6.yaml
       value: "autodetect"
 
     - name: CALICO_IPV4POOL_CIDR
-      value: "172.16.0.0/16"
+      value: "172.16.0.0/12"
 
     - name: CALICO_IPV6POOL_CIDR
       value: "fc00::/48"
@@ -2764,27 +2764,27 @@ busybox   1/1     Running   0          17m   172.27.14.193   k8s-node02   <none>
  kubectl get po -n kube-system -owide
 NAME                                       READY   STATUS    RESTARTS      AGE   IP               NODE           NOMINATED NODE   READINESS GATES
 calico-kube-controllers-5dffd5886b-4blh6   1/1     Running   0             77m   172.25.244.193   k8s-master01   <none>           <none>
-calico-node-fvbdq                          1/1     Running   1 (75m ago)   77m   192.168.1.47     k8s-master01   <none>           <none>
-calico-node-g8nqd                          1/1     Running   0             77m   192.168.1.50     k8s-node01     <none>           <none>
-calico-node-mdps8                          1/1     Running   0             77m   192.168.1.51     k8s-node02     <none>           <none>
-calico-node-nf4nt                          1/1     Running   0             77m   192.168.1.49     k8s-master03   <none>           <none>
-calico-node-sq2ml                          1/1     Running   0             77m   192.168.1.48     k8s-master02   <none>           <none>
-calico-typha-8445487f56-mg6p8              1/1     Running   0             77m   192.168.1.51     k8s-node02     <none>           <none>
-calico-typha-8445487f56-pxbpj              1/1     Running   0             77m   192.168.1.47     k8s-master01   <none>           <none>
-calico-typha-8445487f56-tnssl              1/1     Running   0             77m   192.168.1.50     k8s-node01     <none>           <none>
+calico-node-fvbdq                          1/1     Running   1 (75m ago)   77m   192.168.1.12     k8s-master01   <none>           <none>
+calico-node-g8nqd                          1/1     Running   0             77m   192.168.1.15     k8s-node01     <none>           <none>
+calico-node-mdps8                          1/1     Running   0             77m   192.168.1.16     k8s-node02     <none>           <none>
+calico-node-nf4nt                          1/1     Running   0             77m   192.168.1.14     k8s-master03   <none>           <none>
+calico-node-sq2ml                          1/1     Running   0             77m   192.168.1.13     k8s-master02   <none>           <none>
+calico-typha-8445487f56-mg6p8              1/1     Running   0             77m   192.168.1.16     k8s-node02     <none>           <none>
+calico-typha-8445487f56-pxbpj              1/1     Running   0             77m   192.168.1.12     k8s-master01   <none>           <none>
+calico-typha-8445487f56-tnssl              1/1     Running   0             77m   192.168.1.15     k8s-node01     <none>           <none>
 coredns-5db5696c7-67h79                    1/1     Running   0             63m   172.25.92.65     k8s-master02   <none>           <none>
 metrics-server-6bf7dcd649-5fhrw            1/1     Running   0             61m   172.18.195.1     k8s-master03   <none>           <none>
 
 # 进入busybox ping其他节点上的pod
 
 kubectl exec -ti busybox -- sh
-/ # ping 192.168.1.50
-PING 192.168.1.50 (192.168.1.50): 56 data bytes
-64 bytes from 192.168.1.50: seq=0 ttl=63 time=0.358 ms
-64 bytes from 192.168.1.50: seq=1 ttl=63 time=0.668 ms
-64 bytes from 192.168.1.50: seq=2 ttl=63 time=0.637 ms
-64 bytes from 192.168.1.50: seq=3 ttl=63 time=0.624 ms
-64 bytes from 192.168.1.50: seq=4 ttl=63 time=0.907 ms
+/ # ping 192.168.1.15
+PING 192.168.1.15 (192.168.1.15): 56 data bytes
+64 bytes from 192.168.1.15: seq=0 ttl=63 time=0.358 ms
+64 bytes from 192.168.1.15: seq=1 ttl=63 time=0.668 ms
+64 bytes from 192.168.1.15: seq=2 ttl=63 time=0.637 ms
+64 bytes from 192.168.1.15: seq=3 ttl=63 time=0.624 ms
+64 bytes from 192.168.1.15: seq=4 ttl=63 time=0.907 ms
 
 # 可以连通证明这个pod是可以跨命名空间和跨主机通信的
 ```
@@ -2937,7 +2937,7 @@ ca.crt:     1363 bytes
 
 ## 13.6登录dashboard
 
-https://192.168.1.47:31245/
+https://192.168.1.12:31245/
 
 eyJhbGciOiJSUzI1NiIsImtpZCI6IjZ3RFhuV1U5dmgwbmJESEdHYjR2SUNHeWFjdzMwWnRUb2pYZXNGNUlrb2cifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJrdWJlLXN5c3RlbSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJhZG1pbi11c2VyLXRva2VuLXFmbWY2Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQubmFtZSI6ImFkbWluLXVzZXIiLCJrdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3NlcnZpY2UtYWNjb3VudC51aWQiOiI5NDRjNWJmNi0wNTlhLTRlNWUtOGIxOC00NjI5NTZkZDA0NjYiLCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6a3ViZS1zeXN0ZW06YWRtaW4tdXNlciJ9.I7QJPtETU3FuIqQEMyq7T0yC7wsr7-mQSlcxr4qBl3JKqODOdp2t3wBgpE76rb8eHtFb7PdJa5-hmsyDPbtOwXoji2RKkt_ODBX0hpc-cS8OC4VFgTTnQVNTObLn1nP2sPTlAMJHkN5gza1W-lJanpXDwm-pzxUfVyoBn0a_AWwCc7AamhFrkSGHwEyoOFiN7-UuLAfWnjJtiiWWhugQbduzhvO78QGCWHGwewpSZ74qzfZgQftchXhJa_284_L9LhIFyh8qin5eoRZUi0ALz3wHsGD0L8hMXWqqSnHPswO3SkBRUMtt9CNCqDpH9WeNMNyut7m5MAg5I0nWMhggJQ
 
@@ -3805,8 +3805,8 @@ spec:
 [root@hello ~/yaml]#
 [root@hello ~/yaml]# kubectl  get ingress
 NAME               CLASS    HOSTS                            ADDRESS        PORTS   AGE
-ingress-demo-app   <none>   app.demo.com                     192.168.1.47   80      20m
-ingress-host-bar   nginx    hello.chenby.cn,demo.chenby.cn   192.168.1.47   80      2m17s
+ingress-demo-app   <none>   app.demo.com                     192.168.1.12   80      20m
+ingress-host-bar   nginx    hello.chenby.cn,demo.chenby.cn   192.168.1.12   80      2m17s
 [root@hello ~/yaml]#
 
 ```
