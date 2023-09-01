@@ -65,17 +65,17 @@ pod：172.16.0.0/12
 ### 1.2.配置IP
 
 ```shell
-ssh root@192.168.1.12  "nmcli con mod ens160 ipv4.addresses 192.168.1.12/8; nmcli con mod ens160 ipv4.gateway 192.168.1.254; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "223.5.5.5"; nmcli con up ens160"
-ssh root@192.168.1.13 "nmcli con mod ens160 ipv4.addresses 192.168.1.13/8; nmcli con mod ens160 ipv4.gateway 192.168.1.254; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "223.5.5.5"; nmcli con up ens160"
-ssh root@192.168.1.14 "nmcli con mod ens160 ipv4.addresses 192.168.1.14/8; nmcli con mod ens160 ipv4.gateway 192.168.1.254; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "223.5.5.5"; nmcli con up ens160"
-ssh root@192.168.1.15 "nmcli con mod ens160 ipv4.addresses 192.168.1.15/8; nmcli con mod ens160 ipv4.gateway 192.168.1.254; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "223.5.5.5"; nmcli con up ens160"
-ssh root@192.168.1.16 "nmcli con mod ens160 ipv4.addresses 192.168.1.16/8; nmcli con mod ens160 ipv4.gateway 192.168.1.254; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "223.5.5.5"; nmcli con up ens160"
+ssh root@192.168.1.12  "nmcli con mod ens192 ipv4.addresses 192.168.1.12/8; nmcli con mod ens192 ipv4.gateway 192.168.1.254; nmcli con mod ens192 ipv4.method manual; nmcli con mod ens192 ipv4.dns "223.5.5.5"; nmcli con up ens192"
+ssh root@192.168.1.13 "nmcli con mod ens192 ipv4.addresses 192.168.1.13/8; nmcli con mod ens192 ipv4.gateway 192.168.1.254; nmcli con mod ens192 ipv4.method manual; nmcli con mod ens192 ipv4.dns "223.5.5.5"; nmcli con up ens192"
+ssh root@192.168.1.14 "nmcli con mod ens192 ipv4.addresses 192.168.1.14/8; nmcli con mod ens192 ipv4.gateway 192.168.1.254; nmcli con mod ens192 ipv4.method manual; nmcli con mod ens192 ipv4.dns "223.5.5.5"; nmcli con up ens192"
+ssh root@192.168.1.15 "nmcli con mod ens192 ipv4.addresses 192.168.1.15/8; nmcli con mod ens192 ipv4.gateway 192.168.1.254; nmcli con mod ens192 ipv4.method manual; nmcli con mod ens192 ipv4.dns "223.5.5.5"; nmcli con up ens192"
+ssh root@192.168.1.16 "nmcli con mod ens192 ipv4.addresses 192.168.1.16/8; nmcli con mod ens192 ipv4.gateway 192.168.1.254; nmcli con mod ens192 ipv4.method manual; nmcli con mod ens192 ipv4.dns "223.5.5.5"; nmcli con up ens192"
 
-ssh root@192.168.1.12 "nmcli con mod ens160 ipv6.addresses 2408:8207:78ca:9fa1:181c::10; nmcli con mod ens160 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens160 ipv6.method manual; nmcli con mod ens160 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens160"
-ssh root@192.168.1.13 "nmcli con mod ens160 ipv6.addresses 2408:8207:78ca:9fa1:181c::20; nmcli con mod ens160 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens160 ipv6.method manual; nmcli con mod ens160 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens160"
-ssh root@192.168.1.14 "nmcli con mod ens160 ipv6.addresses 2408:8207:78ca:9fa1:181c::30; nmcli con mod ens160 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens160 ipv6.method manual; nmcli con mod ens160 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens160"
-ssh root@192.168.1.15 "nmcli con mod ens160 ipv6.addresses 2408:8207:78ca:9fa1:181c::40; nmcli con mod ens160 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens160 ipv6.method manual; nmcli con mod ens160 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens160"
-ssh root@192.168.1.16 "nmcli con mod ens160 ipv6.addresses 2408:8207:78ca:9fa1:181c::50; nmcli con mod ens160 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens160 ipv6.method manual; nmcli con mod ens160 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens160"
+ssh root@192.168.1.12 "nmcli con mod ens192 ipv6.addresses 2408:8207:78ca:9fa1:181c::10; nmcli con mod ens192 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens192 ipv6.method manual; nmcli con mod ens192 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens192"
+ssh root@192.168.1.13 "nmcli con mod ens192 ipv6.addresses 2408:8207:78ca:9fa1:181c::20; nmcli con mod ens192 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens192 ipv6.method manual; nmcli con mod ens192 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens192"
+ssh root@192.168.1.14 "nmcli con mod ens192 ipv6.addresses 2408:8207:78ca:9fa1:181c::30; nmcli con mod ens192 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens192 ipv6.method manual; nmcli con mod ens192 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens192"
+ssh root@192.168.1.15 "nmcli con mod ens192 ipv6.addresses 2408:8207:78ca:9fa1:181c::40; nmcli con mod ens192 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens192 ipv6.method manual; nmcli con mod ens192 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens192"
+ssh root@192.168.1.16 "nmcli con mod ens192 ipv6.addresses 2408:8207:78ca:9fa1:181c::50; nmcli con mod ens192 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens192 ipv6.method manual; nmcli con mod ens192 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens192"
 ```
 
 ### 1.3.设置主机名
@@ -1803,7 +1803,7 @@ vrrp_script chk_apiserver {
 }
 vrrp_instance VI_1 {
     state MASTER
-    interface ens160
+    interface ens192
     mcast_src_ip 192.168.1.12
     virtual_router_id 51
     priority 100
@@ -1844,7 +1844,7 @@ vrrp_script chk_apiserver {
 }
 vrrp_instance VI_1 {
     state BACKUP
-    interface ens160
+    interface ens192
     mcast_src_ip 192.168.1.82
     virtual_router_id 51
     priority 50
@@ -1885,7 +1885,7 @@ vrrp_script chk_apiserver {
 }
 vrrp_instance VI_1 {
     state BACKUP
-    interface ens160
+    interface ens192
     mcast_src_ip 192.168.1.83
     virtual_router_id 51
     priority 30
