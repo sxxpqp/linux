@@ -65,11 +65,11 @@ pod：172.16.0.0/12
 ### 1.2.配置IP
 
 ```shell
-ssh root@10.1.1.112 "nmcli con mod ens160 ipv4.addresses 192.168.1.12/8; nmcli con mod ens160 ipv4.gateway 10.0.0.1; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "8.8.8.8"; nmcli con up ens160"
-ssh root@10.1.1.102 "nmcli con mod ens160 ipv4.addresses 192.168.1.13/8; nmcli con mod ens160 ipv4.gateway 10.0.0.1; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "8.8.8.8"; nmcli con up ens160"
-ssh root@10.1.1.104 "nmcli con mod ens160 ipv4.addresses 192.168.1.14/8; nmcli con mod ens160 ipv4.gateway 10.0.0.1; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "8.8.8.8"; nmcli con up ens160"
-ssh root@10.1.1.105 "nmcli con mod ens160 ipv4.addresses 192.168.1.15/8; nmcli con mod ens160 ipv4.gateway 10.0.0.1; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "8.8.8.8"; nmcli con up ens160"
-ssh root@10.1.1.106 "nmcli con mod ens160 ipv4.addresses 192.168.1.16/8; nmcli con mod ens160 ipv4.gateway 10.0.0.1; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "8.8.8.8"; nmcli con up ens160"
+ssh root@192.168.1.12  "nmcli con mod ens160 ipv4.addresses 192.168.1.12/8; nmcli con mod ens160 ipv4.gateway 192.168.1.254; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "223.5.5.5"; nmcli con up ens160"
+ssh root@192.168.1.13 "nmcli con mod ens160 ipv4.addresses 192.168.1.13/8; nmcli con mod ens160 ipv4.gateway 192.168.1.254; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "223.5.5.5"; nmcli con up ens160"
+ssh root@192.168.1.14 "nmcli con mod ens160 ipv4.addresses 192.168.1.14/8; nmcli con mod ens160 ipv4.gateway 192.168.1.254; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "223.5.5.5"; nmcli con up ens160"
+ssh root@192.168.1.15 "nmcli con mod ens160 ipv4.addresses 192.168.1.15/8; nmcli con mod ens160 ipv4.gateway 192.168.1.254; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "223.5.5.5"; nmcli con up ens160"
+ssh root@192.168.1.16 "nmcli con mod ens160 ipv4.addresses 192.168.1.16/8; nmcli con mod ens160 ipv4.gateway 192.168.1.254; nmcli con mod ens160 ipv4.method manual; nmcli con mod ens160 ipv4.dns "223.5.5.5"; nmcli con up ens160"
 
 ssh root@192.168.1.12 "nmcli con mod ens160 ipv6.addresses 2408:8207:78ca:9fa1:181c::10; nmcli con mod ens160 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens160 ipv6.method manual; nmcli con mod ens160 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens160"
 ssh root@192.168.1.13 "nmcli con mod ens160 ipv6.addresses 2408:8207:78ca:9fa1:181c::20; nmcli con mod ens160 ipv6.gateway fe80::2e2:69ff:fe3f:b198; nmcli con mod ens160 ipv6.method manual; nmcli con mod ens160 ipv6.dns "2001:4860:4860::8888"; nmcli con up ens160"
@@ -103,7 +103,7 @@ sudo sed -e 's|^mirrorlist=|#mirrorlist=|g' \
          -i.bak \
          /etc/yum.repos.d/CentOS-*.repo
 
-sed -e 's|^mirrorlist=|#mirrorlist=|g' -e 's|^#baseurl=http://mirror.centos.org/\$contentdir|baseurl=http://10.0.0.123/centos|g' -i.bak  /etc/yum.repos.d/CentOS-*.repo
+sed -e 's|^mirrorlist=|#mirrorlist=|g' -e 's|^#baseurl=http://mirror.centos.org/\$contentdir|baseurl=http://192.168.1.25423/centos|g' -i.bak  /etc/yum.repos.d/CentOS-*.repo
 ```
 
 ### 1.5.安装一些必备工具
