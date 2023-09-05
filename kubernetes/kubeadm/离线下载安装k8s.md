@@ -13,6 +13,7 @@ mkdir -p /etc/systemd/system/kubelet.service.d
 curl -sSL "https://raw.githubusercontent.com/kubernetes/release/v0.4.0/cmd/kubepkg/templates/latest/deb/kubeadm/10-kubeadm.conf" | tee /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
 
 ```
+### 配置kubelet systemd
 ```
 cat >/lib/systemd/system/kubelet.service<<EOF
 [Unit]
@@ -32,6 +33,7 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 ```
+### 配置kubelet文件
 ```
 mkdir /etc/systemd/system/kubelet.service.d
 cat >/etc/systemd/system/kubelet.service.d/10-kubeadm.conf<<EOF
@@ -50,44 +52,46 @@ EOF
 ```
 
 ```
-kubeadm config print init-defaults > kubeadm.yaml
+kubeadm config print init-defaults > kubeadm-init.yaml
+```
+### kubeadm-init.yaml 配置文件
+```
+apiVersion: kubeadm.k8s.io/v1beta3
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: abcdef.0123456789abcdef
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: 192.168.1.191
+  bindPort: 6443
+nodeRegistration:
+  criSocket: unix:///var/run/containerd/containerd.sock
+  imagePullPolicy: IfNotPresent
+  name: k8s-master01
+  taints: null
+---
+controlPlaneEndpoint: "192.168.1.190:8443"
+apiServer:
+  timeoutForControlPlane: 4m0s
+apiVersion: kubeadm.k8s.io/v1beta3
+certificatesDir: /etc/kubernetes/pki
+clusterName: kubernetes
+imageRepository: registry.cn-hangzhou.aliyuncs.com/google_containers
+controllerManager: {}
+dns: {}
+etcd:
+  local:
+    dataDir: /var/lib/etcd
+kind: ClusterConfiguration
+kubernetesVersion: 1.27.1
+networking:
+  dnsDomain: cluster.local
+  serviceSubnet: 10.96.0.0/12
+scheduler: {}
 ```
 
-网络配置
-```
-cat << EOF | tee /etc/cni/net.d/10-containerd-net.conflist
-{
- "cniVersion": "1.0.0",
- "name": "containerd-net",
- "plugins": [
-   {
-     "type": "bridge",
-     "bridge": "cni0",
-     "isGateway": true,
-     "ipMasq": true,
-     "promiscMode": true,
-     "ipam": {
-       "type": "host-local",
-       "ranges": [
-         [{
-           "subnet": "10.88.0.0/16"
-         }],
-         [{
-           "subnet": "2001:db8:4860::/64"
-         }]
-       ],
-       "routes": [
-         { "dst": "0.0.0.0/0" },
-         { "dst": "::/0" }
-       ]
-     }
-   },
-   {
-     "type": "portmap",
-     "capabilities": {"portMappings": true},
-     "externalSetMarkChain": "KUBE-MARK-MASQ"
-   }
- ]
-}
-EOF
-```
