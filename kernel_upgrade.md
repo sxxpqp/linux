@@ -32,6 +32,10 @@ grub2-set-default 0
 #重启并检查
 reboot
 ```
+#出现/etc/grub2.cfg 没有这个文件和目录
+```
+grub2-mkconfig -o /boot/grub2/grub.cfg
+```
 
 ## Ubuntu16.04
 

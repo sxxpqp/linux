@@ -95,3 +95,6 @@ networking:
 scheduler: {}
 ```
 
+```
+kubeadm init --config kubeadm-init.yaml  --upload-certs
+```
