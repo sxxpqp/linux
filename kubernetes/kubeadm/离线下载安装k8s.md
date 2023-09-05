@@ -14,7 +14,7 @@ curl -sSL "https://raw.githubusercontent.com/kubernetes/release/v0.4.0/cmd/kubep
 
 ```
 ```
-cat >/etc/systemd/system/kubelet.service<<EOF
+cat >/lib/systemd/system/kubelet.service<<EOF
 [Unit]
 Description=kubelet: The Kubernetes Node Agent
 Documentation=https://kubernetes.io/docs/home/
@@ -22,9 +22,7 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
-ExecStart=/usr/bin/kubelet \
---container-runtime=remote \
---container-runtime-endpoint=unix:///var/run//containerd/containerd.sock
+ExecStart=/usr/bin/kubelet 
 
 Restart=always
 StartLimitInterval=0
@@ -47,7 +45,7 @@ EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env
 # the .NodeRegistration.KubeletExtraArgs object in the configuration files instead. KUBELET_EXTRA_ARGS should be sourced from this file.
 EnvironmentFile=-/etc/default/kubelet
 ExecStart=
-ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS
+ExecStart=/usr/bin/kubelet \$KUBELET_KUBECONFIG_ARGS \$KUBELET_CONFIG_ARGS \$KUBELET_KUBEADM_ARGS \$KUBELET_EXTRA_ARGS
 EOF
 ```
 
