@@ -47,7 +47,7 @@ spec:
                 - NET_ADMIN
       restartPolicy: Always
       terminationGracePeriodSeconds: 30
-      dnsPolicy: ClusterFirst
+      dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: default
       serviceAccount: default
       imagePullSecrets:
@@ -67,7 +67,6 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: frpc
-  namespace: mengniuningxia
   annotations:
     kubesphere.io/creator: sxx
 data:
@@ -77,8 +76,19 @@ data:
     server_port = 7000
     token = zkturing.imwork.net
     protocol = kcp
-    [tcp1_mengniu]
+    [tcp1_shanxihuadian-mysql]
     type = tcp
-    local_ip = 100.10.1.2
-    local_port = 443
-    remote_port = 38443
+    local_ip = turingcloud-mysql
+    local_port = 3306
+    remote_port = 36020
+    [tcp1_shanxihuadian-nacos]
+    type = tcp
+    local_ip = turingcloud-register
+    local_port = 8848
+    remote_port = 36021
+    [tcp1_shanxihuadian-redis]
+    type = tcp
+    local_ip = turingcloud-redis
+    local_port = 9000
+    remote_port = 36022
+
