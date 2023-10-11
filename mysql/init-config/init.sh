@@ -44,6 +44,12 @@ else
     echo "minio的桶turing已存在"
 
 fi
+if mc mb minio/model &>/dev/null; then
+    echo "minio的桶model创建成功"
+else
+    echo "minio的桶model已存在"
+
+fi
 
 if [ $? -eq 0 ]; then
     echo "minio初始化完成"
