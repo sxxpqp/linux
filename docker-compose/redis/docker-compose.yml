@@ -10,7 +10,7 @@ services:
       - TZ=Asia/Shanghai
       - REDIS_PASSWORD=Xl123456..  
     volumes:
-      - redis-data:/data
+      - ./redis:/data
       # - config/redis.conf:/usr/local/etc/redis/redis.conf
     networks:
       - redis-net

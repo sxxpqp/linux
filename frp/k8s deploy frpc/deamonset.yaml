@@ -2,7 +2,6 @@ kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: frpc
-  namespace: mengniuningxia
   labels:
     app: frpc
   annotations:
@@ -76,29 +75,29 @@ data:
     server_port = 7000
     token = zkturing.imwork.net
     protocol = kcp
-    [tcp1_jiaokeyuan_tezhijia-mysql]
+    [tcp1_jiaokeyuan_dangyangmengniu-tezhijia-mysql]
     type = tcp
     local_ip = turingcloud-mysql
     local_port = 3306
-    remote_port = 36050
-    [tcp1_jiaokeyuan_tezhijia-nacos]
+    remote_port = 36060
+    [tcp1_jiaokeyuan_dangyangmengniu-tezhijia-nacos]
     type = tcp
     local_ip = turingcloud-register
     local_port = 8848
-    remote_port = 36051
-    [tcp1_jiaokeyuan_tezhijia-redis]
+    remote_port = 36061
+    [tcp1_jiaokeyuan_dangyangmengniu-tezhijia-redis]
     type = tcp
     local_ip = turingcloud-redis
     local_port = 3306
-    remote_port = 36052
-    [tcp1_jiaokeyuan_tezhijia-web]
+    remote_port = 36062
+    [tcp1_jiaokeyuan_dangyangmengniu-tezhijia-web]
     type = tcp
     local_ip = turingcloud-web
     local_port = 80
-    remote_port = 36053
-    [tcp1_jiaokeyuan_tezhijia-minio]
+    remote_port = 36063
+    [tcp1_jiaokeyuan_dangyangmengniu-tezhijia-minio]
     type = tcp
     local_ip = turingcloud-minio
     local_port = 9000
-    remote_port = 36054
+    remote_port = 36064
 

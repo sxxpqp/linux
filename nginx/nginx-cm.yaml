@@ -1,0 +1,68 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: nginx-config
+data:
+  nginx.conf: |
+    user  nginx;
+    worker_processes  auto;
+
+    events {
+        worker_connections  4096;
+    }
+
+    http {
+        include       mime.types;
+        default_type  application/octet-stream;
+        underscores_in_headers on;
+        sendfile        on;
+        client_max_body_size 300M;
+        keepalive_timeout  65;
+        gzip  on;
+        server {
+            listen       80;
+            server_name  localhost;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Original-URI $request_uri;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "Upgrade";
+            location / {
+                proxy_pass  http://omvs-web-svc:88;
+            }
+            # location /uc-api {
+            #     rewrite "^/uc-api/(.*)$" /$1 break;
+            #     proxy_pass  http://omei-cloud-api-svc:8080;
+            # }
+            # location /api {
+            #     rewrite "^/api/(.*)$" /$1 break;
+            #     proxy_pass  http://omei-cloud-api-svc:8080;
+            # }   
+            # location /monitor-api {
+            #     rewrite "^/monitor-api/(.*)$" /$1 break;
+            #     proxy_pass  http://omvision-api-svc:8081;
+            # }   
+            # location /omei-api {
+            #     rewrite "^/omei-api/(.*)$" /$1 break;
+            #     proxy_pass  http://omei-cloud-api-svc:8080;
+            # }   
+            # location /omvision-api {
+            #     rewrite "^/omvision-api/(.*)$" /$1 break;
+            #     proxy_pass  http://omvision-api-svc:8081;
+            # }   
+            # location /download/sys_config/images/ {
+            #     rewrite "^/download/sys_config/images/(.*)$" /$1 break;
+            #     root /opt/data/omvs/files/images/; 
+            # }
+            # location /image {
+            #     rewrite "^/image/(.*)$" /$1 break;
+            #     proxy_pass  http://minio-svc:9000;
+            # }
+            # location / {
+            #     proxy_pass  http://minio-svc:9090;
+            # }
+        }
+    }
