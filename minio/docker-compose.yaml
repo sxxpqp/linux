@@ -1,0 +1,23 @@
+version: '3'
+services:
+  minio:
+    image: harbor.iot.store:8085/turing-kubesphere/minio:latest
+    ports:
+      - '9000:9000'
+    volumes:
+      - '/u01:/data'
+    environment:
+      - MINIO_ACCESS_KEY=minio
+      - MINIO_SECRET_KEY=minio@123456
+    privileged: true
+    command: server /data
+    restart: always
+  nginx:
+    image: nginx
+    ports:
+      - '80:80'
+    volumes:
+      - './nginx.conf:/etc/nginx/nginx.conf'
+    restart: always
+
+

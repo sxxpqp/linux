@@ -14,9 +14,9 @@ Environment="HTTP_PROXY=http://192.168.2.173:1080/" "HTTPS_PROXY=http://192.168.
 systemctl daemon-reload
 systemctl restart docker
 ```
-```
 
-```bash
+
+
 ### 自动安装
 **Docker** 提供了一个自动配置与安装的脚本，支持 Debian、RHEL、SUSE 系列及衍生系统的安装。
 
@@ -24,6 +24,7 @@ systemctl restart docker
 
 您为 root 用户，或有 sudo 权限，或知道 root 密码；
 您系统上有 curl 或 wget
+
 
 ```
 export DOWNLOAD_URL="https://mirrors.tuna.tsinghua.edu.cn/docker-ce"

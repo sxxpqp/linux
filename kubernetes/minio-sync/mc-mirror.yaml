@@ -118,3 +118,25 @@ data:
                     }
             }
     }
+---
+# 使用minio做pv
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: minio-pv
+  namespace: tmc-v2-saas
+  labels:
+    app: minio
+spec:
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: minio
+  miniopv:
+    server: http://test.iot.store:9000
+    accessKey: minio
+    secretKey: Iot@123456
+    bucket: vrw
+    region: us-east-1
