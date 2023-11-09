@@ -25,7 +25,9 @@
 # namespace=guizhoujianyuan
 # namespace=dangyangmingniu-tezhijia
 # namespace=diyishifan
-namespace=tmc-v2-saas
+# namespace=tmc-v2-saas
+# namespace=yuanweimin
+namespace=jinanyizhuan-zhihuixiaofang
 if [ -z "$namespace" ]
 then
   echo "namespace is null"
@@ -37,19 +39,19 @@ turingcloud-aircraft=harbor.iot.store:8085/turing-kubesphere/turingcloud-aircraf
 turingcloud-auth=harbor.iot.store:8085/turing-kubesphere/turingcloud-auth:SNAPSHOT-45
 turingcloud-daemon-quartz=harbor.iot.store:8085/turing-kubesphere/turingcloud-daemon-quartz:SNAPSHOT-50
 turingcloud-daily=harbor.iot.store:8085/turing-kubesphere/turingcloud-daily:SNAPSHOT-242
-turingcloud-data=harbor.iot.store:8085/turing-kubesphere/turingcloud-data:SNAPSHOT-56
+turingcloud-data=harbor.iot.store:8085/turing-kubesphere/turingcloud-data:SNAPSHOT-60
 turingcloud-dataanalysis=harbor.iot.store:8085/turing-kubesphere/turingcloud-dataanalysis:SNAPSHOT-317
-turingcloud-device=harbor.iot.store:8085/turing-kubesphere/turingcloud-device:SNAPSHOT-922
+turingcloud-device=harbor.iot.store:8085/turing-kubesphere/turingcloud-device:SNAPSHOT-924
 turingcloud-gateway=harbor.iot.store:8085/turing-kubesphere/turingcloud-gateway:SNAPSHOT-23
-turingcloud-ground-pressure=harbor.iot.store:8085/turing-kubesphere/turingcloud-ground-pressure:SNAPSHOT-138
+turingcloud-ground-pressure=harbor.iot.store:8085/turing-kubesphere/turingcloud-ground-pressure:SNAPSHOT-139
 turingcloud-light=harbor.iot.store:8085/turing-kubesphere/turingcloud-light:SNAPSHOT-8
 turingcloud-register=harbor.iot.store:8085/turing-kubesphere/turingcloud-register:latest
 turingcloud-safety=harbor.iot.store:8085/turing-kubesphere/turingcloud-safety:SNAPSHOT-100
 turingcloud-tx-manager=harbor.iot.store:8085/turing-kubesphere/turingcloud-tx-manager:latest
-turingcloud-upms=harbor.iot.store:8085/turing-kubesphere/turingcloud-upms:SNAPSHOT-600
+turingcloud-upms=harbor.iot.store:8085/turing-kubesphere/turingcloud-upms:SNAPSHOT-607
 turingcloud-video=harbor.iot.store:8085/turing-kubesphere/turingcloud-video:SNAPSHOT-366
 turingcloud-visual=harbor.iot.store:8085/turing-kubesphere/turingcloud-visual:SNAPSHOT-23
-turingcloud-web=harbor.iot.store:8085/turing-kubesphere/turingcloud-web-zktl:SNAPSHOT-1368
+turingcloud-web=harbor.iot.store:8085/turing-kubesphere/turingcloud-web-zktl:SNAPSHOT-1378
 EOF
 # 通过输入参数获取deployment.name=镜像名
 while read line
@@ -91,3 +93,4 @@ done < image.txt
 # - 192.168.0.1
 
 # set -i 's#/:9000/#:9000/vrw/#g' /etc/nginx/nginx.conf
+<div class="vp-preview vp-preview-invisible" id="vp-preview" data-thumb="https://i.vimeocdn.com/video/1214218318-430241caa97f4e555555ac2d6238f8f308d2440f489dd11cfc50666276fed357-d?mw=400&amp;mh=600" data-thumb-width="400" style="background-image: url(&quot;https://i.vimeocdn.com/video/1214218318-430241caa97f4e555555ac2d6238f8f308d2440f489dd11cfc50666276fed357-d?mw=400&amp;mh=600&quot;);"></div>
