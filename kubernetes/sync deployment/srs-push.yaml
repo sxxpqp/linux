@@ -1,0 +1,396 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: srs-demo-192-deploy
+  namespace: srs
+  labels:
+    app: srs-demo-192
+  annotations:
+    deployment.kubernetes.io/revision: '1'
+    kubesphere.io/creator: sxx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: srs-demo-192
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: srs-demo-192
+      annotations:
+        kubesphere.io/restartedAt: '2023-11-17T03:08:35.726Z'
+    spec:
+      containers:
+        - name: y1-39
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.1.39:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.1.39 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-210
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.210:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.210 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y1-67
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.1.67:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.1.67 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-193
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.193:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.193 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-192
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.192:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.192 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-189
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.189:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.189 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-184
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.184:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.184 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-198
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.198:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.198 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-197
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.197:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.197 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-206
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.206:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.206 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-204
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.204:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.204 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-183
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.183:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.183 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-195
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.195:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.195 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-187
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.187:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.187 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-182
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.182:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.182 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-180
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.180:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.180 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y2-243
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.2.243:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.2.243 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y1-12
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.1.12:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.1.12 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y1-199
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.1.199:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.1.199 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y1-245
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.1.245:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.1.245 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y1-244
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.1.244:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.1.244 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y1-247
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.1.247:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.1.247 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y1-246
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.1.246:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.1.246 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+        - name: y1-248
+          image: 'ossrs/srs:encoder'
+          command:
+            - /bin/sh
+          args:
+            - '-c'
+            - >
+              while true; do
+                ffmpeg -rtsp_transport tcp -i rtsp://admin:sdyz1234567@192.168.1.248:554/h264/ch33/main/av_stream \
+              -c copy  -f flv rtmp:/srs-edge-service/live1/192.168.1.248 &&
+              continue; done
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent         
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600

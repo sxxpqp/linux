@@ -103,3 +103,12 @@ volumes:
 networks:
   kafka-net:
     driver: bridge
+---
+version: "3"
+services: 
+   nginx:
+    image: docker.io/bitnami/nginx:1.21
+    ports:
+      - "9094-9096:9094-9096"
+    volumes:
+      - ./nginx.conf:/opt/bitnami/nginx/conf/nginx.conf    

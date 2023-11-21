@@ -27,7 +27,19 @@
 # namespace=diyishifan
 # namespace=tmc-v2-saas
 # namespace=yuanweimin
-namespace=jinanyizhuan-zhihuixiaofang
+# namespace=jinanyizhuan-zhihuixiaofang
+
+# namespace=shanxihainayuanqu
+# namespace=mengniuningxia
+# namespace=jinzhongshiyuciquxiaofangjiuyuandadui
+# namespace=zhengshangpinganjia
+# namespace=guizhoujianyuan
+
+# namespace=jinanyizhuan-zhihuixiaofang
+# namespace=huli-guizhouzhishengwangluokeji
+# namespace=jinanyizhuan-zhihuixiaofang
+# namespace=hengyangshizhengxiangqumingzhengju
+namespace=wuhanjingyuan
 if [ -z "$namespace" ]
 then
   echo "namespace is null"
@@ -37,21 +49,21 @@ cat<<EOF > image.txt
 turingcloud-activiti=harbor.iot.store:8085/turing-kubesphere/turingcloud-activiti:SNAPSHOT-20
 turingcloud-aircraft=harbor.iot.store:8085/turing-kubesphere/turingcloud-aircraft:SNAPSHOT-24
 turingcloud-auth=harbor.iot.store:8085/turing-kubesphere/turingcloud-auth:SNAPSHOT-45
-turingcloud-daemon-quartz=harbor.iot.store:8085/turing-kubesphere/turingcloud-daemon-quartz:SNAPSHOT-50
+turingcloud-daemon-quartz=harbor.iot.store:8085/turing-kubesphere/turingcloud-daemon-quartz:SNAPSHOT-51
 turingcloud-daily=harbor.iot.store:8085/turing-kubesphere/turingcloud-daily:SNAPSHOT-242
-turingcloud-data=harbor.iot.store:8085/turing-kubesphere/turingcloud-data:SNAPSHOT-60
+turingcloud-data=harbor.iot.store:8085/turing-kubesphere/turingcloud-data:SNAPSHOT-61
 turingcloud-dataanalysis=harbor.iot.store:8085/turing-kubesphere/turingcloud-dataanalysis:SNAPSHOT-317
-turingcloud-device=harbor.iot.store:8085/turing-kubesphere/turingcloud-device:SNAPSHOT-924
+turingcloud-device=harbor.iot.store:8085/turing-kubesphere/turingcloud-device:SNAPSHOT-930
 turingcloud-gateway=harbor.iot.store:8085/turing-kubesphere/turingcloud-gateway:SNAPSHOT-23
 turingcloud-ground-pressure=harbor.iot.store:8085/turing-kubesphere/turingcloud-ground-pressure:SNAPSHOT-139
 turingcloud-light=harbor.iot.store:8085/turing-kubesphere/turingcloud-light:SNAPSHOT-8
 turingcloud-register=harbor.iot.store:8085/turing-kubesphere/turingcloud-register:latest
 turingcloud-safety=harbor.iot.store:8085/turing-kubesphere/turingcloud-safety:SNAPSHOT-100
 turingcloud-tx-manager=harbor.iot.store:8085/turing-kubesphere/turingcloud-tx-manager:latest
-turingcloud-upms=harbor.iot.store:8085/turing-kubesphere/turingcloud-upms:SNAPSHOT-607
-turingcloud-video=harbor.iot.store:8085/turing-kubesphere/turingcloud-video:SNAPSHOT-366
+turingcloud-upms=harbor.iot.store:8085/turing-kubesphere/turingcloud-upms:SNAPSHOT-618
+turingcloud-video=harbor.iot.store:8085/turing-kubesphere/turingcloud-video:SNAPSHOT-372
 turingcloud-visual=harbor.iot.store:8085/turing-kubesphere/turingcloud-visual:SNAPSHOT-23
-turingcloud-web=harbor.iot.store:8085/turing-kubesphere/turingcloud-web-zktl:SNAPSHOT-1378
+turingcloud-web=harbor.iot.store:8085/turing-kubesphere/turingcloud-web-zktl:SNAPSHOT-1402
 EOF
 # 通过输入参数获取deployment.name=镜像名
 while read line
@@ -84,13 +96,10 @@ done < image.txt
 #        # Default is HTTP/1, keepalive is only enabled in HTTP/1.1
 #        proxy_http_version 1.1;
 #        proxy_set_header Connection "";
-#        chunked_transfer_encoding off;
- 
+#        chunked_transfer_encoding off; 
 #        # minio 服务直连地址
 #        proxy_pass  http://turingclou-minio:9199;
 # }
 # externalIPs:
 # - 192.168.0.1
-
 # set -i 's#/:9000/#:9000/vrw/#g' /etc/nginx/nginx.conf
-<div class="vp-preview vp-preview-invisible" id="vp-preview" data-thumb="https://i.vimeocdn.com/video/1214218318-430241caa97f4e555555ac2d6238f8f308d2440f489dd11cfc50666276fed357-d?mw=400&amp;mh=600" data-thumb-width="400" style="background-image: url(&quot;https://i.vimeocdn.com/video/1214218318-430241caa97f4e555555ac2d6238f8f308d2440f489dd11cfc50666276fed357-d?mw=400&amp;mh=600&quot;);"></div>

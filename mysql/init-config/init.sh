@@ -51,6 +51,18 @@ else
 
 fi
 
+if mc mb minio/vrw &>/dev/null; then
+    echo "minio开始初始化"
+    mc mirror vrw/ minio/vrw
+    echo "minio的桶vrw创建成功,并同步数据完成"
+    # # 设置桶的访问权限只读
+    # mc policy set public minio/vrw
+
+else
+    echo "minio的桶vrw已存在"
+
+fi
+
 if [ $? -eq 0 ]; then
     echo "minio初始化完成"
 fi
