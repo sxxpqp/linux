@@ -16,7 +16,7 @@ date
 
 ```
 apt install ntpdate 
-ntpdate time.windows.com
+ntpdate time.windows.com 
 ```
 
 #### centos 7
