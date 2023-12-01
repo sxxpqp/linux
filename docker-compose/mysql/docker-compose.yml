@@ -1,12 +1,12 @@
 version: "3.7"
 services:
   mysql:
-    image: mysql:5.7
+    image: docker.io/bitnami/mysql:8.2
     container_name: mysql
     restart: always
     hostname: mysql
     volumes:
-      - mysql-data:/var/lib/mysql
+      - mysql_data:/bitnami/mysql/data
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: wvp
@@ -16,32 +16,16 @@ services:
       - mysql
     # 健康检查 端口号要和上面的一致
     healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-u", "root", "-p$MYSQL_ROOT_PASSWORD", "-P", "3306"]
-      interval: 10s
+      test: ['CMD', '/opt/bitnami/scripts/mysql/healthcheck.sh']
+      interval: 15s
       timeout: 5s
-      retries: 3
-
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    container_name: phpmyadmin
-    restart: always
-    hostname: phpmyadmin
-    ports:
-      - "80:80"
-    environment:
-      PMA_HOST: mysql
-      PMA_PORT: 3306
-      PMA_USER: root
-      PMA_PASSWORD: root
-    networks:
-      - mysql
-    depends_on:
-        mysql:
-          condition: service_healthy
+      retries: 6
 volumes:
-  mysql-data: {
+  mysql_data: {
     driver: local
   }
 networks:
   mysql:
     driver: bridge
+
+    

@@ -63,7 +63,7 @@ services:
       - traefik_default        
 networks:
   traefik_default:
-    external: true
+    driver: bridge
 volumes:
   etcd1_data:
     driver: local

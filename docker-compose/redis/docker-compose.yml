@@ -1,11 +1,11 @@
-version: "3.7"
+# Copyright VMware, Inc.
+# SPDX-License-Identifier: APACHE-2.0
+
+version: '2'
+
 services:
   redis:
-    image: redis:alpine
-    container_name: redis
-    restart: always
-    ports:
-      - "6379:6379"
+    image: docker.io/bitnami/redis:7.2
     environment:
       - TZ=Asia/Shanghai
       - REDIS_PASSWORD=root 
