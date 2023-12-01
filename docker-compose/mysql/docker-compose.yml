@@ -9,7 +9,7 @@ services:
       - mysql-data:/var/lib/mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: gin_demo
+      MYSQL_DATABASE: wvp
     ports:
       - "3306:3306"
     networks:

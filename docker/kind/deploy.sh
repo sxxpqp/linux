@@ -23,6 +23,7 @@ EOF
 
 # install nginx-ingress 出现无法拉取镜像 需要image
 #ingress-class.yaml
+cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -705,3 +706,4 @@ webhooks:
     resources:
     - ingresses
   sideEffects: None
+EOF

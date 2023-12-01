@@ -10,7 +10,7 @@ spec:
         spec:
           initContainers:
           - name: init-mysql-backup
-            image: busybox
+            image: harbor.iot.store:8085/turing-kubesphere/busybox:v1
             command: ['sh', '-c', 'if [ ! -f /tmp/mysql_backup.sh ]; then cp /mysql_backup.sh /tmp/mysql_backup.sh;chmod +x /tmp/mysql_backup.sh; fi']
             volumeMounts:
             - name: mysql-backup
@@ -20,7 +20,7 @@ spec:
               mountPath: /tmp
           containers:
           - name: mysql-backup
-            image: mysql:5.7
+            image: harbor.iot.store:8085/turing-kubesphere/t-charts/mysql:5.7
             volumeMounts:
             - name: backup
               mountPath: /home/database
@@ -38,3 +38,5 @@ spec:
           - name: shared-data
             emptyDir: {}          
           restartPolicy: OnFailure
+          imagePullSecrets:
+          - name: harbor-repository

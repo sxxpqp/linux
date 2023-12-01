@@ -8,14 +8,15 @@ services:
       - "6379:6379"
     environment:
       - TZ=Asia/Shanghai
-      - REDIS_PASSWORD=Xl123456..  
+      - REDIS_PASSWORD=root 
     volumes:
       - ./redis:/data
       # - config/redis.conf:/usr/local/etc/redis/redis.conf
     networks:
       - redis-net
     # command: redis-server /usr/local/etc/redis/redis.conf
-    command: redis-server --requirepass ${REDIS_PASSWORD}
+    
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
 volumes:
   redis-data:
     driver: local

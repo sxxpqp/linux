@@ -269,3 +269,11 @@ SET SESSION GTID_NEXT = AUTOMATIC;
 START SLAVE;
 
 ```
+
+
+```
+mysql -u root -p 
+use mysql
+select `user`,authentication_string,`Host` from `user`;
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'Iot@123456';
+flush privileges;

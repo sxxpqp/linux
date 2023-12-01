@@ -60,9 +60,11 @@ if mc mb minio/vrw &>/dev/null; then
 
 else
     echo "minio的桶vrw已存在"
+    
 
 fi
 
 if [ $? -eq 0 ]; then
+    mc policy set public minio/vrw &>/dev/null
     echo "minio初始化完成"
 fi
