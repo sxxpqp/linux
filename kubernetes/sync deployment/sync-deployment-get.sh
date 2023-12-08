@@ -1,8 +1,8 @@
 #!/bin/bash
 # 获取源k8s命名空间deployment的容器的镜像
 # 用法：./get_image.sh <namespace> <deployment>
-namespace=tmc-v2-test
-# namespace=tmc-v2-saas
+# namespace=tmc-v2-test
+namespace=tmc-v2-saas
 kubectl -n ${namespace} get deployment | grep -v NAME |grep turing| awk '{print $1}' | while read line
 do   
 # 去掉annotation字段
