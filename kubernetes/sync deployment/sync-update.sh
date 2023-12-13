@@ -42,7 +42,7 @@
 # namespace=wuhanjingyuan
 # 
 # namespace=guizhoujianyuan
-namespace=tmc-sd
+namespace=zhengshangpinganjia
 if [ -z "$namespace" ]
 then
   echo "namespace is null"

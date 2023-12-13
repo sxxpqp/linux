@@ -8,6 +8,7 @@ services:
     ports:
       # - "80:80"
       - "1443:443"
+      - "1444:444"
     volumes:
       - ./server.conf:/etc/nginx/conf.d/server.conf
       - ./gs.iot.store.crt/:/etc/nginx/ssl/gs.iot.store.crt
