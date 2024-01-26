@@ -11,8 +11,8 @@ services:
       - "1444:444"
     volumes:
       - ./server.conf:/etc/nginx/conf.d/server.conf
-      - ./gs.iot.store.crt/:/etc/nginx/ssl/gs.iot.store.crt
-      - ./gs.iot.store.key/:/etc/nginx/ssl/gs.iot.store.key
+      - ./gs.iot.store.crt:/etc/nginx/ssl/gs.iot.store.crt
+      - ./gs.iot.store.key:/etc/nginx/ssl/gs.iot.store.key
       # - ./html:/usr/share/nginx/html/
     networks:
       - nginx-net     

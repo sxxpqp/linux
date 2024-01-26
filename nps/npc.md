@@ -10,8 +10,10 @@ docker pull sxxpqp/npc
 # 运行 npc 容器，按提示改好命令，如下图所示
 # 唯一验证密钥在管理界面中获取 vkey替换自己的vkey 特权模式
 ```
-docker run -d --name=npc --restart=always --net=host --privileged sxxpqp/npc -server=clash.sxxpqp.top:8024 -vkey=nnvq5ey45p2u0f48
+docker run -d --name=npc --restart=always --net=host --privileged dockerproxy.com/sxxpqp/npc -server=clash.sxxpqp.top:8024 -vkey=2ei9nzadu1o2tzwt
 ```
+
+
 # 查看日志
 ```
 docker logs npc

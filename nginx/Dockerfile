@@ -1,3 +1,4 @@
 FROM nginx
-COPY  . /usr/share/nginx/html
+COPY  dist /opt/fox-cloud/repository
+COPY default.conf  /etc/nginx/conf.d
 

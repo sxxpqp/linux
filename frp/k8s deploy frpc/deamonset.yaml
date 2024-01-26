@@ -75,29 +75,30 @@ data:
     server_port = 7000
     token = zkturing.imwork.net
     protocol = kcp
-    [tcp1_jiaokeyuan_wuhanjingguanzhiyuan-mysql]
+    [tcp1_hebeibosi-beimingdingyun-mysql]
     type = tcp
     local_ip = turingcloud-mysql
     local_port = 3306
-    remote_port = 36100
-    [tcp1_jiaokeyuan_wuhanjingguanzhiyuan-nacos]
+    remote_port = 36220
+    [tcp1_hebeibosi-beimingdingyun-nacos]
     type = tcp
     local_ip = turingcloud-register
     local_port = 8848
-    remote_port = 36101
-    [tcp1_jiaokeyuan_wuhanjingguanzhiyuan-redis]
+    remote_port = 36221
+    [tcp1_hebeibosi-beimingdingyun-redis]
     type = tcp
     local_ip = turingcloud-redis
     local_port = 3306
-    remote_port = 36102
-    [tcp1_jiaokeyuan_wuhanjingguanzhiyuan-web]
+    remote_port = 36222
+    [tcp1_hebeibosi-beimingdingyun-web]
     type = tcp
     local_ip = turingcloud-web
     local_port = 80
-    remote_port = 36103
-    [tcp1_jiaokeyuan_wuhanjingguanzhiyuan-minio]
+    remote_port = 36223
+    [tcp1_hebeibosi-beimingdingyun-minio]
     type = tcp
     local_ip = turingcloud-minio
     local_port = 9000
-    remote_port = 36104
+    remote_port = 36224
+
 

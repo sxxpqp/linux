@@ -4,6 +4,7 @@ services:
       image: rabbitmq:3.9.4-management
       restart: always
       container_name: rabbitmq
+      hostname: rabbitmq
       privileged: true
       ports:
         - "15672:15672"
@@ -12,7 +13,7 @@ services:
         - "4369:4369"
         - "5671:5671"
       volumes:
-        - rabbitmq_data:/bitnami/rabbitmq/mnesia
+        - rabbitmq_data:/var/lib/rabbitmq
 
         # - ./rabbitmq/log:/var/log/rabbitmq
       environment:
@@ -23,3 +24,6 @@ services:
         # 用户名
         - RABBITMQ_DEFAULT_USER=IoTLinkRabbitMq
         - RABBITMQ_DEFAULT_PASS=20220107@yzIot
+volumes:
+  rabbitmq_data:
+    driver: local        

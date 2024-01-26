@@ -1,0 +1,12 @@
+# npc docker-compose svc
+# docker run -d --name=npc --restart=always --net=host --privileged sxxpqp/npc -server=clash.sxxpqp.top:8024 -vkey=nnvq5ey45p2u0f48
+version: "3.8"
+services:
+  npc:
+    image: sxxpqp/npc
+    container_name: npc
+    restart: always
+    network_mode: host
+    # 特权模式
+    privileged: true
+    command: -server=nps.iot.store:8024 -vkey=3vt78fco14iqmrsl

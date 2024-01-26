@@ -1,8 +1,6 @@
 # Copyright VMware, Inc.
 # SPDX-License-Identifier: APACHE-2.0
-
 version: '2'
-
 services:
   redis:
     image: docker.io/bitnami/redis:7.2
