@@ -87,7 +87,7 @@ spec:
       containers:
       - name: "tdengine"
         image: "tdengine/tdengine:2.6.0.34"
-        imagePullPolicy: "Always"
+        imagePullPolicy: "IfNotPresent"
         envFrom:
         - configMapRef:
             name: taoscfg
