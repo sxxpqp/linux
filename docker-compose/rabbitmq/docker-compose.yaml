@@ -1,0 +1,29 @@
+version: "3.8"
+services:
+  rabbitmq:
+      image: rabbitmq:3.9.4-management
+      restart: always
+      container_name: rabbitmq
+      hostname: rabbitmq
+      privileged: true
+      ports:
+        - "15672:15672"
+        - "5672:5672"
+        - "25672:25672"
+        - "4369:4369"
+        - "5671:5671"
+      volumes:
+        - rabbitmq_data:/var/lib/rabbitmq
+
+        # - ./rabbitmq/log:/var/log/rabbitmq
+      environment:
+        - RABBITMQ_SECURE_PASSWORD=yes
+        - RABBITMQ_LOGS=-
+        # vhost
+        - RABBITMQ_DEFAULT_VHOST=/VirtualHosts
+        # 用户名
+        - RABBITMQ_DEFAULT_USER=IoTLinkRabbitMq
+        - RABBITMQ_DEFAULT_PASS=20220107@yzIot
+volumes:
+  rabbitmq_data:
+    driver: local        

@@ -1,0 +1,60 @@
+pipeline {
+  agent {
+    node {
+      label 'maven'
+    }
+
+  }
+  stages {
+    stage('拉取Gitee代码') {
+      agent none
+      steps {
+         retry(3){ git(url: 'https://gitee.com/zkturing/Fox-Cloud-Server.git', changelog: true, poll: false, credentialsId: 'gitee', branch: 'zkturing')
+      }
+    }
+    }
+
+    stage('建造docker镜像') {
+      agent none
+      steps {
+        container('maven') {
+          sh '''mvn -gs settings.xml clean 
+mvn -gs settings.xml  -fn  install -DskipTests -Pdev
+pwd
+cd $APP_NAME
+docker build -f Dockerfile  -t $REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BUILD_NUMBER .'''
+          withCredentials([usernamePassword(credentialsId : 'harbor-2021' ,usernameVariable : 'DOCKER_USERNAME' ,passwordVariable : 'DOCKER_PASSWORD' ,)]) {
+            sh 'echo "$DOCKER_PASSWORD" | docker login $REGISTRY -u "$DOCKER_USERNAME" --password-stdin'
+            sh 'docker push $REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BUILD_NUMBER'
+            sh 'docker tag $REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:SNAPSHOT-$BUILD_NUMBER $REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:latest'
+            sh 'docker push $REGISTRY/$DOCKERHUB_NAMESPACE/$APP_NAME:latest'
+          }
+
+        }
+
+      }
+    }
+
+    stage('测试主管审核-发布到saas线') {
+      steps {
+        input(message: '@duanqq ', submitter: 'duanqq')
+      }
+    }
+
+    stage('发布到saas线') {
+      agent none
+      steps {
+        container('maven') {
+          withCredentials([kubeconfigContent(credentialsId : 'huawei-saas-kubeconfig' ,variable : 'KUBECONFIG_CONTENT' ,)]) {
+            sh '''[ -d ~/.kube ] || mkdir ~/.kube
+echo "$KUBECONFIG_CONTENT" > ~/.kube/config
+envsubst < devops/huawei-saas-cluster/huawei-saas/pod-saas.yaml | kubectl  apply -f -'''
+          }
+
+        }
+
+      }
+    }
+
+  }
+}

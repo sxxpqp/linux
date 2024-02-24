@@ -1,0 +1,22 @@
+- name: say 'hello world'
+  hosts: all
+  tasks:
+    - name: echo 'hello world'
+      command: echo 'hello world'
+      register: result
+    - name: print stdout
+      debug:
+        msg: "{{ result.stdout }}"
+    - name: Update repositories cache
+    # 开启sudo权限
+      become: yes #开启sudo权限
+      apt:
+        update_cache: yes
+    - name: Install vim
+      become: yes
+      apt:
+        name: vim
+        state: present #present表示安装，absent表示卸载    
+
+
+# ansible-playbook hello_world.yml        

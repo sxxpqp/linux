@@ -1,0 +1,32 @@
+#docker run -d  --privileged --name ubuntu1804 -p 2222:22  -u root ubuntu1804:test /sbin/init
+version: '3'
+services:
+  server1:
+    image: ubuntu1804:test
+    user: root
+    command: /sbin/init
+    privileged: true
+    ports:
+      - "2222:22"
+    tty: true
+    stdin_open: true
+  server2:
+    image: ubuntu1804:test
+    user: root
+    command: /sbin/init
+    privileged: true
+    ports:
+      - "2223:22"
+    tty: true
+    stdin_open: true
+  server3:
+    image: ubuntu1804:test
+    user: root
+    command: /sbin/init
+    privileged: true
+    ports:
+      - "2224:22"
+    tty: true
+    stdin_open: true    
+
+

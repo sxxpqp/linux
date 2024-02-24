@@ -1,0 +1,52 @@
+server1  ansible_ssh_host=127.0.0.1  ansible_ssh_port=2222  
+server2  ansible_ssh_host=127.0.0.1  ansible_ssh_port=2223  
+server3  ansible_ssh_host=127.0.0.1  ansible_ssh_port=2224 
+
+[web]
+server1
+[db]
+server2
+[cache]
+server3
+
+[all:vars]
+ansible_ssh_user=turing
+ansible_ssh_pass=Turing@2022
+ansible_sudo_pass=Turing@2022
+# ansible -i hosts all -m ping
+
+
+ui先换过来吧 布局有问题
+
+群里的包 再发一下看看
+
+192.168.1.28:6379  root   redis 默认用户名 redis没有用户 只有密码  
+
+密码是 root 
+是的
+
+好的
+
+可以连接到redis 
+
+我这配置的没啥问题啊
+服务启动成功了呀
+是不是缓存有问题 删除一些缓存试试
+
+我再打个包试试
+前端也看一下呀 
+
+页面刷新获取验证码的时候 加载报错
+登陆这款都没动过
+
+nginx  你那边动过吗
+没有的
+
+本地没办法复现bug
+你把redis 缓存都删了试试 
+我在启动 ？？？
+
+你重启redis 试试
+
+重启项目了吗
+需要把redis缓存清空 key删除呀

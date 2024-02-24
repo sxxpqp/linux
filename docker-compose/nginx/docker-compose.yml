@@ -1,4 +1,4 @@
-version: "2"
+version: "3.7"
 services:
   nginx:
     image: nginx:latest
@@ -6,10 +6,14 @@ services:
     restart: always
     hostname: nginx
     ports:
-      - "80:80"
+      # - "80:80"
+      - "1443:443"
+      - "1444:444"
     volumes:
       - ./server.conf:/etc/nginx/conf.d/server.conf
-      - ./html:/usr/share/nginx/html/
+      - ./gs.iot.store.crt:/etc/nginx/ssl/gs.iot.store.crt
+      - ./gs.iot.store.key:/etc/nginx/ssl/gs.iot.store.key
+      # - ./html:/usr/share/nginx/html/
     networks:
       - nginx-net     
 networks:

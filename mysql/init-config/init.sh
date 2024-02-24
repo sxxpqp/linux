@@ -65,6 +65,6 @@ else
 fi
 
 if [ $? -eq 0 ]; then
-    mc policy set public minio/vrw &>/dev/null
+    mc policy  public minio/vrw &>/dev/null
     echo "minio初始化完成"
 fi

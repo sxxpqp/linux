@@ -1,0 +1,51 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: npc
+  namespace: gs-xiaofang
+  labels:
+    app: npc
+spec:
+  selector:
+    matchLabels:
+      app: npc
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: npc
+      annotations:
+        kubesphere.io/restartedAt: '2024-01-26T09:08:03.565Z'
+        logging.kubesphere.io/logsidecar-config: '{}'
+    spec:
+      containers:
+        - name: npc
+          image: dockerproxy.com/sxxpqp/npc
+          args:
+            - '-server=43.142.147.232:8024'
+            - '-vkey=an2uxu1ue34vsveu'
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirstWithHostNet
+      serviceAccountName: default
+      serviceAccount: default
+      hostNetwork: true
+      securityContext: {}
+      imagePullSecrets:
+        - name: harbor-repository
+      affinity: {}
+      schedulerName: default-scheduler
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 20%
+      maxSurge: 0
+  revisionHistoryLimit: 10

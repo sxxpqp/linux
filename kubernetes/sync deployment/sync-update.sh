@@ -7,7 +7,7 @@
 # namespace=tmc-v2-saas
 # namespace=zhihuixiaofnag
 # namespace=shanxihuadian 
-# namespace=yuanweimin
+# namespace=yuanweimin 
 # namespace=zigong-xiaofang
 # namespace=zhengshangpinganjia
 # namespace=diyishifan
@@ -40,7 +40,13 @@
 # namespace=jinanyizhuan-zhihuixiaofang
 # namespace=hengyangshizhengxiangqumingzhengju
 # namespace=wuhanjingyuan
-namespace=mengniuningxia
+# 
+# namespace=guizhoujianyuan
+# namespace=mengniuningxia
+# namespace=tmc-v2-saas
+# namespace=henanzhongyiyuanfushudisanyiyuan
+# namespace=hebeibosi-beimingdingyun
+namespace=jinzhongshiyuciquxiaofangjiuyuandadui
 if [ -z "$namespace" ]
 then
   echo "namespace is null"
@@ -48,23 +54,23 @@ then
 fi
 cat<<EOF > image.txt
 turingcloud-activiti=harbor.iot.store:8085/turing-kubesphere/turingcloud-activiti:SNAPSHOT-20
-turingcloud-aircraft=harbor.iot.store:8085/turing-kubesphere/turingcloud-aircraft:SNAPSHOT-24
-turingcloud-auth=harbor.iot.store:8085/turing-kubesphere/turingcloud-auth:SNAPSHOT-45
-turingcloud-daemon-quartz=harbor.iot.store:8085/turing-kubesphere/turingcloud-daemon-quartz:SNAPSHOT-51
-turingcloud-daily=harbor.iot.store:8085/turing-kubesphere/turingcloud-daily:SNAPSHOT-244
-turingcloud-data=harbor.iot.store:8085/turing-kubesphere/turingcloud-data:SNAPSHOT-61
-turingcloud-dataanalysis=harbor.iot.store:8085/turing-kubesphere/turingcloud-dataanalysis:SNAPSHOT-317
-turingcloud-device=harbor.iot.store:8085/turing-kubesphere/turingcloud-device:SNAPSHOT-933
+turingcloud-aircraft=harbor.iot.store:8085/turing-kubesphere/turingcloud-aircraft:SNAPSHOT-23
+turingcloud-auth=harbor.iot.store:8085/turing-kubesphere/turingcloud-auth:SNAPSHOT-48
+turingcloud-daemon-quartz=harbor.iot.store:8085/turing-kubesphere/turingcloud-daemon-quartz:SNAPSHOT-53
+turingcloud-daily=harbor.iot.store:8085/turing-kubesphere/turingcloud-daily:SNAPSHOT-282
+turingcloud-data=harbor.iot.store:8085/turing-kubesphere/turingcloud-data:SNAPSHOT-62
+turingcloud-dataanalysis=harbor.iot.store:8085/turing-kubesphere/turingcloud-dataanalysis:SNAPSHOT-332
+turingcloud-device=harbor.iot.store:8085/turing-kubesphere/turingcloud-device:SNAPSHOT-1006
 turingcloud-gateway=harbor.iot.store:8085/turing-kubesphere/turingcloud-gateway:SNAPSHOT-23
-turingcloud-ground-pressure=harbor.iot.store:8085/turing-kubesphere/turingcloud-ground-pressure:SNAPSHOT-139
+turingcloud-ground-pressure=harbor.iot.store:8085/turing-kubesphere/turingcloud-ground-pressure:SNAPSHOT-145
 turingcloud-light=harbor.iot.store:8085/turing-kubesphere/turingcloud-light:SNAPSHOT-8
 turingcloud-register=harbor.iot.store:8085/turing-kubesphere/turingcloud-register:latest
-turingcloud-safety=harbor.iot.store:8085/turing-kubesphere/turingcloud-safety:SNAPSHOT-100
+turingcloud-safety=harbor.iot.store:8085/turing-kubesphere/turingcloud-safety:SNAPSHOT-101
 turingcloud-tx-manager=harbor.iot.store:8085/turing-kubesphere/turingcloud-tx-manager:latest
-turingcloud-upms=harbor.iot.store:8085/turing-kubesphere/turingcloud-upms:SNAPSHOT-620
-turingcloud-video=harbor.iot.store:8085/turing-kubesphere/turingcloud-video:SNAPSHOT-375
+turingcloud-upms=harbor.iot.store:8085/turing-kubesphere/turingcloud-upms:SNAPSHOT-670
+turingcloud-video=harbor.iot.store:8085/turing-kubesphere/turingcloud-video:SNAPSHOT-445
 turingcloud-visual=harbor.iot.store:8085/turing-kubesphere/turingcloud-visual:SNAPSHOT-23
-turingcloud-web=harbor.iot.store:8085/turing-kubesphere/turingcloud-web-zktl:SNAPSHOT-1413
+turingcloud-web=harbor.iot.store:8085/turing-kubesphere/turingcloud-web-zktl:SNAPSHOT-1587
 EOF
 # 通过输入参数获取deployment.name=镜像名
 while read line
@@ -104,3 +110,7 @@ done < image.txt
 # externalIPs:
 # - 192.168.0.1
 # set -i 's#/:9000/#:9000/vrw/#g' /etc/nginx/nginx.conf
+
+
+# kill python process
+# ps -ef | grep python | grep -v grep | awk '{print $2}' | xargs kill -9
