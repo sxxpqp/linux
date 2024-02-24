@@ -79,9 +79,6 @@ sudo tee /etc/docker/daemon.json <<-'EOF'
 "log-opts": {"max-size":"500m", "max-file":"3"}
 }
 EOF
-sudo systemctl daemon-reload
-sudo systemctl reload docker
-sudo docker info
 ```
 
 
