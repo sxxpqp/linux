@@ -185,3 +185,9 @@ Kubernetes 集群备份主要是备份 ETCD 集群。而恢复时，主要考虑
 
 - https://yq.aliyun.com/articles/11035
 - https://www.jianshu.com/p/8b483ed49f26
+
+
+# ETCD 恢复与备份
+# ETCDCTL_API=3  etcdctl snapshot save snap.20220107.db --cacert=/etc/ssl/etcd/ssl/ca.pem --cert=/etc/ssl/etcd/ssl/admin-node1.pem --key=/etc/ssl/etcd/ssl/admin-node1-key.pem --endpoints="https://100.10.1.2:2379" 
+
+# ETCDCTL_API=3  etcdctl snapshot restore snap.20220107.db --cacert=/etc/ssl/etcd/ssl/ca.pem --cert=/etc/ssl/etcd/ssl/admin-node1.pem --key=/etc/ssl/etcd/ssl/admin-node1-key.pem --endpoints="https://100.10.1.2:2379" --data-dir=/var/lib/etcd --initial-advertise-peer-urls="https://100.10.1.2:2380" --initial-cluster="node1=https://100.10.1.2:2380" --initial-cluster-token="k8s_etcd" --name="node1"
