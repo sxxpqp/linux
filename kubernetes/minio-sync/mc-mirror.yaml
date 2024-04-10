@@ -97,8 +97,8 @@ data:
                     },
                     "minio2": {
                             "url": "http://turingcloud-minio:9000",
-                            "accessKey": "turing",
-                            "secretKey": "Turing2020",
+                            "accessKey": "minio",
+                            "secretKey": "Iot@123456",
                             "api": "s3v4",
                             "path": "auto"
                     },

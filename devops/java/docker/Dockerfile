@@ -1,4 +1,4 @@
-FROM  linuxjdk8:v2
+FROM  bitnami/java:1.8
 
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo 'Asia/Shanghai' >/etc/timezone
 
