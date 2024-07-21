@@ -67,7 +67,7 @@ bootstrapTokens:
   - authentication
 kind: InitConfiguration
 localAPIEndpoint:
-  advertiseAddress: 192.168.1.191
+  advertiseAddress: 192.168.1.191 #修改为本机的ip
   bindPort: 6443
 nodeRegistration:
   criSocket: unix:///var/run/containerd/containerd.sock
@@ -75,7 +75,7 @@ nodeRegistration:
   name: k8s-master01
   taints: null
 ---
-controlPlaneEndpoint: "192.168.1.190:8443"
+controlPlaneEndpoint: "192.168.1.190:8443" #多节点需要开启
 apiServer:
   timeoutForControlPlane: 4m0s
 apiVersion: kubeadm.k8s.io/v1beta3
@@ -94,7 +94,7 @@ networking:
   serviceSubnet: 10.96.0.0/12
 scheduler: {}
 ```
-
+### 需要上传upload-certs 其他主节点需要下载证书
 ```
 kubeadm init --config kubeadm-init.yaml  --upload-certs
 ```
