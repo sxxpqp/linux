@@ -147,7 +147,7 @@ kubectl -n kube-system edit cm kube-proxy
 
 #### 更新集群 master 节点 获取证书 controlPlaneEndpoint
 ```
-kubectl edit cm kubeadm-config -n kube-system
+kubeadm init phase upload-config kubeadm --config kubeadm.yaml 
 docker ps |grep -E 'k8s_kube-apiserver|k8s_kube-controller-manager|k8s_kube-scheduler|k8s_etcd_etcd' | awk -F ' ' '{print $1}' |xargs docker restart
 
 kubectl -n kube-public edit cm cluster-info
