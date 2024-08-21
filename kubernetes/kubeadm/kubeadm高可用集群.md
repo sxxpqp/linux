@@ -60,7 +60,7 @@ spec:
     - name: vip_retryperiod
       value: "1"
     - name: address
-      value: 172.16.0.
+      value: 172.16.0.51
     image: iharbor.sxxpqp.top/library/kube-vip:v0.4.0
     imagePullPolicy: Always
     name: kube-vip
