@@ -1,0 +1,66 @@
+{
+    "clusters": [
+      {
+        "nodes": [
+          {
+            "node": {
+              "hostnames": {
+                "manage": [
+                  "server1"
+                ],
+                "storage": [
+                  "172.16.0.22"
+                ]
+              },
+              "zone": 1
+            },
+            "devices": [
+              "/dev/sdb"
+            ]
+          },
+          {
+            "node": {
+              "hostnames": {
+                "manage": [
+                  "server2"
+                ],
+                "storage": [
+                  "172.16.0.23"
+                ]
+              },
+              "zone": 1
+            },
+            "devices": [
+              "/dev/sdb"
+            ]
+          },
+          {
+            "node": {
+              "hostnames": {
+                "manage": [
+                  "server3"
+                ],
+                "storage": [
+                  "172.16.0.24"
+                ]
+              },
+              "zone": 1
+            },
+            "devices": [
+              "/dev/sdb"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+  
+
+cat > /etc/docker/daemon.json <<EOF
+{
+"registry-mirrors": ["https://egkr0rl5.mirror.aliyuncs.com","https://iharbor.sxxpqp.top"],
+"log-driver":"json-file",
+"exec-opts": ["native.cgroupdriver=systemd"],
+"log-opts": {"max-size":"500m", "max-file":"3"}
+}
+EOF
