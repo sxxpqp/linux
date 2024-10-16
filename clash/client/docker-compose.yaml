@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  clash-premium:
+    image: dreamacro/clash-premium:latest
+    container_name: clash-premium
+    ports:
+      - "7890:7890" # HTTP 代理端口
+      - "7891:7891" # SOCKS 代理端口
+      - "9090:9090" # Clash Dashboard（如果配置了）
+    volumes:
+      - ./clash/config:/root/.config/clash # 映射配置文件
+    restart: always
+
+  yacd:
+    image: yangliu/yacd:latest
+    container_name: yacd
+    ports:
+      - "8080:80" # 访问 Yacd 的端口
+    environment:
+      - PROXY_URL=http://clash-premium:9090 # 指向 Clash Premium 容器的 URL
+    restart: always
