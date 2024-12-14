@@ -30,3 +30,7 @@ networks:
     driver: bridge
 
     
+
+---
+
+### docker exec -it mysql mysql -u root

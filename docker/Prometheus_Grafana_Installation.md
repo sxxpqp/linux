@@ -85,7 +85,7 @@ scrape_configs:
 1. **运行 Grafana**（端口映射 3000）
 
    ```bash
-   docker run -d        -p 3000:3000   --user root  --restart=always   --dns 114.114.114.114        --name=grafana        -v /etc/localtime:/etc/localtime:ro        -v /export0/grafana/data:/var/lib/grafana        -v /export0/grafana/plugins:/var/lib/grafana/plugins        -e "GF_SECURITY_ADMIN_PASSWORD=admin1q2w.3e"        -e "GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,grafana-piechart-panel"        grafana/grafana:9.3.2
+   docker run -d        -p 3000:3000   --user root  --restart=always   --dns 114.114.114.114        --name=grafana        -v /etc/localtime:/etc/localtime:ro        -v /export0/grafana/data:/var/lib/grafana        -v /export0/grafana/plugins:/var/lib/grafana/plugins        -e "GF_SECURITY_ADMIN_PASSWORD=admin"        -e "GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,grafana-piechart-panel"        grafana/grafana:9.3.2
    ```
 
 ## 四、运行采集器
@@ -114,16 +114,16 @@ vim /home/mysqld-exporter/.my.cnf
 内容如下:注 XX.XX.XX.XX IP为数据库访问地址：
 ```
 [client]
-user=exporter
-password=Mysql1q2w.3e
-host=XX.XX.XX.XX
+user=root
+password=root
+host=172.16.115.19
 port=3306
 ```
-3）运行容器 注：172.16.115.19替换为实际数据库IP地址
+3）运行容器 注：172.24.21.134替换为实际数据库IP地址
 ```
 docker run -d --restart=always --name mysqld-exporter -v /etc/localtime:/etc/localtime:ro \
 -v /home/mysqld-exporter/.my.cnf:/etc/.my.cnf \
--p 9104:9104 -e DATA_SOURCE_NAME="root:root@(172.16.115.19:3306)/mysql" \
+-p 9104:9104 -e DATA_SOURCE_NAME="root:root@(172.24.21.134:3306)/mysql" \
 prom/mysqld-exporter --config.my-cnf=etc/.my.cnf
 ```
 4）防火墙端口9104：
@@ -142,9 +142,10 @@ firewall-cmd --reload
 ```
 4、JVM服务节点采集器
 ```
-docker run -d --restart=always --volume=/:/rootfs:ro --volume=/var/run:/var/run:ro \
---volume=/sys:/sys:ro --volume=/var/lib/docker/:/var/lib/docker:ro \
---volume=/dev/disk/:/dev/disk:ro --publish=8080:8080 \
+docker run -d --restart=always --volume=/:/rootfs:ro \
+--volume=/var/run:/var/run:ro --volume=/sys:/sys:ro \
+--volume=/var/lib/docker/:/var/lib/docker:ro \
+--volume=/dev/disk/:/dev/disk:ro --publish=8081:8080 \
 --detach=true --name cadvisor google/cadvisor:latest
 ```
 防火墙端口8080：
@@ -154,19 +155,28 @@ firewall-cmd --reload
 5、nginx服务节点采集器
 Nginx 需要配置stub_status
 ```
-nginx-status.conf 内容如下：
+cat << EOF > /opt/nginx-status.conf
 server {
-listen 8081;
-server_name  localhost;
+    listen 8081;
+    server_name localhost;
     location /stub_status {
-       stub_status on;
-       access_log off;
+        stub_status on;
+        access_log off;
     }
 }
+EOF
+
 ```
-注：172.16.115.19替换为实际运行IP
+
 ```
-docker run -p 9113:9113 --restart=always nginx/nginx-prometheus-exporter:1.3.0 --nginx.scrape-uri=http://172.16.115.19:8081/stub_status
+docker run --name  my-nginx --restart=always -d -p 80:80 -p 8081:8081 \
+    -v /opt/nginx-status.conf:/etc/nginx/conf.d//nginx.conf:ro \ 
+    nginx:latest
+
+```
+注：172.24.21.134替换为实际运行IP
+```
+docker run -p 9113:9113 --restart=always nginx/nginx-prometheus-exporter:1.3.0 --nginx.scrape-uri=http://172.24.21.134:8081/stub_status
 
 ```
 防火墙端口9113：
@@ -181,17 +191,14 @@ firewall-cmd --reload
 ```
 mkdir -p /home/redis/config /home/redis/data
 
-docker run -p 6379:6379 --restart=always -v /home/redis/config/redis.conf:/etc/redis/redis.conf \
--v /home/redis/data:/data --name redis4SXD \
---sysctl net.core.somaxconn=1024 -d redis:5.0.4 \
-sh -c 'redis-server /etc/redis/redis.conf --appendonly yes --maxmemory 2G'
+
 
 ```
 
- 注：172.16.115.19替换为实际IP
+ 注：172.24.21.134替换为实际IP
 ```
 docker run -d --restart=always --name redis-exporter -v /etc/localtime:/etc/localtime:ro \
--p 9121:9121 oliver006/redis_exporter '--redis.addr=redis://172.16.115.19:6379'
+-p 9121:9121 oliver006/redis_exporter '--redis.addr=redis://172.24.21.134:6379'
 ```
 
 6、部署node-exporter
