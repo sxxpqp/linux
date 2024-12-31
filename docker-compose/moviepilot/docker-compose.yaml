@@ -1,0 +1,164 @@
+version: '3.3'
+
+# MoviePilot 地址：https://github.com/jxxghp/MoviePilot
+
+services:
+  # cookiecloud:
+  #   image: easychen/cookiecloud:latest
+  #   restart: always
+  #   ports:
+  #     - 8088:8088
+  #   hostname: cookiecloud
+  #   container_name: cookiecloud
+  qbittorrent:
+    image: 'nevinee/qbittorrent:latest'
+    container_name: qbittorrent
+    restart: always
+    tty: true
+    hostname: qbittorrent
+    volumes:
+      - '${VOLUME_PATH:-/volume1/MoviePilot}/qbittorrent:/data' # 目录已提前创建好
+      - '${VOLUME_PATH:-/volume1/MoviePilot}/media/downloads:/media/downloads' # 目录已提前创建好
+    tmpfs:
+      - '/tmp'
+    environment:
+      - 'QB_USERNAME=admin'
+      - 'QB_PASSWORD=adminadmin2023'
+      - 'WEBUI_PORT=8080'
+      - 'BT_PORT=49678'
+      - 'PUID=1026'
+      - 'PGID=100'
+    ports:
+      - target: 8080
+        published: 8080
+        protocol: tcp
+      - target: 49678
+        published: 49678
+        protocol: tcp
+      - target: 49678
+        published: 49678
+        protocol: udp
+    network_mode: bridge
+  jellyfin:
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/jellyfin:2024123005
+    container_name: jellyfin
+    network_mode: 'host'
+    volumes:
+      - ${VOLUME_PATH:-/volume1/MoviePilot}/jellyfin/config:/config
+      - ${VOLUME_PATH:-/volume1/MoviePilot}/jellyfin/cache:/cache
+      - ${VOLUME_PATH:-/volume1/MoviePilot}/media:/media
+      - ${VOLUME_PATH:-/volume1/MoviePilot}/jellyfin/fonts:/usr/local/share/fonts/custom
+    restart: 'unless-stopped'
+    # Optional - alternative address used for autodiscovery
+    environment:
+      - JELLYFIN_PublishedServerUrl=http://example.com
+  moviepilot:
+    stdin_open: true # 是否打开标准输入流（交互模式），为 true 时容器可以保持运行并与用户交互
+    tty: true # 是否分配伪终端，使容器的终端行为更像一个真实的终端
+    container_name: moviepilot-v2 # 容器的名称
+    hostname: moviepilot-v2 # 容器主机名
+    # 网关设置
+    network_mode: host # 内置的网关
+    # networks:  # 自定义网关
+    #  - moviepilot
+    # 端口映射，当network_mode的值为 host 时，将失效
+    # ports:
+    # 前端 UI 显示
+    # - target: 3000  # 容器内部端口设置为 3000
+    #   published: 3000  # 映射到宿主机的 3000 端口，允许外部访问
+    #   protocol: tcp  # TCP 协议，可选udp
+    # API 接口
+    # - target: 3001  # 容器内部端口设置为 3001
+    #   published: 3001  # 映射到宿主机的 3001 端口，允许外部访问
+    #   protocol: tcp  # TCP 协议，可选udp
+
+    # 目录映射：宿主机目录:容器内目录
+    volumes:
+      - '${VOLUME_PATH:-/volume1/MoviePilot}/media:/media' # 媒体库或下载库路径
+      - '${VOLUME_PATH:-/volume1/MoviePilot}/moviepilot-v2/config:/config' # moviepilot 的配置文件存放路径
+      - '${VOLUME_PATH:-/volume1/MoviePilot}/moviepilot-v2/core:/moviepilot/.cache/ms-playwright' # 浏览器内核存放路径
+      - '/var/run/docker.sock:/var/run/docker.sock:ro' # 用于获取宿主机的docker管理权，一般用于UI页面重启或自动更新
+
+    # 环境变量：- '变量名=值‘
+    environment:
+      - 'NGINX_PORT=3000' # UI页面的内部监听端口
+      - 'PORT=3001' # API接口的内部监听端口
+      - 'PUID=0' # 设置应用运行时的用户 ID 为 0（root 用户）
+      - 'PGID=0' # 设置应用运行时的组 ID 为 0（root 组）
+      - 'UMASK=000' # 文件创建时的默认权限掩码，000 表示不限制权限
+      - 'TZ=Asia/Shanghai' # 设置时区为上海（Asia/Shanghai）
+      # - 'AUTH_SITE=iyuu'  # 设置认证站点，v2.0.7+版本以后可不设置，直接通过 UI 配置
+      # - 'IYUU_SIGN=xxxx'  # 单个站点密钥，配合 AUTH_SITE 使用
+      - 'SUPERUSER=admin' # 设置超级用户为 admin
+      #- 'SUPERUSER_PASSWORD=JMAQtaEfSOWYj_l-xrz1SQ' #超管密码，自定义即可
+      # - 'API_TOKEN=无需手动配置，系统会自动生成。如果需要自定义配置，必须为16位以上的复杂字符串'.
+      - 'MOVIEPILOT_AUTO_UPDATE=release'
+      - 'WALLPAPER=tmdb' # 登录首页电影海报，`tmdb`/`bing`，默认`tmdb`
+      - 'API_TOKEN=1_enJzROe1tGR_E7D8oA2Q' # API密钥，在媒体服务器Webhook、微信回调等地址配置中需要加上?token=该值，建议修改为复杂字符串
+      # - 'PROXY_HOST='
+      # TMDB API地址
+      - 'TMDB_API_DOMAIN=api.themoviedb.org' # 下载保存目录
+      - 'DOWNLOAD_PATH=/media/downloads'
+      - 'DOWNLOAD_MOVIE_PATH=/media/downloads/movies'
+      - 'DOWNLOAD_TV_PATH=/media/downloads/tv'
+      - 'DOWNLOAD_ANIME_PATH=/media/downloads/anime' # 下载站点字幕
+      - 'DOWNLOAD_SUBTITLE=false' # 下载二级分类开关
+      - 'DOWNLOAD_CATEGORY=false' # 下载器监控
+      - 'DOWNLOADER_MONITOR=true'
+      - 'SUBSCRIBE_MODE=spider'
+      - 'SUBSCRIBE_RSS_INTERVAL=30' # 刮削入库的媒体文件
+      - 'SCRAP_METADATA=true'
+      - 'SCRAP_FOLLOW_TMDB=true' # 种子标签
+      - 'TORRENT_TAG=MOVIEPILOT' # 媒体库目录
+      - 'LIBRARY_PATH=/media'
+      - 'LIBRARY_MOVIE_NAME=movies'
+      - 'LIBRARY_TV_NAME=tv'
+      - 'LIBRARY_ANIME_NAME=anime' # 媒体库二级分类开关
+      - 'LIBRARY_CATEGORY=false' # 转移方式，支持link/copy/move/softlink
+      - 'TRANSFER_TYPE=link' # 转移覆盖模式，默认为`size`，支持`nerver`/`size`/`always`，分别表示`不覆盖`/`根据文件大小覆盖（大覆盖小）`/`总是覆盖`
+      - 'AUTH_SITE=icc2022'
+      - 'ICC2022_UID=28765'
+      - 'ICC2022_PASSKEY=d1439981b246f91ab9a45814c6e11ea3'
+      - 'OVERWRITE_MODE=size' # CookieCloud服务器地址（默认可以不用修改）
+      - 'COOKIECLOUD_HOST=http://COOKIECLOUD:8088' # CookieCloud用户KEY
+      - 'COOKIECLOUD_KEY=1ZTyTxnBJeevoBEG2JpoT5' # CookieCloud端对端加密密码
+      - 'COOKIECLOUD_PASSWORD=1ZTyTxnBJeevoBEG2JpoT5' # CookieCloud同步间隔（分钟）
+      - 'COOKIECLOUD_INTERVAL=20' # CookieCloud对应的浏览器UA，可选，设置后可增加连接站点的成功率，同步站点后可以在管理界面中修改
+      - 'USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36'
+      - 'SUBSCRIBE_SEARCH=false' # 交互搜索自动下载用户ID，使用,分割
+      - 'AUTO_DOWNLOAD_USER=' # 插件市场仓库地址，多个地址使用`,`分隔，保留最后的/
+      - 'PLUGIN_MARKET=https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/' # 消息通知渠道，支持 telegram/wechat/slack/synologychat
+      - 'MESSAGER=telegram'
+      - 'TELEGRAM_TOKEN=xxxxxx'
+      - 'TELEGRAM_CHAT_ID=xxxxxxxxxxxx'
+        # - 'TELEGRAM_USERS=xxxxxxxxxxxxx'
+        # - 'TELEGRAM_ADMINS=xxxxxxxxxxxxx'
+        # - 'WECHAT_CORPID='
+        # - 'WECHAT_APP_SECRET='
+        # - 'WECHAT_APP_ID='
+        # - 'WECHAT_TOKEN='
+        # - 'WECHAT_ENCODING_AESKEY='
+        # - 'WECHAT_ADMINS='
+        # - 'WECHAT_PROXY='
+        # - 'SLACK_OAUTH_TOKEN='
+        # - 'SLACK_APP_TOKEN='
+        # - 'SLACK_CHANNEL='
+        # - 'SYNOLOGYCHAT_WEBHOOK='
+        # - 'SYNOLOGYCHAT_TOKEN='
+
+        # 下载器，支持qbittorrent/transmission
+      - 'DOWNLOADER=qbittorrent'
+      - 'QB_HOST=http://qbittorrent:8080'
+      - 'QB_USER=admin'
+      - 'QB_PASSWORD=adminadmin2023'
+      - 'QB_CATEGORY=false'
+      - 'QB_SEQUENTIAL=true'
+      - 'QB_FORCE_RESUME=false'
+    # 重启模式: 
+    restart: always # 始终重启
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/moviepilot-v2:latest
+
+# 当使用内置网关时，可不启用
+# networks:
+#   moviepilot:  # 定义一个名为 moviepilot 的自定义网络
+#     name: moviepilot  # 网络的名称
