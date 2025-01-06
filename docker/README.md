@@ -152,16 +152,29 @@ docker images|grep -v REPOSITORY|grep ^gji|awk '{print $1":"$2}' > images.txt
 ```
 ```
 #!/bin/bash
-for image in $(cat images.txt)
-do
-docker pull $image
-strA=`echo $image|awk 'BEGIN{FS="/";OFS="/"}{print $1,$2}'`
-result=$(echo $image | grep "${strA}")
-if [[ "$result" != "" ]];then
-docker tag ${image} registry.cn-hangzhou.aliyuncs.com/sxxpqp${image#$strA}
-docker push registry.cn-hangzhou.aliyuncs.com/sxxpqp${image#$strA}
-fi
+
+# 读取 images.txt 中的每个镜像名称
+for image in $(cat images.txt); do
+    # 获取镜像名的前两部分（例如 registry/repo）
+    strA=$(echo $image | awk 'BEGIN{FS="/";OFS="/"}{print $1,$2}')
+
+    # 检查是否包含仓库部分
+    if [[ "$image" == "$strA"* ]]; then
+        # 输出镜像和目标仓库名称
+        echo "镜像：${image}"
+        
+        # 为镜像添加仓库标签并推送到新的仓库
+        new_image="dockerhub.kubekey.local/kubesphereio$(echo $image | sed "s#^$strA##")"
+        echo "推送到：${new_image}"
+
+        # 标记镜像并推送
+        docker tag "$image" "$new_image"
+        docker push "$new_image"
+    else
+        echo "跳过无效镜像：$image"
+    fi
 done
+
 ```
 
 ### ssh实现免密登陆

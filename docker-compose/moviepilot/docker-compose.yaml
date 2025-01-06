@@ -3,13 +3,13 @@ version: '3.3'
 # MoviePilot 地址：https://github.com/jxxghp/MoviePilot
 
 services:
-  # cookiecloud:
-  #   image: easychen/cookiecloud:latest
-  #   restart: always
-  #   ports:
-  #     - 8088:8088
-  #   hostname: cookiecloud
-  #   container_name: cookiecloud
+  cookiecloud:
+    image: easychen/cookiecloud:latest
+    restart: always
+    ports:
+      - 8088:8088
+    hostname: cookiecloud
+    container_name: cookiecloud
   qbittorrent:
     image: 'nevinee/qbittorrent:latest'
     container_name: qbittorrent
@@ -39,6 +39,24 @@ services:
         published: 49678
         protocol: udp
     network_mode: bridge
+  emby:
+    container_name: emby
+    ports:
+      - 8097:8096
+      - 8920:8920
+      - 11900:11900
+      - 7359:7359
+    volumes:
+      - '${VOLUME_PATH:-/volume1/MoviePilot}/emby:/config' # 目录已提前创建好
+      - '${VOLUME_PATH:-/volume1/MoviePilot}/media:/data' # 目录已提前创建好
+    environment:
+      - TZ=Asia/Shanghai
+      - UID=1026
+      - GID=100
+    restart: always
+    hostname: emby
+    network_mode: bridge
+    image: 'emby/embyserver:latest'
   jellyfin:
     image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/jellyfin:2024123005
     container_name: jellyfin

@@ -2,7 +2,7 @@ version: "3.7"
 services:
   mysql:
     # image: docker.io/bitnami/mysql:8.2
-    image: docker.io/bitnami/mysql:5.7
+    image: docker.io/bitnami/mysql:${version:-5.7}
     container_name: mysql
     restart: always
     hostname: mysql
