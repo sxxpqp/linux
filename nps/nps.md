@@ -103,5 +103,5 @@ EOF
 
 
 ```bash
-docker run -d --name=nps  --privileged --restart=always --net=host -v /opt/nps/conf:/conf sxxpqp/nps
+docker run -d --name=nps  --privileged --restart=always --net=host -v /opt/nps/conf:/conf registry.cn-hangzhou.aliyuncs.com/sxxpqp/nps
 ```
