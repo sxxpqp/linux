@@ -15,7 +15,7 @@ Kubernetes 集群部署、组件配置、存储、监控、CI/CD 等生产运维
 | [v1.28.3-CentOS-binary-install-IPv6-IPv4](v1.28.3-CentOS-binary-install-IPv6-IPv4-Three-Masters-Two-Slaves-Offline.md) | CentOS 双栈离线二进制部署 K8s v1.28.3 | 验证过 |
 | [rke-install-k8s.md](rke-install-k8s.md) | RKE 部署 K8s | 验证过 |
 | [rke2-deploy-k8s.md](rke2-deploy-k8s.md) | RKE2 部署 K8s | ✅ 生产验证 |
-| [minikube/](minikube/) | Minikube 本地测试集群安装 | 学习笔记 |
+| [minikube/](minikube/) | Minikube 本地测试集群（含阿里云镜像加速配置） | 学习笔记 |
 | [kubemini-install.md](kubemini-install.md) | kubemini 安装笔记 | 学习笔记 |
 
 ### 网络
