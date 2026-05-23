@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: / #这样可以在转发请求之前修改路径，如将下面的/testNginx， 改为/， 否则nginx-service收到的请求依旧会包含/testNginx
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: test.sxxpqp.top #域名，只能是域名，支持通配符（*.foo.com）
+      http:
+        paths:
+          - path: /
+            pathType: Prefix #路径匹配类型，可见https://kubernetes.io/zh-cn/docs/concepts/services-networking/ingress/
+            backend:
+              service:
+                name: nginx #要转发到那个service
+                port:
+                  number: 80 #service的端口
+---
+

@@ -1,0 +1,87 @@
+
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: mysql-backup
+  namespace: devops-tools
+  labels:
+    k8s.kuboard.cn/name: mysql-backup
+  annotations: {}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-backup
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: mysql-backup
+    spec:
+      containers:
+        - name: mysql-backup
+          image: 'registry.cn-hangzhou.aliyuncs.com/sxxpqp/backup-mysql:latest'
+          env:
+            - name: CRON_SCHEDULE
+              value: 30 0 * * *
+            - name: TZ
+              value: Asia/Shanghai
+            - name: S3_BUCKET
+              value: idc-databackup
+            - name: S3_ENDPOINT
+              value: 'http://192.168.100.101:8060'
+            - name: S3_BACKUP_PATH
+              value: backup/mysql
+            - name: MYSQL_HOST
+              value: 192.168.100.25
+            - name: MYSQL_PORT
+              value: '3306'
+            - name: MYSQL_USER
+              value: backup
+            - name: MYSQL_DATABASES
+              value: all
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-backup-secret
+                  key: S3_ACCESS_KEY
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-backup-secret
+                  key: S3_SECRET_KEY
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-backup-secret
+                  key: MYSQL_PASSWORD
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: Always
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+
+---
+kind: Secret
+apiVersion: v1
+metadata:
+  name: mysql-backup-secret
+  namespace: devops-tools
+data:
+  MYSQL_PASSWORD: U29odWdsb2JhbDEyMy4=
+  S3_ACCESS_KEY: b3hlem1zajZnenkzcDJteDdhbXA=
+  S3_SECRET_KEY: bWQ1YmEyMWZzeHd3Yjh3MjVkMHhtbTYzMndqaDlwanBxc3o0bXFuaQ==
+type: Opaque
+

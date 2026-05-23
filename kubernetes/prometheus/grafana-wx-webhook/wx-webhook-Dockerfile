@@ -1,0 +1,13 @@
+# 编译阶段
+FROM golang:1.22-alpine AS builder
+WORKDIR /build
+COPY main.go .
+RUN go mod init wx-webhook && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o wx-webhook .
+
+# 运行阶段（极简镜像，仅 4MB）
+FROM scratch
+COPY --from=builder /build/wx-webhook /wx-webhook
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+EXPOSE 5001
+ENTRYPOINT ["/wx-webhook"]

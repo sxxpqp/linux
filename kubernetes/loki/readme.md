@@ -1,0 +1,1 @@
+helm upgrade  --install --values ./loki/values.yaml loki grafana/loki -n monitoring  --set loki.auth_enabled=false

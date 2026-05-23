@@ -1,0 +1,28 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: dinghook
+  namespace: monitoring
+  labels:
+    alertmanagerConfig: example
+spec:
+  # 关键点：如果是全集群告警，不要在这里写具体的 match 命名空间
+  # 并且确保你的 PrometheusRule 里的告警带有 severity: critical
+  receivers:
+    - name: Critical
+      webhookConfigs:
+        - url: "http://promoter:8080/test1/send"
+          sendResolved: true
+  route:
+    groupBy: ["alertname", "namespace"]
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 12h
+    receiver: Critical
+    # 如果你想匹配所有空间的 critical 告警
+    routes:
+      - receiver: Critical
+        # matchers:
+        #   - name: severity
+        #     value: critical
+        #     matchType: =

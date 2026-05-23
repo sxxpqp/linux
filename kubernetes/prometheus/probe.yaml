@@ -1,0 +1,27 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: blackbox-http-external
+  namespace: monitoring
+  labels:
+    app: blackbox-exporter
+    release: prometheus-operator  # 匹配kube-prometheus 0.14标签
+spec:
+  # 严格匹配CRD定义：targets → staticConfig → static（目标列表）
+  targets:
+    staticConfig:
+      # 核心修复：用static而非targets
+      static:
+        - https://wishfoxs.com
+        - https://baidu.com 
+      # 可选：给目标加标签（可省略）
+      labels:
+        env: prod
+        type: external-service
+  # 关联Blackbox模块和服务（不变）
+  module: http_2xx
+  prober:
+    url: blackbox-exporter.monitoring.svc:19115
+  # 采集配置（不变）
+  interval: 30s
+  scrapeTimeout: 10s

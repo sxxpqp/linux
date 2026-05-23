@@ -1,0 +1,164 @@
+# =============================================================
+# RocketMQ 5.3.2 Operator 部署 - 3主3从 + Controller
+# 基于官方示例字段结构，namespace: middleware
+# 镜像：hub.wishfoxs.com:6443/middleware
+# =============================================================
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: broker-config
+  namespace: middleware
+data:
+  BROKER_MEM: " -Xms8g -Xmx8g -Xmn4g -XX:+UseG1GC -XX:G1HeapRegionSize=16m -XX:MaxGCPauseMillis=200 "
+  broker-common.conf: |
+    # brokerClusterName/brokerName/brokerId 由 Operator 自动生成，不要手动设置
+    deleteWhen=04
+    fileReservedTime=72
+    flushDiskType=SYNC_FLUSH
+    # SYNC_MASTER 同步双写，不丢消息
+    # DO NOT set to SLAVE，replica 实例由 Operator 自动设置
+    brokerRole=SYNC_MASTER
+    enableControllerMode=true
+    autoCreateTopicEnable=false
+    autoCreateSubscriptionGroup=false
+    diskSpaceCleanForciblyRatio=0.85
+    diskSpaceWarningLevelRatio=0.90
+    sendMessageThreadPoolNums=128
+    pullMessageThreadPoolNums=128
+
+---
+apiVersion: rocketmq.apache.org/v1alpha1
+kind: NameService
+metadata:
+  name: name-service
+  namespace: middleware
+spec:
+  # 3副本 NameServer，嵌入 Controller Raft 选举
+  size: 3
+  nameServiceImage: hub.wishfoxs.com:6443/middleware/rocketmq:5.3.2
+  imagePullPolicy: IfNotPresent
+  # hostNetwork 改为 false，使用 K8s 网络
+  hostNetwork: false
+  dnsPolicy: ClusterFirst
+  resources:
+    requests:
+      memory: "1024Mi"
+      cpu: "500m"
+    limits:
+      memory: "2048Mi"
+      cpu: "1000m"
+  storageMode: StorageClass
+  hostPath: /data/rocketmq/nameserver
+  volumeClaimTemplates:
+    - metadata:
+        name: namesrv-storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 20Gi
+
+---
+apiVersion: rocketmq.apache.org/v1alpha1
+kind: Broker
+metadata:
+  name: broker
+  namespace: middleware
+spec:
+  # 3组 × (1主+1从) = 3主3从
+  size: 3
+  replicaPerGroup: 2
+  nameServers: ""
+  brokerImage: hub.wishfoxs.com:6443/middleware/rocketmq:5.3.2
+  imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "8192Mi"
+      cpu: "2000m"
+    limits:
+      memory: "12288Mi"
+      cpu: "4000m"
+  allowRestart: true
+  storageMode: StorageClass
+  hostPath: /data/rocketmq/broker
+  scalePodName: broker-0-master-0
+  env:
+    - name: BROKER_MEM
+      valueFrom:
+        configMapKeyRef:
+          name: broker-config
+          key: BROKER_MEM
+  volumes:
+    - name: broker-config
+      configMap:
+        name: broker-config
+        items:
+          - key: broker-common.conf
+            path: broker-common.conf
+  volumeClaimTemplates:
+    - metadata:
+        name: broker-storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 100Gi
+
+---
+apiVersion: rocketmq.apache.org/v1alpha1
+kind: Console
+metadata:
+  name: console
+  namespace: middleware
+spec:
+  nameServers: ""
+  consoleDeployment:
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      labels:
+        app: rocketmq-console
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: rocketmq-console
+      template:
+        metadata:
+          labels:
+            app: rocketmq-console
+        spec:
+          containers:
+            - name: console
+              image: hub.wishfoxs.com:6443/middleware/rocketmq-dashboard:2.0.0
+              ports:
+                - containerPort: 8080
+              resources:
+                requests:
+                  cpu: 200m
+                  memory: 512Mi
+                limits:
+                  cpu: 500m
+                  memory: 1Gi
+
+---
+# Console 对外访问
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketmq-console
+  namespace: middleware
+spec:
+  type: NodePort
+  selector:
+    app: rocketmq-console
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30880

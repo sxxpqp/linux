@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-export-local
+  namespace: monitoring
+  labels:
+    app: node-export
+spec:
+  type: ClusterIP
+  clusterIP: None # 一定要设置 clusterIP:None
+  ports:
+    - name: port
+      port: 9100
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: node-export
+  namespace: monitoring
+  labels:
+    app: node-export
+subsets:
+  - addresses:
+      - ip: 192.168.150.252 # 指定etcd节点地址，如果是集群则继续向下添加
+        nodeName: gitlab
+    ports:
+      - name: port
+        port: 9100
+---
+# kubernetesControlPlane-serviceMonitorEtcd.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: node-export
+  namespace: monitoring
+  labels:
+    k8s-app: node-export
+spec:
+  jobLabel: k8s-app
+  endpoints:
+    - port: port
+      interval: 15s
+  selector:
+    matchLabels:
+      app: node-export
+  namespaceSelector:
+    matchNames:
+      - monitoring

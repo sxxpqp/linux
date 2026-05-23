@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nacos-quick
+  labels:
+    app: nacos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nacos
+  template:
+    metadata:
+      labels:
+        app: nacos
+      # Prometheus 自动发现配置
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/nacos/metrics"
+        prometheus.io/port: "8848"
+    spec:
+      containers:
+        - name: nacos-server
+          image: nacos/nacos-server:2.0.2
+          env:
+            - name: MODE
+              value: "standalone"
+          ports:
+            - containerPort: 8848
+              name: http
+            - containerPort: 9848
+              name: grpc-client
+            - containerPort: 9849
+              name: grpc-raft
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nacos-service
+spec:
+  type: NodePort
+  selector:
+    app: nacos
+  ports:
+    - name: http
+      port: 8848
+      targetPort: 8848
+      nodePort: 30849 # 对应你命令里的 8849，你可以根据需要调整
+    - name: grpc-client
+      port: 9848
+      targetPort: 9848
+    - name: grpc-raft
+      port: 9849
+      targetPort: 9849

@@ -1,0 +1,63 @@
+# ci/daemonset-prod.yaml
+controller:
+  name: controller
+  image:
+    repository: cnych/ingress-nginx
+    tag: 'v1.1.0'
+    digest:
+
+  dnsPolicy: ClusterFirstWithHostNet
+
+  hostNetwork: true
+
+  publishService: # hostNetwork 模式下设置为false，通过节点IP地址上报ingress status数据
+    enabled: false
+
+  # 是否需要处理不带 ingressClass 注解或者 ingressClassName 属性的 Ingress 对象
+  # 设置为 true 会在控制器启动参数中新增一个 --watch-ingress-without-class 标注
+  watchIngressWithoutClass: false
+
+  kind: DaemonSet
+
+  tolerations: # kubeadm 安装的集群默认情况下master是有污点，需要容忍这个污点才可以部署
+    - key: 'node-role.kubernetes.io/master'
+      operator: 'Equal'
+      effect: 'NoSchedule'
+
+  nodeSelector: # 固定到master1节点
+    kubernetes.io/hostname: node1
+
+  service: # HostNetwork 模式不需要创建service
+    enabled: false
+
+  admissionWebhooks: # 强烈建议开启 admission webhook
+    enabled: true
+    createSecretJob:
+      resources:
+        limits:
+          cpu: 10m
+          memory: 20Mi
+        requests:
+          cpu: 10m
+          memory: 20Mi
+    patchWebhookJob:
+      resources:
+        limits:
+          cpu: 10m
+          memory: 20Mi
+        requests:
+          cpu: 10m
+          memory: 20Mi
+    patch:
+      enabled: true
+      image:
+        repository: cnych/ingress-nginx-webhook-certgen
+        tag: v1.1.1
+        digest:
+
+defaultBackend: # 配置默认后端
+  enabled: true
+  name: defaultbackend
+  image:
+    repository: cnych/ingress-nginx-defaultbackend
+    tag: '1.5'

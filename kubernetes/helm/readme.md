@@ -1,0 +1,1 @@
+helm template saas-milvus neo4j/neo4j > neo4j_manifest.yaml

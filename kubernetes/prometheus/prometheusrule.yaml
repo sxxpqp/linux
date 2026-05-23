@@ -1,0 +1,50 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: nacos-rules
+  namespace: monitoring # 与 Prometheus 实例在同一个命名空间
+  labels:
+    # 根据您的 Prometheus Operator 配置，可能需要特定的标签来自动发现规则
+    app: kube-prometheus-stack
+    release: prometheus
+spec:
+  groups:
+    - name: nacos.rules
+      rules:
+        # 告警规则 1: Nacos 实例是否存活
+        # 当 Nacos PodMonitor 抓取失败时触发
+        - alert: NacosServiceDown
+          expr: up{app="nacos"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            app: nacos
+          annotations:
+            summary: "Nacos 服务实例宕机 (Instance down)"
+            description: "Nacos 实例 {{ $labels.instance }} 已经失联超过 5 分钟。"
+
+        # 告警规则 2: Nacos 配置加载失败率高
+        # 使用 Nacos 2.x 指标 nacos_monitor{name="getConfig"} 来监控获取配置的请求
+        - alert: NacosConfigGetErrorRateHigh
+          expr: |
+            (sum by (app, instance) (rate(nacos_monitor{name="getConfig", status="ERROR"}[5m])) / 
+             sum by (app, instance) (rate(nacos_monitor{name="getConfig"}[5m]))) * 100 > 10
+          for: 10m
+          labels:
+            severity: warning
+            app: nacos
+          annotations:
+            summary: "Nacos 配置获取错误率高 (Config get error rate high)"
+            description: "Nacos 实例 {{ $labels.instance }} 在过去 10 分钟内的配置获取错误率超过 10%。"
+
+        # 告警规则 3: 数据库连接池使用率过高
+        # Nacos 默认不会直接暴露连接池指标，但如果您有扩展指标或使用通用数据库监控，可以使用类似规则。
+        # 假设有一个名为 db_connection_pool_used_connections 的指标
+        # - alert: NacosDBConnectionPoolUsageHigh
+        #   expr: (db_connection_pool_used_connections{app="nacos"} / db_connection_pool_max_connections{app="nacos"}) * 100 > 80
+        #   for: 15m
+        #   labels:
+        #     severity: warning
+        #   annotations:
+        #     summary: "Nacos 数据库连接池使用率高"
+        #     description: "Nacos 数据库连接池使用率已超过 80% 达到 {{ $value }}%。"

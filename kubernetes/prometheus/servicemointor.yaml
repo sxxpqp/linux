@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: nacos-monitor
+  namespace: monitoring # 监控命名空间
+  labels:
+    app: nacos
+spec:
+  selector:
+    matchLabels:
+      app: nacos # 与Service标签匹配
+  endpoints:
+    - port: http # 与Service端口名称匹配
+      path: /nacos/actuator/prometheus
+      interval: 30s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - default # Nacos所在的命名空间

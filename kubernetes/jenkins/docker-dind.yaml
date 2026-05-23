@@ -1,0 +1,77 @@
+# docker-dind.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app: docker-dind
+  name: docker-dind-data
+  namespace: kube-ops
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nfs-csi
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docker-dind
+  namespace: kube-ops
+  labels:
+    app: docker-dind
+spec:
+  selector:
+    matchLabels:
+      app: docker-dind
+  template:
+    metadata:
+      labels:
+        app: docker-dind
+    spec:
+      containers:
+        - image: docker:dind
+          imagePullPolicy: Always
+          name: docker-dind
+          args:
+            - --registry-mirror=https://dockerhub.ihome.sxxpqp.top:8443/ # 指定一个镜像加速器地址
+          env:
+            - name: DOCKER_DRIVER
+              value: overlay2
+            - name: DOCKER_HOST
+              value: tcp://0.0.0.0:2375
+            - name: DOCKER_TLS_CERTDIR # 禁用 TLS（最好别禁用）
+              value: ""
+          volumeMounts:
+            - name: docker-dind-data-vol # 持久化docker根目录
+              mountPath: /var/lib/docker/
+          ports:
+            - name: daemon-port
+              containerPort: 2375
+          securityContext:
+            privileged: true # 需要设置成特权模式
+      volumes:
+        - name: docker-dind-data-vol
+          hostPath:
+            path: /var/lib/docker
+            type: DirectoryOrCreate
+
+      # volumes:
+      #   - name: docker-dind-data-vol
+      #     persistentVolumeClaim:
+      #       claimName: docker-dind-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: docker-dind
+  namespace: kube-ops
+  labels:
+    app: docker-dind
+spec:
+  ports:
+    - port: 2375
+      targetPort: 2375
+  selector:
+    app: docker-dind

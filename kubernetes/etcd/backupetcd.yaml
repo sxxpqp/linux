@@ -1,0 +1,113 @@
+
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: etcd-backup
+  namespace: devops-tools
+  labels:
+    app: etcd-backup
+  annotations: {}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: etcd-backup
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: etcd-backup
+      annotations:
+        kubectl.kubernetes.io/restartedAt: '2026-03-07T18:11:42+08:00'
+    spec:
+      volumes:
+        - name: etcd-certs
+          secret:
+            secretName: etcd-backup-certs
+            defaultMode: 384
+        - name: backup-tmp
+          emptyDir: {}
+      containers:
+        - name: etcd-backup
+          image: 'registry.cn-hangzhou.aliyuncs.com/sxxpqp/backup-etcd:latest'
+          envFrom:
+            - configMapRef:
+                name: etcd-backup-config
+            - secretRef:
+                name: etcd-backup-s3-creds
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          volumeMounts:
+            - name: etcd-certs
+              readOnly: true
+              mountPath: /etc/etcd-certs
+            - name: backup-tmp
+              mountPath: /data
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      dnsPolicy: ClusterFirst
+      securityContext: {}
+      schedulerName: default-scheduler
+  strategy:
+    type: Recreate
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: etcd-backup-config
+  namespace: devops-tools
+  labels:
+    app: etcd-backup
+data:
+  CRON_SCHEDULE: 0 * * * *
+  ETCD_CA: /etc/etcd-certs/ca.crt
+  ETCD_CERT: /etc/etcd-certs/server.crt
+  ETCD_ENDPOINTS: 'https://192.168.100.10:2379'
+  ETCD_KEY: /etc/etcd-certs/server.key
+  S3_BACKUP_PATH: backup/etcd
+  S3_BUCKET: idc-databackup
+  S3_ENDPOINT: 'http://192.168.100.101:8060'
+  TZ: Asia/Shanghai
+
+---
+kind: Secret
+apiVersion: v1
+metadata:
+  name: etcd-backup-s3-creds
+  namespace: devops-tools
+  labels:
+    app: etcd-backup
+data:
+  S3_ACCESS_KEY: b3hlem1zajZnenkzcDJteDdhbXA=
+  S3_SECRET_KEY: bWQ1YmEyMWZzeHd3Yjh3MjVkMHhtbTYzMndqaDlwanBxc3o0bXFuaQ==
+type: Opaque
+
+---
+kind: Secret
+apiVersion: v1
+metadata:
+  name: etcd-backup-certs
+  namespace: devops-tools
+  labels:
+    app: etcd-backup
+data:
+  ca.crt: >-
+    LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUMvRENDQWVTZ0F3SUJBZ0lJZmpxaHFVUzkzZVV3RFFZSktvWklodmNOQVFFTEJRQXdFakVRTUE0R0ExVUUKQXhNSFpYUmpaQzFqWVRBZUZ3MHlOVEEzTURRd056TTBNalJhRncwek5UQTNNREl3TnpNNU1qUmFNQkl4RURBTwpCZ05WQkFNVEIyVjBZMlF0WTJFd2dnRWlNQTBHQ1NxR1NJYjNEUUVCQVFVQUE0SUJEd0F3Z2dFS0FvSUJBUURMCjRXQ0gyZkxtR2xUSERKZFBkeEVCMi8xY0E0UXU4SUtyWUR5SVNEQXNYTmpEU09uTFhEalM2QUF3cWNkcVIxOG0KSDlsOVlENXZ6a0piN0M0UVBpbG9tK0Jabmk5WExlSE1EOG5vYVpMbTU3RWNQTURjRHAwLzRKdmZGWGNOdXhEMApCVWtuQ2d5V0V0K09ZV1RNWFlqcmRlcmRmMS9pd1VlR1pLci85WXVYUkRtTXZGam1pd1FOd3MxaktrUWdOTmFyCkpxV1lGWUF0Y3Y4QThzSFJXZytsT0J4V3lmOVljdEM0ZmRXWi9INTNzNmdITk5nUldjSERUV0xwdGV2NXo5TUIKaGg4YnAwdjdJeFBRekFBTEpqY2hFU3I2VHRnejRjY2h1WjVRVUVZUEhjV2NlYWhhbng5cjlXSDFGOWlUSGs3awphcGxXK1FXSUpsVHVXUHZ6S2c0bEFnTUJBQUdqVmpCVU1BNEdBMVVkRHdFQi93UUVBd0lDcERBUEJnTlZIUk1CCkFmOEVCVEFEQVFIL01CMEdBMVVkRGdRV0JCVG0vZTkrSUtPTEhrQThHWnZlNnhJZjV6K285VEFTQmdOVkhSRUUKQ3pBSmdnZGxkR05rTFdOaE1BMEdDU3FHU0liM0RRRUJDd1VBQTRJQkFRQkJwTHMrYTVxRFlmOVRRQ3lES1JITwpPNnE5eXFmdTdlbzh2Kzl3QWZ0VEd2K0Q5Q1lTVGRGYlcwTDk0aUFCRjZlb0FXZTgxRlVnNVdpWmxsSkFLYW9hCk9FeG9ZNldqRTRxTGcrSTF5QWhuZFA2cWd3a0NBVnNZTWUvK3ozemlEai90aG44NlNpbE5yRVk5UkdYRXhuZHIKVWp0RlU5UDFrUDlyMHhmYkZzVFozNENtSCswc2RQalJPTE9UOEtRd0xMaEpwYjdvWndtZThBQ0pNSnJwSExmeQptUUV6MVBFSlZSOGdzOXlJeUs5cnNjZE1ZcEIxVys4NWJXYW5MVSsrZ3ExS3llNllQQ1VqYkdTVjEydHVDV2k2CjJKeUwxV1hGL1hRTFVTS05wUzluRVBUOGc5cDNIVjMzTHJQWThiR2JCRWNjZFdpNnFjKzU4UERpTktnRnRLSUIKLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+  server.crt: >-
+    LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURWekNDQWorZ0F3SUJBZ0lJUEwwbkNOYS9oUXN3RFFZSktvWklodmNOQVFFTEJRQXdFakVRTUE0R0ExVUUKQXhNSFpYUmpaQzFqWVRBZUZ3MHlOVEEzTURRd056TTBNalJhRncweU56QXhNamt4TVRNMU1UWmFNQnN4R1RBWApCZ05WQkFNVEVHczRjMjB6TG5OdmFIVm5iRzlpWVd3d2dnRWlNQTBHQ1NxR1NJYjNEUUVCQVFVQUE0SUJEd0F3CmdnRUtBb0lCQVFDd1d0Y1JqeXJFWWM5L09qNFNSL0NSbTYyc0dJeEsrKzVPK09HUytDaHlzc3J6N3Z5cFdOdU8KbVNodlhXb0xtWEI4RW4zUHV5Nk9jQm1JS01ORHlGYjVtMWhiZ2lMbkQ3dU9GWEhsdTdTYkpmOCtNWWR1SjI0WQo2dHFBZGkreXYydFovcHBldy9wdHA0QzJsVDdpcUw3K2xUUVhFOWpnamhYRkQrYm1aVzQvdG1hSFZQWi8veVU3CjJ4NFdjV3Ridi9PczZzcFlxOTh0SEhvRFZmSWJtcDlSOTZybnRaQmdmeDJORzRkcUowYzlTY0wxU0ZjZHUxQWgKK1M4NWZjUmpqalBnMFRzNm1hbHJKL1RGeG1zZGV6YnlkVWtwYkxDaHRXdlh1ditzMk1RVGtMUnRkMDkzQmtsMwpEQW5ud29qcERkU2lhK21sVlhqU0MxTldtaWkzQ0g0TkFnTUJBQUdqZ2Fjd2dhUXdEZ1lEVlIwUEFRSC9CQVFECkFnV2dNQjBHQTFVZEpRUVdNQlFHQ0NzR0FRVUZCd01CQmdnckJnRUZCUWNEQWpBTUJnTlZIUk1CQWY4RUFqQUEKTUI4R0ExVWRJd1FZTUJhQUZPYjk3MzRnbzRzZVFEd1ptOTdyRWgvblA2ajFNRVFHQTFVZEVRUTlNRHVDRUdzNApjMjB6TG5OdmFIVm5iRzlpWVd5Q0NXeHZZMkZzYUc5emRJY0V3S2hrRlljRWZ3QUFBWWNRQUFBQUFBQUFBQUFBCkFBQUFBQUFBQVRBTkJna3Foa2lHOXcwQkFRc0ZBQU9DQVFFQW5aZHZwcGswaEg4UWtsV3MwOVNVSlNNeXZvMDUKL0FpQ05XVGJtTW5yS1pJNFlacGc4dDlqNVVsSFlONk1KR2NFNFNjZFhZejVLdWE5Ym9kTDBValE1NVV5NTNFOQpweVp0VDdhRTczZlF1Y3g2cncxV2F0bXo0UHJBTXk5KzNmZnNOMCtpWTZmc2w0RnVvT2FEL21STUtNRGdwdlprCjdGSklaVHF0Y1JmVVV4UzdLZElZa3RZS2ZGelVydHdtbkJ5Zk9sZTFoSDdZejRNY2Nxc3RtVTh1bmhnNXdpMDgKQTBoajMrVXpwOXJwSG1aeVV6bTdLb0Z0WEFVVGlGUGtpeHBud0dTbFZ2c1pmZ1hHVW5DWE4yRUhQalVXVmVrSQp6M2tKVVp2VjgyN0JtWlRhdkVFMWVPQkFSTzI3SU5HdE9TYlBFZE5mZXYxTjFHS2pNcW1uZWNjc3N3PT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+  server.key: >-
+    LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFb3dJQkFBS0NBUUVBc0ZyWEVZOHF4R0hQZnpvK0VrZndrWnV0ckJpTVN2dnVUdmpoa3Znb2NyTEs4Kzc4CnFWamJqcGtvYjExcUM1bHdmQko5ejdzdWpuQVppQ2pEUThoVytadFlXNElpNXcrN2poVng1YnUwbXlYL1BqR0gKYmlkdUdPcmFnSFl2c3I5cldmNmFYc1A2YmFlQXRwVSs0cWkrL3BVMEZ4UFk0STRWeFEvbTVtVnVQN1ptaDFUMgpmLzhsTzlzZUZuRnJXNy96ck9yS1dLdmZMUng2QTFYeUc1cWZVZmVxNTdXUVlIOGRqUnVIYWlkSFBVbkM5VWhYCkhidFFJZmt2T1gzRVk0NHo0TkU3T3BtcGF5ZjB4Y1pySFhzMjhuVkpLV3l3b2JWcjE3ci9yTmpFRTVDMGJYZFAKZHdaSmR3d0o1OEtJNlEzVW9tdnBwVlY0MGd0VFZwb290d2grRFFJREFRQUJBb0lCQUJuY0dERmc5dnA1QlQ0NAp3aVZZR3pTZXlXYTA2czJNQjdQWTF1c0FMSjQxRFlHYmg3MGxaSHlTaE5WZnMwOGtIdFJ5dWJRZVZJTmFlTVA0CmhqbUlSUWl3K05IaVVVL2toTEllL3VhYkVhNjJjYWtqQmlMbThVUUNIQ3crS0Z4anFWQTIvMWZxRU96SFpSNWcKNENuSWFNbFlBNTFtc2FTcjhSRkdkYXRQTUUxektWOERCY1ExL2R0WlBpSGxTVkh6R1VnQm9LdElkZTRFMEFUZQp4UlBxUk8xY21DSDlpaDlJRUxjNEdPYWRVS1A0VzQwem5uVThDT2phMG9ITDZscTV4YXVBTUwxVHZQR3hXU3k1Ck9UR2lITDZZNGQvK3FGdDhZK2VJVTlwanJKZmdOM0NsRVRpb3NPSUhPMUZ5ekRqdGFSeDloS0gydTdYRUpycU8KNjU3bWYxa0NnWUVBMFBjZDVVVWUvRnhjV1pYU0FkS1pYMHZFZnJJU3lDQ3ppc0toMlNhU1JOQ1hqTjJVR3NHbAo0aWV5WGhtenNmNjhrRUM2Ri83NkhCV0RLdmx0eFg5SGxydnNBSXBXNExlamR5RDcwSzc5VWZnMU53Q2ZIUitOCkk0WVN6ZExvcS8wQWNWRjloc29EUFZRalM0elcwY2l6OUJtMHZ1aWNlcXNtUS9lbThTOFFUNGNDZ1lFQTJBeXAKWVh5Z2ZhZllCWlBmR2FPc0FmN3ZNREE4NHhiK0R1aUI5dVQxeWxocTVKY3FkZDF4N1NacUs2TzRFSm9BeFRzbwpWY3N6c1l3czFIR0wzTlNBa2RDNFhPZmV4alpjTUl4OGNtV3FoLzBqSU9UY0R2TUlmZXNrN3p3a09oZGs5eXBZCjQyMjRYVFRCRWFuZ0hBcTY1UjViTGZLYWVTZzYrK2ZVaGl5S29zc0NnWUVBcWlCR2FwNTN0NlhLV2ZVcjRPZ0EKamlFMWZLQ2x3ZUU5eXo3aVhkU1ZTUWs2R1NsY3B0djVuY0lMNmFpckw4TGc2ZUNJb1hpcFQ2d0QranpRTGZhTgo1aDVnNlorM1U0U3V4UkpKY1lER0pMSWJRUWgwZ2xWcHB2NUUyT1ZaSUl6K2kwTjVHdi9rMjAxZzN1VnZENlNEClBieWY5cjJTaUJ4SEx4YTFCNjcxYklrQ2dZQldvTTBSMzh6aVZYaVMwL1h5NitPK2NTQXJMRXhkcWd4NG9kWHEKejJlV21ObFRpeUZsWFVPZkdYWWN4V3E2aldXZHI5aStmZG5lYVJ4WW1xYkFCeHorV3JoeDJDOUZQdXE4TkxoNQpqalpRakxtWEtPenJ1WnRBRWhjZkxmaEFxcnk3Tm1tcDE0YkRLTEg1aVNucFZJd1g3cElVM0dBQUVKZUdCakQ3CkU4VUsvUUtCZ0ZsMzFQa0ZZS2dZMVRlcWNiYXU5dnE1Y3EwS3hpOTVKQWJMS0REZzdKbHg0TUpjcDRpQjNUVDcKQTVsV3VjR3dwc1BoS055bFVDOWsyNTc1R3diOFFyeG5KVlpsa1dYUkRteG1zS0RxQ24vL1dKSFJ2dWowaUQxaAowVlVDY2t2TnNhQm5sTW0vWUl4ZjE1aWdvc050a3M5ZHZNdEowM0lhcnd6M0hOTnRZbS80Ci0tLS0tRU5EIFJTQSBQUklWQVRFIEtFWS0tLS0tCg==
+type: Opaque
+

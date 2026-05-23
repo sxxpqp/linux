@@ -1,0 +1,44 @@
+version: "3"
+
+services:
+  # VictoriaMetrics 单节点（替代 Prometheus）
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics:v1.108.0
+    container_name: victoria-metrics
+    restart: always
+    ports:
+      - 8428:8428          # HTTP 查询接口（Grafana 数据源用这个）
+      - 8089:8089          # InfluxDB 协议（可选）
+      - 4242:4242          # OpenTSDB 协议（可选）
+    volumes:
+      - ./victoria-metrics-data:/victoria-metrics-data
+      - ./prometheus-scrape.yml:/etc/prometheus-scrape.yml   # 抓取配置（可选）
+    command:
+      - "-storageDataPath=/victoria-metrics-data"
+      - "-retentionPeriod=60d"             # 数据保留 60 天
+      - "-httpListenAddr=:8428"
+      # - "-promscrape.config=/etc/prometheus-scrape.yml"  # 启用自抓取（完全替代 Prometheus）
+      # - "-maxDailyIngestionPerRow=500000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Grafana（沿用已有的即可，这里仅为参考）
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana
+    restart: always
+    ports:
+      - 3000:3000
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana-data:/var/lib/grafana
+    depends_on:
+      - victoria-metrics
+
+volumes:
+  victoria-metrics-data:
+  grafana-data:

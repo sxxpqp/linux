@@ -1,0 +1,30 @@
+apiVersion: v1
+items:
+- apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    creationTimestamp: "2024-11-11T04:42:08Z"
+    generation: 1
+    name: my-nginx
+    namespace: default
+    resourceVersion: "2451139"
+    uid: 695da4b2-5fcb-4e05-b5a4-898a4333e015
+  spec:
+    ingressClassName: nginx
+    rules:
+    - host: ngdemo.sxxpqp.top
+      http:
+        paths:
+        - backend:
+            service:
+              name: my-nginx
+              port:
+                number: 80
+          path: /
+          pathType: Prefix
+    tls:
+    - hosts:
+      - ngdemo.sxxpqp.top
+      secretName: test-ngdemo

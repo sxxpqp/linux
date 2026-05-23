@@ -1,0 +1,803 @@
+# =============================================================
+# RocketMQ 5.3.2 完整部署 All-in-One
+# 集群：3主3从 + Controller 自动选主 + Proxy + Dashboard
+# namespace：middleware
+# 镜像：hub.wishfoxs.com:6443/middleware
+# 存储：longhorn 100Gi/broker
+# 部署顺序：直接 kubectl apply -f rocketmq-all-in-one.yaml
+# =============================================================
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: middleware
+
+# -----------------------------------------------
+# NameServer 配置
+# -----------------------------------------------
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: namesrv-config
+  namespace: middleware
+data:
+  namesrv.conf: |
+    enableControllerInNamesrv=true
+    controllerDLegerGroup=dledger-controller
+    controllerDLegerPeers=n0-namesrv-0.namesrv-headless.middleware.svc.cluster.local:9878;n1-namesrv-1.namesrv-headless.middleware.svc.cluster.local:9878;n2-namesrv-2.namesrv-headless.middleware.svc.cluster.local:9878
+    controllerStorePath=/home/rocketmq/logs/controller
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: namesrv-headless
+  namespace: middleware
+spec:
+  clusterIP: None
+  selector:
+    app: namesrv
+  ports:
+    - name: namesrv
+      port: 9876
+    - name: controller
+      port: 9877
+    - name: raft
+      port: 9878
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: namesrv
+  namespace: middleware
+spec:
+  selector:
+    app: namesrv
+  ports:
+    - name: namesrv
+      port: 9876
+      targetPort: 9876
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: namesrv
+  namespace: middleware
+spec:
+  serviceName: namesrv-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: namesrv
+  template:
+    metadata:
+      labels:
+        app: namesrv
+    spec:
+      securityContext:
+        runAsUser: 0
+        fsGroup: 0
+      initContainers:
+        - name: init-config
+          image: hub.wishfoxs.com:6443/middleware/rocketmq:5.3.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              INDEX=${POD_NAME##*-}
+              cp /tmp/namesrv-tpl/namesrv.conf /etc/rocketmq/namesrv.conf
+              echo "controllerDLegerSelfId=n${INDEX}" >> /etc/rocketmq/namesrv.conf
+              mkdir -p /home/rocketmq/logs/rocketmqlogs
+              mkdir -p /home/rocketmq/logs/controller
+              chmod -R 777 /home/rocketmq/logs
+              echo "--- namesrv.conf ---"
+              cat /etc/rocketmq/namesrv.conf
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: namesrv-conf-tpl
+              mountPath: /tmp/namesrv-tpl
+            - name: namesrv-conf-dynamic
+              mountPath: /etc/rocketmq
+            - name: logs
+              mountPath: /home/rocketmq/logs
+      containers:
+        - name: namesrv
+          image: hub.wishfoxs.com:6443/middleware/rocketmq:5.3.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+          command: ["sh", "mqnamesrv", "-c", "/etc/rocketmq/namesrv.conf"]
+          env:
+            - name: JAVA_OPT
+              value: "-Xms1g -Xmx1g"
+          ports:
+            - containerPort: 9876
+              name: namesrv
+            - containerPort: 9877
+              name: controller
+            - containerPort: 9878
+              name: raft
+          volumeMounts:
+            - name: namesrv-conf-dynamic
+              mountPath: /etc/rocketmq
+            - name: logs
+              mountPath: /home/rocketmq/logs
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          readinessProbe:
+            tcpSocket:
+              port: 9876
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9876
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: namesrv-conf-tpl
+          configMap:
+            name: namesrv-config
+        - name: namesrv-conf-dynamic
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: namesrv
+                topologyKey: kubernetes.io/hostname
+  volumeClaimTemplates:
+    - metadata:
+        name: logs
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 10Gi
+
+# -----------------------------------------------
+# Broker 配置
+# -----------------------------------------------
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: broker-a-config
+  namespace: middleware
+data:
+  broker.conf: |
+    brokerClusterName=DefaultCluster
+    brokerName=broker-a
+    listenPort=10911
+    enableControllerMode=true
+    controllerAddr=namesrv-0.namesrv-headless.middleware.svc.cluster.local:9878;namesrv-1.namesrv-headless.middleware.svc.cluster.local:9878;namesrv-2.namesrv-headless.middleware.svc.cluster.local:9878
+    brokerRole=SLAVE
+    flushDiskType=SYNC_FLUSH
+    storePathRootDir=/home/rocketmq/store
+    storePathCommitLog=/home/rocketmq/store/commitlog
+    autoCreateTopicEnable=false
+    autoCreateSubscriptionGroup=false
+    fileReservedTime=72
+    deleteWhen=04
+    diskSpaceCleanForciblyRatio=0.85
+    diskSpaceWarningLevelRatio=0.90
+    sendMessageThreadPoolNums=128
+    pullMessageThreadPoolNums=128
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: broker-b-config
+  namespace: middleware
+data:
+  broker.conf: |
+    brokerClusterName=DefaultCluster
+    brokerName=broker-b
+    listenPort=10911
+    enableControllerMode=true
+    controllerAddr=namesrv-0.namesrv-headless.middleware.svc.cluster.local:9878;namesrv-1.namesrv-headless.middleware.svc.cluster.local:9878;namesrv-2.namesrv-headless.middleware.svc.cluster.local:9878
+    brokerRole=SLAVE
+    flushDiskType=SYNC_FLUSH
+    storePathRootDir=/home/rocketmq/store
+    storePathCommitLog=/home/rocketmq/store/commitlog
+    autoCreateTopicEnable=false
+    autoCreateSubscriptionGroup=false
+    fileReservedTime=72
+    deleteWhen=04
+    diskSpaceCleanForciblyRatio=0.85
+    diskSpaceWarningLevelRatio=0.90
+    sendMessageThreadPoolNums=128
+    pullMessageThreadPoolNums=128
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: broker-c-config
+  namespace: middleware
+data:
+  broker.conf: |
+    brokerClusterName=DefaultCluster
+    brokerName=broker-c
+    listenPort=10911
+    enableControllerMode=true
+    controllerAddr=namesrv-0.namesrv-headless.middleware.svc.cluster.local:9878;namesrv-1.namesrv-headless.middleware.svc.cluster.local:9878;namesrv-2.namesrv-headless.middleware.svc.cluster.local:9878
+    brokerRole=SLAVE
+    flushDiskType=SYNC_FLUSH
+    storePathRootDir=/home/rocketmq/store
+    storePathCommitLog=/home/rocketmq/store/commitlog
+    autoCreateTopicEnable=false
+    autoCreateSubscriptionGroup=false
+    fileReservedTime=72
+    deleteWhen=04
+    diskSpaceCleanForciblyRatio=0.85
+    diskSpaceWarningLevelRatio=0.90
+    sendMessageThreadPoolNums=128
+    pullMessageThreadPoolNums=128
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: broker-a-headless
+  namespace: middleware
+spec:
+  clusterIP: None
+  selector:
+    app: broker-a
+  ports:
+    - name: broker
+      port: 10911
+    - name: broker-vip
+      port: 10909
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: broker-a
+  namespace: middleware
+spec:
+  serviceName: broker-a-headless
+  replicas: 2
+  selector:
+    matchLabels:
+      app: broker-a
+  template:
+    metadata:
+      labels:
+        app: broker-a
+        broker-group: rocketmq-broker
+    spec:
+      securityContext:
+        runAsUser: 0
+        fsGroup: 0
+      initContainers:
+        - name: init-store
+          image: hub.wishfoxs.com:6443/middleware/rocketmq:5.3.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /home/rocketmq/store/commitlog
+              mkdir -p /home/rocketmq/store/consumequeue
+              mkdir -p /home/rocketmq/store/index
+              mkdir -p /home/rocketmq/store/config
+              mkdir -p /home/rocketmq/logs/rocketmqlogs
+              chmod -R 777 /home/rocketmq/store
+              chmod -R 777 /home/rocketmq/logs
+              echo "init done"
+          volumeMounts:
+            - name: store
+              mountPath: /home/rocketmq/store
+            - name: logs
+              mountPath: /home/rocketmq/logs
+      containers:
+        - name: broker
+          image: hub.wishfoxs.com:6443/middleware/rocketmq:5.3.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+          command: ["sh", "mqbroker", "-c", "/etc/rocketmq/broker.conf"]
+          env:
+            - name: NAMESRV_ADDR
+              value: "namesrv-0.namesrv-headless.middleware.svc.cluster.local:9876;namesrv-1.namesrv-headless.middleware.svc.cluster.local:9876;namesrv-2.namesrv-headless.middleware.svc.cluster.local:9876"
+            - name: JAVA_OPT
+              value: "-Xms8g -Xmx8g -Xmn4g -XX:+UseG1GC -XX:G1HeapRegionSize=16m -XX:MaxGCPauseMillis=200"
+          ports:
+            - containerPort: 10911
+              name: broker
+            - containerPort: 10909
+              name: broker-vip
+          volumeMounts:
+            - name: broker-conf
+              mountPath: /etc/rocketmq/broker.conf
+              subPath: broker.conf
+            - name: store
+              mountPath: /home/rocketmq/store
+            - name: logs
+              mountPath: /home/rocketmq/logs
+          resources:
+            requests:
+              cpu: 2000m
+              memory: 8Gi
+            limits:
+              cpu: 4000m
+              memory: 12Gi
+          readinessProbe:
+            tcpSocket:
+              port: 10911
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 10911
+            initialDelaySeconds: 60
+            periodSeconds: 15
+      volumes:
+        - name: broker-conf
+          configMap:
+            name: broker-a-config
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: broker-a
+              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    broker-group: rocketmq-broker
+                topologyKey: kubernetes.io/hostname
+  volumeClaimTemplates:
+    - metadata:
+        name: store
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 100Gi
+    - metadata:
+        name: logs
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: broker-b-headless
+  namespace: middleware
+spec:
+  clusterIP: None
+  selector:
+    app: broker-b
+  ports:
+    - name: broker
+      port: 10911
+    - name: broker-vip
+      port: 10909
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: broker-b
+  namespace: middleware
+spec:
+  serviceName: broker-b-headless
+  replicas: 2
+  selector:
+    matchLabels:
+      app: broker-b
+  template:
+    metadata:
+      labels:
+        app: broker-b
+        broker-group: rocketmq-broker
+    spec:
+      securityContext:
+        runAsUser: 0
+        fsGroup: 0
+      initContainers:
+        - name: init-store
+          image: hub.wishfoxs.com:6443/middleware/rocketmq:5.3.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /home/rocketmq/store/commitlog
+              mkdir -p /home/rocketmq/store/consumequeue
+              mkdir -p /home/rocketmq/store/index
+              mkdir -p /home/rocketmq/store/config
+              mkdir -p /home/rocketmq/logs/rocketmqlogs
+              chmod -R 777 /home/rocketmq/store
+              chmod -R 777 /home/rocketmq/logs
+              echo "init done"
+          volumeMounts:
+            - name: store
+              mountPath: /home/rocketmq/store
+            - name: logs
+              mountPath: /home/rocketmq/logs
+      containers:
+        - name: broker
+          image: hub.wishfoxs.com:6443/middleware/rocketmq:5.3.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+          command: ["sh", "mqbroker", "-c", "/etc/rocketmq/broker.conf"]
+          env:
+            - name: NAMESRV_ADDR
+              value: "namesrv-0.namesrv-headless.middleware.svc.cluster.local:9876;namesrv-1.namesrv-headless.middleware.svc.cluster.local:9876;namesrv-2.namesrv-headless.middleware.svc.cluster.local:9876"
+            - name: JAVA_OPT
+              value: "-Xms8g -Xmx8g -Xmn4g -XX:+UseG1GC -XX:G1HeapRegionSize=16m -XX:MaxGCPauseMillis=200"
+          ports:
+            - containerPort: 10911
+              name: broker
+            - containerPort: 10909
+              name: broker-vip
+          volumeMounts:
+            - name: broker-conf
+              mountPath: /etc/rocketmq/broker.conf
+              subPath: broker.conf
+            - name: store
+              mountPath: /home/rocketmq/store
+            - name: logs
+              mountPath: /home/rocketmq/logs
+          resources:
+            requests:
+              cpu: 2000m
+              memory: 8Gi
+            limits:
+              cpu: 4000m
+              memory: 12Gi
+          readinessProbe:
+            tcpSocket:
+              port: 10911
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 10911
+            initialDelaySeconds: 60
+            periodSeconds: 15
+      volumes:
+        - name: broker-conf
+          configMap:
+            name: broker-b-config
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: broker-b
+              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    broker-group: rocketmq-broker
+                topologyKey: kubernetes.io/hostname
+  volumeClaimTemplates:
+    - metadata:
+        name: store
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 100Gi
+    - metadata:
+        name: logs
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: broker-c-headless
+  namespace: middleware
+spec:
+  clusterIP: None
+  selector:
+    app: broker-c
+  ports:
+    - name: broker
+      port: 10911
+    - name: broker-vip
+      port: 10909
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: broker-c
+  namespace: middleware
+spec:
+  serviceName: broker-c-headless
+  replicas: 2
+  selector:
+    matchLabels:
+      app: broker-c
+  template:
+    metadata:
+      labels:
+        app: broker-c
+        broker-group: rocketmq-broker
+    spec:
+      securityContext:
+        runAsUser: 0
+        fsGroup: 0
+      initContainers:
+        - name: init-store
+          image: hub.wishfoxs.com:6443/middleware/rocketmq:5.3.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /home/rocketmq/store/commitlog
+              mkdir -p /home/rocketmq/store/consumequeue
+              mkdir -p /home/rocketmq/store/index
+              mkdir -p /home/rocketmq/store/config
+              mkdir -p /home/rocketmq/logs/rocketmqlogs
+              chmod -R 777 /home/rocketmq/store
+              chmod -R 777 /home/rocketmq/logs
+              echo "init done"
+          volumeMounts:
+            - name: store
+              mountPath: /home/rocketmq/store
+            - name: logs
+              mountPath: /home/rocketmq/logs
+      containers:
+        - name: broker
+          image: hub.wishfoxs.com:6443/middleware/rocketmq:5.3.2
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+          command: ["sh", "mqbroker", "-c", "/etc/rocketmq/broker.conf"]
+          env:
+            - name: NAMESRV_ADDR
+              value: "namesrv-0.namesrv-headless.middleware.svc.cluster.local:9876;namesrv-1.namesrv-headless.middleware.svc.cluster.local:9876;namesrv-2.namesrv-headless.middleware.svc.cluster.local:9876"
+            - name: JAVA_OPT
+              value: "-Xms8g -Xmx8g -Xmn4g -XX:+UseG1GC -XX:G1HeapRegionSize=16m -XX:MaxGCPauseMillis=200"
+          ports:
+            - containerPort: 10911
+              name: broker
+            - containerPort: 10909
+              name: broker-vip
+          volumeMounts:
+            - name: broker-conf
+              mountPath: /etc/rocketmq/broker.conf
+              subPath: broker.conf
+            - name: store
+              mountPath: /home/rocketmq/store
+            - name: logs
+              mountPath: /home/rocketmq/logs
+          resources:
+            requests:
+              cpu: 2000m
+              memory: 8Gi
+            limits:
+              cpu: 4000m
+              memory: 12Gi
+          readinessProbe:
+            tcpSocket:
+              port: 10911
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 10911
+            initialDelaySeconds: 60
+            periodSeconds: 15
+      volumes:
+        - name: broker-conf
+          configMap:
+            name: broker-c-config
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: broker-c
+              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    broker-group: rocketmq-broker
+                topologyKey: kubernetes.io/hostname
+  volumeClaimTemplates:
+    - metadata:
+        name: store
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 100Gi
+    - metadata:
+        name: logs
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 10Gi
+
+# -----------------------------------------------
+# Proxy
+# -----------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy
+  namespace: middleware
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: proxy
+  template:
+    metadata:
+      labels:
+        app: proxy
+    spec:
+      containers:
+        - name: proxy
+          image: hub.wishfoxs.com:6443/middleware/rocketmq:5.3.2
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "mqproxy"]
+          env:
+            - name: NAMESRV_ADDR
+              value: "namesrv-0.namesrv-headless.middleware.svc.cluster.local:9876;namesrv-1.namesrv-headless.middleware.svc.cluster.local:9876;namesrv-2.namesrv-headless.middleware.svc.cluster.local:9876"
+            - name: JAVA_OPT
+              value: "-Xms1g -Xmx1g"
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 8081
+              name: grpc
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: proxy
+                topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy
+  namespace: middleware
+spec:
+  selector:
+    app: proxy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+    - name: grpc
+      port: 8081
+      targetPort: 8081
+
+# -----------------------------------------------
+# Dashboard
+# -----------------------------------------------
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rocketmq-dashboard
+  namespace: middleware
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rocketmq-dashboard
+  template:
+    metadata:
+      labels:
+        app: rocketmq-dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: hub.wishfoxs.com:6443/middleware/rocketmq-dashboard:2.0.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: JAVA_OPTS
+              value: "-Drocketmq.namesrv.addr=namesrv-0.namesrv-headless.middleware.svc.cluster.local:9876;namesrv-1.namesrv-headless.middleware.svc.cluster.local:9876;namesrv-2.namesrv-headless.middleware.svc.cluster.local:9876"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rocketmq-dashboard
+  namespace: middleware
+spec:
+  type: NodePort
+  selector:
+    app: rocketmq-dashboard
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30880
+
+
+

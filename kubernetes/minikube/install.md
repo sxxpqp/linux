@@ -1,0 +1,2 @@
+sudo install minikube-linux-amd64 /usr/local/bin/minikube && rm minikube-linux-amd64
+minikube start --image-mirror-country cn  --registry-mirror=https://0512ji.dockerhub.sxxpqp.top  --base-image=registry.cn-hangzhou.aliyuncs.com/google_containers/kicbase:v0.0.46
