@@ -25,8 +25,8 @@ spec:
           configMap:
             name: frpc
             items:
-              - key: frpc.ini
-                path: frpc.ini
+              - key: frpc.toml
+                path: frpc.toml
             defaultMode: 420
       containers:
         - name: container-q2cnta
@@ -35,8 +35,8 @@ spec:
           volumeMounts:
             - name: volume-kgjoln
               readOnly: true
-              mountPath: /frp/frpc.ini
-              subPath: frpc.ini
+              mountPath: /frp/frpc.toml
+              subPath: frpc.toml
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
           imagePullPolicy: IfNotPresent
@@ -69,36 +69,45 @@ metadata:
   annotations:
     kubesphere.io/creator: sxx
 data:
-  frpc.ini: |-
-    [common]
-    server_addr = zkturing.imwork.net
-    server_port = 7000
-    token = zkturing.imwork.net
-    protocol = kcp
-    [tcp1_yueyangjiedusuo-tezhijia-mysql]
-    type = tcp
-    local_ip = turingcloud-mysql
-    local_port = 3306
-    remote_port = 31006
-    [tcp1_yueyangjiedusuo-tezhijia-nacos]
-    type = tcp
-    local_ip = turingcloud-register
-    local_port = 8848
-    remote_port = 31001
-    [tcp1_yueyangjiedusuo-tezhijia-redis]
-    type = tcp
-    local_ip = turingcloud-redis
-    local_port = 3306
-    remote_port = 31002
-    [tcp1_yueyangjiedusuo-tezhijia-web]
-    type = tcp
-    local_ip = turingcloud-web
-    local_port = 80
-    remote_port = 31003
-    [tcp1_yueyangjiedusuo-tezhijia-minio]
-    type = tcp
-    local_ip = turingcloud-minio
-    local_port = 9000
-    remote_port = 31004
+  frpc.toml: |-
+    serverAddr = "zkturing.imwork.net"
+    serverPort = 7000
+    auth.token = "zkturing.imwork.net"
+    transport.protocol = "kcp"
+
+    [[proxies]]
+    name = "tcp1_yueyangjiedusuo-tezhijia-mysql"
+    type = "tcp"
+    localIP = "turingcloud-mysql"
+    localPort = 3306
+    remotePort = 31006
+
+    [[proxies]]
+    name = "tcp1_yueyangjiedusuo-tezhijia-nacos"
+    type = "tcp"
+    localIP = "turingcloud-register"
+    localPort = 8848
+    remotePort = 31001
+
+    [[proxies]]
+    name = "tcp1_yueyangjiedusuo-tezhijia-redis"
+    type = "tcp"
+    localIP = "turingcloud-redis"
+    localPort = 3306
+    remotePort = 31002
+
+    [[proxies]]
+    name = "tcp1_yueyangjiedusuo-tezhijia-web"
+    type = "tcp"
+    localIP = "turingcloud-web"
+    localPort = 80
+    remotePort = 31003
+
+    [[proxies]]
+    name = "tcp1_yueyangjiedusuo-tezhijia-minio"
+    type = "tcp"
+    localIP = "turingcloud-minio"
+    localPort = 9000
+    remotePort = 31004
 
 
