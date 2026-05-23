@@ -58,7 +58,7 @@ Linux 运维知识库，涵盖容器编排、云原生、CI/CD、监控、网络
 
 | 目录 | 内容 | 状态 |
 |---|---|---|
-| [prometheus/](prometheus/README.MD) | Prometheus & VictoriaMetrics 监控（部署指南、告警、Grafana） | ✅ 生产验证 |
+| [prometheus/](prometheus/README.md) | Prometheus & VictoriaMetrics 监控（部署指南、告警、Grafana） | ✅ 生产验证 |
 
 ### CI/CD
 
@@ -83,7 +83,7 @@ Linux 运维知识库，涵盖容器编排、云原生、CI/CD、监控、网络
 |---|---|
 | MySQL InnoDB 集群（生产推荐） | [mysql/mysql-config.md](mysql/mysql-config.md) |
 | K8s 集群部署 | [kubernetes/README.md](kubernetes/README.md) |
-| Prometheus 监控（VictoriaMetrics 生产推荐） | [prometheus/README.MD](prometheus/README.MD) |
+| Prometheus 监控（VictoriaMetrics 生产推荐） | [prometheus/README.md](prometheus/README.md) |
 | Jenkins CI/CD 流水线 | [devops/README.md](devops/README.md) |
 | Docker 服务编排 | [docker/docker-compose/](docker/docker-compose/) |
 | Nginx 反向代理 | [nginx/nginx.cnf](nginx/nginx.cnf) |

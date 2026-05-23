@@ -42,7 +42,6 @@ Kubernetes 集群部署、组件配置、存储、监控、CI/CD 等生产运维
 | [csi-longhorn/](csi-longhorn/) | Longhorn CSI 配置 | 验证过 |
 | [longhorn/](longhorn/) | Longhorn 存储（部署、前置依赖安装） | ✅ 生产验证 |
 | [rook/](rook/) | Rook Ceph 存储集群 | 验证过 |
-| [ceph/](ceph/) | Ceph 相关（待整理） | 学习笔记 |
 | [glusterfs/](glusterfs/) | GlusterFS 配置（topology） | 验证过 |
 | [storageclass/](storageclass/) | StorageClass 配置（local-path） | 验证过 |
 | [sc/](sc/) | 存储类补充（OpenEBS、默认 SC 配置） | 验证过 |

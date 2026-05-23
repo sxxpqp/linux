@@ -45,8 +45,10 @@
 # ENTRYPOINT ./server -c config.docker.yaml
 FROM mysql:5.7
 WORKDIR /opt
-COPY . .
-RUN chmod +x ./mc
-RUN mv ./mc /usr/local/bin/
-CMD [ "bash" ,"init.sh" ]
+COPY init.sh .
+RUN apt-get update && apt-get install -y curl && \
+    curl -sL https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/local/bin/mc && \
+    chmod +x /usr/local/bin/mc && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+CMD ["bash", "init.sh"]
 
