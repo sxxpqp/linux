@@ -105,3 +105,27 @@ EOF
 ```bash
 docker run -d --name=nps  --privileged --restart=always --net=host -v /opt/nps/conf:/conf registry.cn-hangzhou.aliyuncs.com/sxxpqp/nps
 ```
+
+### docker compose 方式
+
+创建 `docker-compose.yml`:
+
+```yaml
+version: "3"
+
+services:
+  nps:
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/nps
+    container_name: nps
+    restart: always
+    network_mode: "host"
+    privileged: true
+    volumes:
+      - /opt/nps/conf:/conf
+```
+
+启动:
+
+```bash
+docker compose up -d
+```
