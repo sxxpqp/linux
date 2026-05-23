@@ -1,0 +1,7 @@
+[user]
+	name = sxxpqp
+	email = 971944699@qq.com
+[http]
+	proxy = http://172.16.0.251:7890
+[https]
+	proxy = http://172.16.0.251:7890
