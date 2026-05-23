@@ -1,0 +1,43 @@
+version: '3.8'
+
+# ================================================================
+#  Rancher 单节点 Docker Compose 部署
+#  作者: sxxpqp
+#  访问: https://<宿主机IP>:8443
+#  文档: https://docs.ranchermanager.rancher.io
+# ================================================================
+
+services:
+  rancher:
+    image: rancher/rancher:stable
+    container_name: rancher
+    restart: unless-stopped
+    privileged: true
+    ports:
+      # - "8080:80"      # HTTP  → 自动跳转 HTTPS
+      - "8443:443"     # HTTPS → Rancher UI
+    volumes:
+      - rancher_data:/var/lib/rancher
+    environment:
+      # 初始 bootstrap 密码（首次登录后强制修改）
+      - CATTLE_BOOTSTRAP_PASSWORD=Admin@123456
+      # 如果宿主机有域名可填，没有填 IP 也可以
+      # - CATTLE_SERVER_URL=https://rancher.wishfoxs.com
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-fk", "https://localhost/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  rancher_data:
+    driver: local
+
+
+
