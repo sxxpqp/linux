@@ -1,168 +1,24 @@
-## 关于kubesphere的日常总结及分享
+# KubeSphere 容器平台
 
-### 多集群管理
+KubeSphere 多集群管理、配置示例与运维。
 
-#### kubesphere host集群配置文件
+## 文件说明
 
-```
-apiVersion: installer.kubesphere.io/v1alpha1
-kind: ClusterConfiguration
-metadata:
-  labels:
-    version: v3.1.1
-  name: ks-installer
-  namespace: kubesphere-system
-spec:
-  alerting:
-    enabled: true
-  auditing:
-    enabled: true
-  authentication:
-    jwtSecret: ''
-  common:
-    es:
-      basicAuth:
-        enabled: false
-        password: ''
-        username: ''
-      elasticsearchDataVolumeSize: 20Gi
-      elasticsearchMasterVolumeSize: 4Gi
-      elkPrefix: cl-svyozyxd
-      externalElasticsearchPort: ''
-      externalElasticsearchUrl: ''
-      logMaxAge: 3
-    minioVolumeSize: 20Gi
-    monitoring:
-      endpoint: 'http://prometheus-operated.kubesphere-monitoring-system.svc:9090'
-    openldap:
-      enabled: true
-    openldapVolumeSize: 2Gi
-    redis:
-      enabled: true
-    redisVolumSize: 2Gi
-  console:
-    enableMultiLogin: true
-    port: 30880
-  devops:
-    enabled: true
-    jenkinsJavaOpts_MaxRAM: 2g
-    jenkinsJavaOpts_Xms: 512m
-    jenkinsJavaOpts_Xmx: 512m
-    jenkinsMemoryLim: 2Gi
-    jenkinsMemoryReq: 1500Mi
-    jenkinsVolumeSize: 8Gi
-  etcd:
-    endpointIps: '192.168.0.3,192.168.0.6,192.168.0.7'
-    monitoring: true
-    port: 2379
-    tlsEnable: false
-  events:
-    enabled: true
-    ruler:
-      enabled: true
-      replicas: 2
-  ks_image_pull_policy: IfNotPresent
-  kubeedge:
-    cloudCore:
-      cloudHub:
-        advertiseAddress:
-          - 139.198.122.166
-        nodeLimit: '100'
-      cloudhubHttpsPort: '10002'
-      cloudhubPort: '10000'
-      cloudhubQuicPort: '10001'
-      cloudstreamPort: '10003'
-      nodeSelector:
-        node-role.kubernetes.io/worker: ''
-      service:
-        cloudhubHttpsNodePort: '30002'
-        cloudhubNodePort: '30000'
-        cloudhubQuicNodePort: '30001'
-        cloudstreamNodePort: '30003'
-        tunnelNodePort: '30004'
-      tolerations: []
-      tunnelPort: '10004'
-    edgeWatcher:
-      edgeWatcherAgent:
-        nodeSelector:
-          node-role.kubernetes.io/worker: ''
-        tolerations: []
-      nodeSelector:
-        node-role.kubernetes.io/worker: ''
-      tolerations: []
-    enabled: true
-  local_registry: ''
-  logging:
-    enabled: true
-    logsidecar:
-      enabled: true
-      replicas: 2
-  metrics_server:
-    enabled: true
-  monitoring:
-    prometheusMemoryRequest: 400Mi
-    prometheusVolumeSize: 20Gi
-    storageClass: ''
-  multicluster:
-    clusterRole: host
-    proxyPublishAddress: 'http://139.198.122.166:32715'
-  network:
-    ippool:
-      type: none
-    networkpolicy:
-      enabled: true
-    topology:
-      type: none
-  openpitrix:
-    store:
-      enabled: true
-  openpitrix_job_repo: kubesphere/openpitrix-jobs
-  persistence:
-    storageClass: ''
-  servicemesh:
-    enabled: true
+| 文件 | 说明 |
+|---|---|
+| [install.md](install.md) | KubeSphere 安装指南 |
+| [config-sample.yaml](config-sample.yaml) | KubeSphere 集群配置示例 |
+| [dconfig-sample.yaml](dconfig-sample.yaml) | KubeSphere 配置示例（devops 增强版） |
+| [kubesphere-update-masterip.sh](kubesphere-update-masterip.sh) | KubeSphere Master 节点 IP 变更后更新证书与服务 |
+| [imagepull.sh](imagepull.sh) | KubeSphere 镜像批量拉取脚本 |
+| [tf.md](tf.md) | KubeSphere 技术架构说明 |
 
-```
+## 多集群管理
 
-#### 获取主集群的jwtSecret
+### Host 集群配置要点
 
-```
-kubectl -n kubesphere-system get cm kubesphere-config -o yaml | grep -v "apiVersion" | grep jwtSecret
-```
+- 在 ks-installer 中设置 `clusterRole: host` 和 `proxyPublishAddress`
+- 成员集群设置 `clusterRole: member` 并配置 host 集群的 `jwtSecret`
+- 获取成员集群 kubeconfig: `kubectl get cluster [name] -o jsonpath='{.spec.connection.kubeconfig}' | base64 -d`
 
-#### 成员集群添加步骤
-
-修改ks-installer配置文件
-
-```
-kubectl edit cc ks-installer -n kubesphere-system
-```
-
-在 `ks-installer` 的 YAML 文件中对应输入上面所示的 `jwtSecret`：
-
-```
-authentication:
-  jwtSecret: 4rdisUzp50XpeklFMBhH0We6rBTXD8dX
-```
-
-向下滚动并将 `clusterRole` 的值设置为 `member`，然后点击**确定**（如果使用 Web 控制台）使其生效：
-
-```
-multicluster:
-  clusterRole: member
-```
-
-## 部署node-exporter**
-
-```
-docker run -d  --restart=always --name node -p 9100:9100   -v /proc:/host/proc:ro   -v /sys:/host/sys:ro   -v /:/rootfs:ro   -v /etc/localtime:/etc/localtime -v /etc/timezone:/etc/timezone   --net="host"   prom/node-exporter
-```
-
-
-
-### 要注意获取集群的kubeconfig时，需要在host集群上执行命令
-
-```
-kubectl get cluster [cluster-name] -o jsonpath='{.spec.connection.kubeconfig}' | base64 -d
-```
-
+> **注意**：配置文件中的版本（v3.1.1）和 IP 地址仅供参考，请根据实际版本和环境修改。

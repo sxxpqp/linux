@@ -1,17 +1,11 @@
-并发执行脚本
+# Shell 脚本合集
 
-```
-#!/bin/bash
-for ((i=10;i<=310;i++));do
-while read line
-do
-{
-  ffmpeg -re -stream_loop -1 -i $line -vcodec copy -codec copy -f rtsp rtsp://127.0.0.1:554/video$i
-} &
-done< 1.txt
- 
+常用 Shell 脚本汇总。
 
-done
-wait
-```
+## 文件说明
 
+| 文件 | 说明 |
+|---|---|
+| [init-mysql-minio](init-mysql-minio) | MySQL + MinIO 初始化脚本 |
+
+> 另有基础运维脚本在 [centos/](../centos/) 目录下（安全加固、内核升级、LVM 等）。
