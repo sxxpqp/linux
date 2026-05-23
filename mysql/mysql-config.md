@@ -98,6 +98,103 @@ MySQL Router ← → MySQL Shell (admin)
   Group Replication（单主模式）
 ```
 
+### 新机器部署步骤
+
+以以下 IP 为例，**部署前确认你自己的三台机器 IP**：
+
+```text
+node1: 192.168.100.24
+node2: 192.168.100.25
+node3: 192.168.100.26
+```
+
+#### 下载安装包（所有节点）
+
+```bash
+# 安装 MySQL 8.0/8.4
+# https://dev.mysql.com/downloads/mysql/
+# 安装 MySQL Shell
+# https://dev.mysql.com/downloads/shell/
+```
+
+#### 配置文件
+
+每台机器执行以下命令，注意替换 `@update` 标注的参数：
+
+```bash
+# 1. 创建目录
+mkdir -p /etc/mysql
+vi /etc/mysql/my.cnf
+```
+
+将下方 [各节点 my.cnf](#2-各节点-mycnf) 的内容写入，**替换 `@update` 所在行的值**，然后保存。
+
+逐台启动 MySQL：
+
+```bash
+# 2. 初始化
+mysqld --initialize --user=mysql --datadir=/var/lib/mysql
+# 注意保存输出的临时 root 密码
+
+# 3. 启动
+systemctl start mysqld
+systemctl enable mysqld
+
+# 4. 修改 root 密码
+mysql -uroot -p
+# 输入临时密码后执行:
+ALTER USER 'root'@'localhost' IDENTIFIED BY '你的密码';
+```
+
+#### 部署集群
+
+在 **node1** 上执行 mysqlsh 部署：
+
+```bash
+# 登录 node1
+mysqlsh root@192.168.100.24:3306
+```
+
+```js
+// 配置所有节点（按需替换 IP 和密码）
+dba.configureInstance('root@192.168.100.24:3306', {password: '你的密码'})
+dba.configureInstance('root@192.168.100.25:3306', {password: '你的密码'})
+dba.configureInstance('root@192.168.100.26:3306', {password: '你的密码'})
+
+// 创建集群（在 node1 执行）
+var cluster = dba.createCluster('myCluster')
+
+// 添加 node2、node3
+cluster.addInstance('root@192.168.100.25:3306', {password: '你的密码'})
+cluster.addInstance('root@192.168.100.26:3306', {password: '你的密码'})
+
+// 检查状态
+cluster.status()
+```
+
+#### 部署 Router
+
+在应用服务器上执行：
+
+```bash
+# 引导（指定任一集群节点 IP）
+mysqlrouter --bootstrap root@192.168.100.24:3306 --user=mysqlrouter
+
+# 启动
+systemctl start mysqlrouter
+```
+
+#### 需要替换的汇总
+
+| 在哪替换 | 替换什么 |
+|---|---|
+| `my.cnf` `server-id` | 每个节点唯一（1、2、3） |
+| `my.cnf` `group_replication_local_address` | 改为本机 IP |
+| `my.cnf` `group_replication_group_seeds` | 改为三台机器 IP |
+| `my.cnf` `innodb_buffer_pool_size` | 按机器内存调整 |
+| `mysqlsh` 命令 | 替换 IP 和 root 密码 |
+| `mysqlrouter --bootstrap` | 替换集群节点 IP |
+
 ### 1. 配置要求
 
 - 至少 3 个节点（奇数，用于 PAXOS 投票）
