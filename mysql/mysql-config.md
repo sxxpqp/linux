@@ -1,3 +1,318 @@
+### MySQL 调优参考
+
+#### 时区
+数据库时区应与业务服务保持一致，推荐使用东八区。
+
+```ini
+# 容器启动时设置 TZ 环境变量
+-e TZ=Asia/Shanghai
+
+# 或在 my.cnf 中设置
+default-time-zone = '+8:00'
+```
+
+#### 连接数
+取决于服务器内存，一般按每个连接 ≈ 2MB 估算：
+
+```ini
+# 最大连接数（默认 151）
+max_connections = 800
+# 连接超时，单位秒，建议 300（5分钟），避免僵尸连接耗尽连接池
+wait_timeout = 300
+interactive_timeout = 300
+# 最大错误连接数，防止暴力破解打满连接
+max_connect_errors = 1000
+```
+
+#### 缓存 & Buffer
+
+最关键的是 `innodb_buffer_pool_size`，通常设为物理内存的 **60%-80%**：
+
+```ini
+# 假设服务器 16GB 内存，缓冲池设为 10GB
+innodb_buffer_pool_size = 10G
+# 缓冲池实例数，减少锁竞争（默认 1，建议 4 或 8）
+innodb_buffer_pool_instances = 4
+# 日志缓冲区大小（默认 16M，写入频繁可适当加大）
+innodb_log_buffer_size = 64M
+# 每个日志文件大小（默认 48M，建议 1G-2G）
+innodb_log_file_size = 1G
+# 日志文件组数量（默认 2）
+innodb_log_files_in_group = 2
+# 排序缓冲区（每个 session 分配，不宜过大）
+sort_buffer_size = 4M
+join_buffer_size = 4M
+# 表缓存
+table_open_cache = 2000
+table_definition_cache = 2000
+```
+
+#### 数据安全（双 1 配置）
+
+保证数据不丢最关键的两个参数，但会降低写入性能（约 3-5 倍）：
+
+```ini
+# 每次事务提交都刷盘
+sync_binlog = 1
+innodb_flush_log_at_trx_commit = 1
+```
+
+如果追求写入性能且能接受秒级丢数，可将 `innodb_flush_log_at_trx_commit` 改为 2。
+
+#### 其他需要注意的
+
+| 参数 | 说明 | 建议值 |
+|---|---|---|
+| `max_allowed_packet` | 最大允许数据包 | 128M-1G（大字段/备份需要） |
+| `innodb_lock_wait_timeout` | 行锁等待超时（秒） | 10-30 |
+| `tmp_table_size` / `max_heap_table_size` | 内存临时表大小 | 64M-256M |
+| `long_query_time` | 慢查询阈值（秒） | 1-3 |
+| `expire_logs_days` / `binlog_expire_logs_seconds` | binlog 过期时间 | 7-14 天 |
+| `character_set_server` | 字符集 | `utf8mb4`（推荐，支持 emoji） |
+| `autocommit` | 自动提交 | 1（默认，业务中注意显式事务） |
+
+慢查询日志建议开启：
+
+```ini
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 2
+log_queries_not_using_indexes = 1
+```
+
+---
+
+## MySQL InnoDB Cluster（mysqlsh 管理）
+
+推荐使用 MySQL Shell + Group Replication 替代传统主从复制，具备自动故障转移。
+
+### 架构
+
+```
+MySQL Router ← → MySQL Shell (admin)
+                    ↓
+┌─────────┬─────────┬─────────┐
+│ MySQL1  │ MySQL2  │ MySQL3  │
+│ Primary │ Secondary│Secondary│
+└─────────┴─────────┴─────────┘
+  Group Replication（单主模式）
+```
+
+### 1. 配置要求
+
+- 至少 3 个节点（奇数，用于 PAXOS 投票）
+- 每个节点配置静态 hostname，确保互访
+- 关闭防火墙或放通 3306、33060、33061 端口
+
+### 2. 各节点 my.cnf
+
+```ini
+[mysqld]
+server_id = 1                                # 每个节点唯一
+gtid_mode = ON
+enforce-gtid-consistency = ON
+binlog_checksum = NONE                       # Group Replication 要求
+
+# Group Replication
+plugin_load_add = group_replication
+group_replication_group_name = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"  # UUID，每个集群固定
+group_replication_start_on_boot = OFF
+group_replication_bootstrap_group = OFF
+group_replication_local_address = "10.0.0.1:33061"                     # 本机 IP:组通信端口
+group_replication_group_seeds = "10.0.0.1:33061,10.0.0.2:33061,10.0.0.3:33061"
+group_replication_ip_allowlist = "10.0.0.0/24"
+group_replication_single_primary_mode = ON
+group_replication_enforce_update_everywhere_checks = OFF
+
+# 推荐
+binlog_format = ROW
+binlog_row_image = MINIMAL                    # 减少 binlog 体积
+transaction_write_set_extraction = XXHASH64
+loose-group_replication_recovery_get_public_key = ON
+
+# 连接数 — 每个集群节点独立设置
+max_connections = 800                         # 最大连接数（Router 会占用一部分）
+max_connect_errors = 1000
+wait_timeout = 300                            # 非交互连接超时（秒）
+interactive_timeout = 300                     # 交互连接超时（秒）
+net_read_timeout = 30                         # 读超时
+net_write_timeout = 60                        # 写超时
+
+# Group Replication 通信超时
+loose-group_replication_communication_stack = XCOM
+loose-group_replication_poll_spin_loops = 20000
+loose-group_replication_compression_threshold = 1048576  # 1MB 以上压缩传输
+```
+
+### 3. 使用 mysqlsh 部署集群
+
+```bash
+# 安装 MySQL Shell
+# MySQL 官网下载对应版本 mysql-shell 包
+# https://dev.mysql.com/downloads/shell/
+
+# 连接第一个实例
+mysqlsh root@10.0.0.1:3306
+```
+
+```js
+// 在 mysqlsh JS 模式下执行
+
+// 1. 配置实例（每个节点逐一执行）
+dba.configureInstance('root@10.0.0.1:3306', {password: 'password'})
+dba.configureInstance('root@10.0.0.2:3306', {password: 'password'})
+dba.configureInstance('root@10.0.0.3:3306', {password: 'password'})
+
+// 2. 创建集群（在第一个节点执行）
+var cluster = dba.createCluster('myCluster', {adoptFromGR: false})
+
+// 3. 添加其余节点
+cluster.addInstance('root@10.0.0.2:3306', {password: 'password'})
+cluster.addInstance('root@10.0.0.3:3306', {password: 'password'})
+
+// 4. 检查状态
+cluster.status()
+```
+
+### 4. 部署 MySQL Router
+
+在应用服务器上部署 Router，提供读写分离和负载均衡：
+
+```bash
+# 安装 MySQL Router
+# https://dev.mysql.com/downloads/router/
+
+# 引导配置（指定任一集群节点即可自动发现）
+mysqlrouter --bootstrap root@10.0.0.1:3306 --user=mysqlrouter
+
+# 启动 Router
+systemctl start mysqlrouter
+```
+
+Router 默认端口：
+
+| 端口 | 用途 |
+|---|---|
+| 6446 | 读写端口（主库） |
+| 6447 | 只读端口（从库） |
+
+应用连接方式：
+
+```text
+# 读写
+jdbc:mysql://10.0.0.10:6446/dbname
+
+# 只读
+jdbc:mysql://10.0.0.10:6447/dbname
+```
+
+### Router 连接池与超时配置
+
+`--bootstrap` 后生成 `/etc/mysqlrouter/mysqlrouter.conf`，核心调优参数：
+
+```ini
+[DEFAULT]
+# Router 自身的连接池，每个 worker 线程持有
+client_connect_timeout = 10              # 客户端连接超时（秒）
+max_total_connections = 500              # Router 最大客户端连接数
+connect_timeout = 10                     # 到 MySQL 后端连接超时（秒）
+read_timeout = 60                        # 读超时（秒）
+
+[routing:primary]
+bind_address = 0.0.0.0
+bind_port = 6446
+destinations = metadata-cache://myCluster?role=PRIMARY
+routing_strategy = first-available                 # 主库：first-available
+protocol = classic
+# 后端连接池
+connection_sharing = 1                             # 启用连接共享（默认关闭）
+connection_sharing_delay = 5                       # 连接共享延迟（秒），用于事务开始前不共享
+max_connect_errors = 100                           # 最大连续错误后标记不可达
+client_ssl_mode = PREFERRED
+server_ssl_mode = PREFERRED
+
+[routing:secondary]
+bind_address = 0.0.0.0
+bind_port = 6447
+destinations = metadata-cache://myCluster?role=SECONDARY
+routing_strategy = round-robin                    # 从库：round-robin 负载均衡
+protocol = classic
+connection_sharing = 1
+connection_sharing_delay = 5
+max_connect_errors = 100
+client_ssl_mode = PREFERRED
+server_ssl_mode = PREFERRED
+
+[connection_pool]
+# 到 MySQL 后端的连接池
+max_size = 50                                     # 每个后端最大连接数
+max_idle_time = 120                               # 空闲连接最大存活秒数
+max_lifetime_seconds = 1800                       # 连接最大生命周期（30分钟）
+```
+
+**关键说明：**
+
+| 参数 | 作用 | 如果设太小 |
+|---|---|---|
+| `connection_sharing = 1` | 多个客户端复用同一后端连接 | — |
+| `max_total_connections` | Router 能接受的最大连接数 | 客户端连接被拒绝 |
+| `max_size` | Router 到每个 MySQL 后端的连接池大小 | 后端连接不足，请求排队 |
+| `connection_sharing_delay` | 事务开始多久后不允许共享连接 | 短事务场景可设 1-3 |
+
+**连接数计算公式：**
+
+```
+Router max_total_connections ≤ MySQL max_connections × 节点数
+Router 连接池 max_size × 后端节点数 ≤ MySQL max_connections
+```
+
+示例（3 节点集群，MySQL max_connections=800）：
+
+```text
+Router max_total_connections = 800      # 可接受 800 个客户端
+Router 连接池 max_size = 200            # 每个后端最多 200 连接
+                                      # 200 × 3 = 600 ≤ 800 ✅
+```
+
+重启 Router 生效：
+
+```bash
+systemctl restart mysqlrouter
+```
+
+### 5. 日常管理命令
+
+```js
+// 连接 shell 后
+var cluster = dba.getCluster('myCluster')
+
+// 查看状态
+cluster.status()
+cluster.status({extended: 1})
+
+// 描述拓扑
+cluster.describe()
+
+// 主从切换（switchover，计划内）
+cluster.switchPrimaryTo('10.0.0.2:3306')
+
+// 故障转移（failover）
+// Group Replication 自动选举，无需手动操作
+
+// 移除实例
+cluster.removeInstance('root@10.0.0.3:3306')
+
+// 重新加入实例
+cluster.rejoinInstance('root@10.0.0.3:3306')
+
+// 解散集群
+cluster.dissolve()
+```
+
+### 6. 传统主从复制（旧方案）
+
+> 以下为传统异步/半同步复制方式，建议新项目改用上方 InnoDB Cluster。
+
 ### 主配置
 ```
 [mysqld]
