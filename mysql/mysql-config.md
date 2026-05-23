@@ -106,18 +106,23 @@ MySQL Router ← → MySQL Shell (admin)
 
 ### 2. 各节点 my.cnf
 
+> ⚠️ **部署到新机器时，标注了 `# @update` 的参数需要按实际情况修改。**
+
 ```ini
 [mysqld]
+# @update 每个节点唯一（1/2/3...）
 server-id=1
 bind-address=0.0.0.0
 sql_mode=STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
 wait_timeout = 600
+# @update 根据实际时区修改
 default-time-zone = 'Asia/Shanghai'
 interactive_timeout = 600
 max_allowed_packet = 1G
 net_read_timeout   = 600
 net_write_timeout  = 600
 max_connections = 2000
+# @update 根据机器内存调整，物理内存 60%-80%
 innodb_buffer_pool_size = 8G
 innodb_buffer_pool_instances = 4
 slow_query_log = 1
@@ -134,9 +139,12 @@ log_slave_updates=ON
 
 transaction_write_set_extraction=XXHASH64
 
+# @update 所有节点相同，用 uuidgen 生成
 loose-group_replication_group_name="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 loose-group_replication_start_on_boot=OFF
+# @update 本机 IP + 33061（组通信端口）
 loose-group_replication_local_address="192.168.100.24:33061"
+# @update 所有节点 IP:33061
 loose-group_replication_group_seeds="192.168.100.24:33061,192.168.100.25:33061,192.168.100.26:33061"
 loose-group_replication_bootstrap_group=OFF
 
@@ -188,12 +196,20 @@ cluster.status()
 # 安装 MySQL Router
 # https://dev.mysql.com/downloads/router/
 
-# 引导配置（指定任一集群节点即可自动发现）
+# 引导配置（指定任一集群节点即可自动发现，用户名密码为数据库 root）
+# @update --user=mysqlrouter 为系统用户，可根据需要修改
 mysqlrouter --bootstrap root@10.0.0.1:3306 --user=mysqlrouter
 
 # 启动 Router
 systemctl start mysqlrouter
 ```
+
+> ⚠️ `--bootstrap` 会自动生成 Router 配置文件，其中 `router_id`、`user`（MySQL 账号）、SSL 证书路径等由引导过程自动填写，**无需手动修改**。
+>
+> 需要确认的参数：
+> - `max_total_connections` / `max_connections` — 根据并发量调整
+> - `connect_timeout` / `read_timeout` — 根据网络情况调整
+> - `ttl` — metadata 刷新间隔，网络稳定可适当加大
 
 Router 默认端口：
 
@@ -216,6 +232,8 @@ jdbc:mysql://10.0.0.10:6447/dbname
 
 `--bootstrap` 后生成 `/etc/mysqlrouter/mysqlrouter.conf`，核心参数如下：
 
+> ⚠️ 标注了 `# @update` 的参数根据环境调整；其余由 `--bootstrap` 自动生成，无需手动修改。
+
 ```ini
 [DEFAULT]
 user=mysqlrouter
@@ -224,9 +242,13 @@ runtime_folder=/etc/mysqlrouter/run
 data_folder=/etc/mysqlrouter/data
 keyring_path=/etc/mysqlrouter/data/keyring
 master_key_path=/etc/mysqlrouter/mysqlrouter.key
+# @update 网络延迟高可加大
 connect_timeout=5
+# @update 大查询慢可加大
 read_timeout=30
+# @update 根据并发量调整
 max_total_connections=4000
+# @update 同上
 max_connections=4000
 dynamic_state=/etc/mysqlrouter/data/state.json
 client_ssl_cert=/etc/mysqlrouter/data/router-cert.pem
@@ -241,9 +263,11 @@ level=INFO
 
 [metadata_cache:bootstrap]
 cluster_type=gr
+# @update 多 Router 实例时需唯一
 router_id=1
-user=mysql_router1_bayywcj
+user=mysql_router1_bayywcj                       # bootstrap 自动生成，无需修改
 metadata_cluster=myCluster
+# @update metadata 缓存刷新秒数
 ttl=0.5
 auth_cache_ttl=-1
 auth_cache_refresh_interval=2
@@ -251,15 +275,16 @@ use_gr_notifications=0
 
 [routing:bootstrap_rw]
 bind_address=0.0.0.0
-bind_port=6446
+bind_port=6446                                   # 读写端口（应用连接此端口）
 destinations=metadata-cache://myCluster/?role=PRIMARY
 routing_strategy=first-available
 protocol=classic
+# @update 与 DEFAULT 保持一致
 max_connections=4000
 
 [routing:bootstrap_ro]
 bind_address=0.0.0.0
-bind_port=6447
+bind_port=6447                                   # 只读端口（应用连接）
 destinations=metadata-cache://myCluster/?role=SECONDARY
 routing_strategy=round-robin-with-fallback
 protocol=classic
@@ -267,14 +292,14 @@ max_connections=4000
 
 [routing:bootstrap_x_rw]
 bind_address=0.0.0.0
-bind_port=6448
+bind_port=6448                                   # X Protocol 读写
 destinations=metadata-cache://myCluster/?role=PRIMARY
 routing_strategy=first-available
 protocol=x
 
 [routing:bootstrap_x_ro]
 bind_address=0.0.0.0
-bind_port=6449
+bind_port=6449                                   # X Protocol 只读
 destinations=metadata-cache://myCluster/?role=SECONDARY
 routing_strategy=round-robin-with-fallback
 protocol=x
