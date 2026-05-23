@@ -52,13 +52,13 @@ Kubernetes 是用于自动部署，扩展和管理容器化应用程序的开源
 首先导入 gpg key：
 
 ```
-sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key
 ```
 
 新建 `/etc/apt/sources.list.d/kubernetes.list`，内容为
 
 ```
-deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://mirrors.tuna.tsinghua.edu.cn/kubernetes/apt kubernetes-xenial main
+deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /
 ```
 
 #### RHEL/CentOS 用户
@@ -144,7 +144,7 @@ echo 'complete -o default -F __start_kubectl k' >>~/.bashrc
  ip_vs_rr
  ip_vs_wrr
  ip_vs_sh
- nf_conntrack_ipv4
+ nf_conntrack
 
 在所有的Kubernetes节点node1和node2上执行以下脚本:
 ```
@@ -154,13 +154,13 @@ echo 'complete -o default -F __start_kubectl k' >>~/.bashrc
  modprobe  ip_vs_rr
  modprobe  ip_vs_wrr
  modprobe  ip_vs_sh
- modprobe  nf_conntrack_ipv4
+ modprobe  nf_conntrack
  EOF
 ```
  ```
- chmod 755 /etc/sysconfig/modules/ipvs.modules && bash /etc/sysconfig/modules/ipvs.modules && lsmod | grep -e ip_vs -e nf_conntrack_ipv4
+ chmod 755 /etc/sysconfig/modules/ipvs.modules && bash /etc/sysconfig/modules/ipvs.modules && lsmod | grep -e ip_vs -e nf_conntrack
  ```
- 脚本创建了的/etc/sysconfig/modules/ipvs.modules文件，保证在节点重启后能自动加载所需模块。 使用lsmod | grep -e ip_vs -e nf_conntrack_ipv4命令查看是否已经正确加载所需的内核模块。
+ 脚本创建了的/etc/sysconfig/modules/ipvs.modules文件，保证在节点重启后能自动加载所需模块。 使用lsmod | grep -e ip_vs -e nf_conntrack命令查看是否已经正确加载所需的内核模块。
  在所有节点上安装ipset软件包
  ```
  yum install ipset -y

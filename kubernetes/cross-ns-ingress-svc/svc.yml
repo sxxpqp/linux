@@ -14,7 +14,7 @@ spec:
   sessionAffinity: None
   externalName: turingcloud-web.kubesphere-system.svc.cluster.local
 ---
-  apiVersion: extensions/v1beta1
+  apiVersion: networking.k8s.io/v1
   kind: Ingress
   metadata:
     annotations:
@@ -27,10 +27,13 @@ spec:
     - host: paj.9ancore.com
       http:
         paths:
-        - backend:
-            serviceName: pinganjia
-            servicePort: 80
-          path: /
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: pinganjia
+              port:
+                number: 80
     tls:
     - hosts:
       - paj.9ancore.com

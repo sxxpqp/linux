@@ -1,104 +1,41 @@
-## 关于linux docker kubernetes prometheus cicd service-mesh的日常总结及分享
+# Linux Ops Notes
 
-### 修改时区
+Linux 运维知识库，涵盖容器编排、云原生、CI/CD、监控、网络等日常运维实践与笔记。
 
-#### ubuntu 18.04
+## 目录结构
 
-```shell
-ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-```
+| 目录 | 内容 |
+|---|---|
+| [ansible/](ansible/) | Ansible 自动化配置（CentOS 初始化、hello world 等） |
+| [centos/](centos/) | CentOS 系统管理（安全加固、LVM、内核升级、SSH 防护等） |
+| [containerd/](containerd/) | Containerd 运行时安装与配置 |
+| [devops/](devops/) | CI/CD 流水线（Jenkins、Java/Node.js 项目部署、k8s pod 模板） |
+| [dns/](dns/) | BIND9 内网 DNS 服务搭建 |
+| [docker/](docker/) | Docker 生态（安装、镜像构建、docker-compose 服务编排、Containerlab、Kind、Clash） |
+| [etcd/](etcd/) | etcd 集群部署与备份恢复 |
+| [frp/](frp/) | frp 内网穿透（Docker & K8s 部署） |
+| [git/](git/) | Git 配置 |
+| [go/](go/) | Go 语言笔记（channel 模式等） |
+| [istio/](istio/) | Istio 服务网格（多命名空间通信） |
+| [k3s/](k3s/) | K3s 轻量级 K8s |
+| [k9s/](k9s/) | K9s Kubernetes 终端管理工具 |
+| [kubernetes/](kubernetes/) | Kubernetes 核心（RKE、RKE2、kubeadm、二进制部署、ingress-nginx、etcd、监控、存储、GPU 等） |
+| [kubesphere/](kubesphere/) | KubeSphere 容器平台部署与配置 |
+| [minio/](minio/) | MinIO 对象存储 |
+| [mysql/](mysql/) | MySQL 运维（备份、xtrabackup、配置） |
+| [nginx/](nginx/) | Nginx 配置（反向代理、SSL、HTTP-FLV 直播流） |
+| [nps/](nps/) | nps 内网穿透 |
+| [prometheus/](prometheus/) | Prometheus & Grafana 监控 |
+| [shell-script/](shell-script/) | 常用 Shell 脚本合集 |
+| [ubuntu/](ubuntu/) | Ubuntu 系统配置 |
+| [arm-k8s/](arm-k8s/) | ARM 架构 K8s 集群 |
+| [clash/](clash/) | Clash 代理客户端 |
 
-```
-date
-```
+## 快速指引
 
-同步时间
-
-```
-apt install ntpdate 
-ntpdate time.windows.com 
-```
-
-#### centos 7
-
-列出支持的时区
-
-```
-timedatectl list-timezones | grep -i Shanghai
-```
-
-命令行修改时区
-
-```
-sudo timedatectl set-timezone Asia/Shanghai
-```
-
-通过ln的方式去修改时区
-
-```
-ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-```
-
-```
-date
-```
-
-同步时间
-
-```
-apt install ntpdate 
-ntpdate time.windows.com
-```
-
-
-
-
-
-### NTP服务总览
-
-提供一台时间服务器：
-
-```
-ntp.tuna.tsinghua.edu.cn
-```
-
-服务器位于清华校内，提供 IPv4 与 IPv6 双栈服务。校内师生可以使用这一服务进行一般的时间校准工作，但需要进行校园网认证；我们建议同时配置学校信息化技术中心提供的 NTP (166.111.8.28 / 166.111.8.29 / 2402:f000:1:801::8:28 / 2402:f000:1:801::8:29) 服务作为备用。
-
-#### 服务介绍
-
-NTP (网络时间协议, network time protocol) 是网络中保持时间同步的协议 ([How does it work](http://www.ntp.org/ntpfaq/NTP-s-algo.htm))。简单来说，客户端通过向服务器发送带有时间戳的数据包和服务器回复带有时间戳的数据包，来获得客户端发送时间，服务端接收时间、服务端发送时间、客户端接收时间 4 个时间戳。客户端系统时间偏移量定义为 δ = (t₃ - t₀) - (t₂ - t₁)。如果运行 ntpd 服务，一般来说 ntpd 会逐渐调整时钟，避免时间跳变。这对于运行计费系统、交易系统或者其他对时间准确性和事件先后顺序敏感的操作十分重要。
-
-#### Linux 客户端配置
-
-使用 systemd-timesyncd 的用户需要修改 `/etc/systemd/timesyncd.conf`，将其中 `NTP=` 一行取消注释，修改为 `NTP=ntp.tuna.tsinghua.edu.cn` 。同时建议校内用户在 `FallbackNTP` 一栏中添加服务总览中提到的备用 NTP。修改好后，可使用 `systemctl restart systemd-timesyncd` 使配置生效。
-
-使用 ntpd 的用户需要在 `/etc/ntp.conf` 中添加一行 `server ntp.tuna.tsinghua.edu.cn` 。（若您的发行版使用 Chrony，请修改对应的配置文件 `/etc/chrony.conf`。）
-
-为了确保 ntpd 服务正在运行，使用你的发行版的 initscripts 脚本或 `systemctl`（若有）进行检查和修正。
-
-如果你的机器的时钟发生跳变不会有严重后果 (例如在你的笔记本上)，你可以使用 `sudo sntp ntp.tuna.tsinghua.edu.cn` 进行一次性的同步。
-
-#### Mac 客户端配置
-
-在“系统配置 > 日期与时间 > 自动设置日期与时间”一栏，填入 `ntp.tuna.tsinghua.edu.cn`。
-
-在 macOS Mojave 及更新的系统，你可以使用 `sudo sntp -sS ntp.tuna.tsinghua.edu.cn` 来进行一次性的同步，否则，使用 `sudo ntpdate ntp.tuna.tsinghua.edu.cn` 进行同步。
-
-#### Windows 客户端配置
-
-#### Windows XP 及以下版本的配置
-
-在“运行”中输入 `net time /setsntp:ntp.tuna.tsinghua.edu.cn`。
-
-#### Windows 10 客户端配置
-
-在“控制面板 > 时钟、语言和区域 > 日期和时间 > Internet时间 > 更改设置”中勾选“与 Internet 时间服务器同步”，在“服务器”一栏填入 `ntp.tuna.tsinghua.edu.cn`。
-
-您也可以通过在命令提示符中使用 `w32tm /config /manualpeerlist:ntp.tuna.tsinghua.edu.cn /syncfromflags:manual /update` 来将此服务器设置为您的时间服务器.
-
-
-
-### 一键安装trojan-go 科学代理
-```
-bash <(curl -sSL "https://raw.githubusercontent.com/veip007/hj/main/trojan-go.sh") 
-```
+- **安装 Docker**: [docker-install.md](docker/docker-install.md)
+- **K8s 集群部署**: [kubernetes/](kubernetes/) 下有多种方式（sealos、kubeadm、RKE、二进制）
+- **Docker 服务编排**: [docker/docker-compose/](docker/docker-compose/) 包含 Redis、MySQL、Kafka、GitLab 等
+- **Prometheus 监控**: [prometheus/](prometheus/)
+- **CI/CD 流水线**: [devops/](devops/)
+- **CentOS 安全加固**: [centos/centos-security-init.sh](centos/centos-security-init.sh)
