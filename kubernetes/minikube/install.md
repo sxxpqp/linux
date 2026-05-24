@@ -20,51 +20,74 @@ sudo install minikube-darwin-arm64 /usr/local/bin/minikube && rm minikube-darwin
 
 Minikube 需要从 `k8s.gcr.io`、`registry.k8s.io` 拉取镜像，国内必须配置加速。
 
-### 2.1 基础启动（阿里云镜像）
-
-```bash
-minikube start \
-  --image-mirror-country cn \
-  --registry-mirror=https://hub.ihome.sxxpqp.top:8443 \
-  --base-image=registry.cn-hangzhou.aliyuncs.com/google_containers/kicbase:v0.0.46
-```
-
-参数说明：
-- `--image-mirror-country cn` — 使用阿里云 k8s 镜像仓库替代 gcr.io
-- `--registry-mirror` — Docker Hub 镜像加速（替换为自己的加速器地址）
-- `--base-image` — Minikube 基础镜像（必须在国内环境下指定，否则拉取 kicbase 失败）
-
-### 2.2 指定 K8s 版本 + 更多资源
-
-```bash
-minikube start \
-  --image-mirror-country cn \
-  --registry-mirror=https://hub.ihome.sxxpqp.top:8443 \
-  --base-image=registry.cn-hangzhou.aliyuncs.com/google_containers/kicbase:v0.0.46 \
-  --kubernetes-version=v1.28.3 \
-  --cpus=4 \
-  --memory=8g \
-  --disk-size=40g
-```
-
-### 2.3 使用 Docker 驱动
+### 2.1 基础启动（完整配置）
 
 ```bash
 # 确保已安装 Docker
 minikube start \
+  --force \
   --driver=docker \
+  --cni=cilium \
   --image-mirror-country cn \
+  --image-repository=registry.cn-hangzhou.aliyuncs.com/google_containers \
   --registry-mirror=https://hub.ihome.sxxpqp.top:8443 \
-  --base-image=registry.cn-hangzhou.aliyuncs.com/google_containers/kicbase:v0.0.46
+  --base-image=registry.cn-hangzhou.aliyuncs.com/google_containers/kicbase:v0.0.46 \
+  --binary-mirror=https://nexus.ihome.sxxpqp.top:8443/repository/kubernetes-binaries \
+  --kubernetes-version=v1.32.0 \
+  --cpus=4 \
+  --memory=8g \
+  --disk-size=40g \
 ```
 
-### 2.4 配置持久化镜像加速
+参数说明：
+- `--force` — 使用 root 运行时必须加
+- `--driver=docker` — 使用 Docker 驱动（推荐）
+- `--cni=cilium` — 网络插件，支持 NetworkPolicy
+- `--image-mirror-country cn` — 使用阿里云 k8s 镜像仓库替代 gcr.io
+- `--registry-mirror` — Docker Hub 镜像加速
+- `--base-image` — Minikube 基础镜像（国内必须指定）
+- `--binary-mirror` — kubectl/kubeadm/kubelet 二进制下载镜像
+- `--kubernetes-version` — 指定 K8s 版本（避免默认拉最新版导致镜像站 404）
+- `--cpus` / `--memory` / `--disk-size` — 资源分配
+- `--ports` — 端口映射（宿主机:minikube 容器），用于直接通过宿主机 IP 访问服务
 
-写入默认配置，后续 `minikube start` 无需重复传参：
+### 2.2 多节点集群
 
 ```bash
-minikube config set image-mirror-country cn
-minikube config set registry-mirror https://hub.ihome.sxxpqp.top:8443
+minikube start \
+  --force \
+  --driver=docker \
+  --cni=calico \
+  --image-mirror-country cn \
+  --registry-mirror=https://10291y.ihome.sxxpqp.top:8443 \
+  --image-repository=registry.cn-hangzhou.aliyuncs.com/google_containers \
+  --base-image=registry.cn-hangzhou.aliyuncs.com/google_containers/kicbase:v0.0.50 \
+  --binary-mirror=https://nexus.ihome.sxxpqp.top:8443/repository/kubernetes-binaries \
+  --nodes=3 \
+  --cpus=4 \
+  --memory=8g \
+  --disk-size=40g \
+  --kubernetes-version=v1.32.0
+```
+
+`--nodes=3` 表示 1 个 control-plane + 2 个 worker 节点。
+
+### 2.3 指定版本 + 资源
+
+```bash
+minikube start \
+  --force \
+  --driver=docker \
+  --image-mirror-country cn \
+  --registry-mirror=https://10291y.ihome.sxxpqp.top:8443 \
+  --image-repository=registry.cn-hangzhou.aliyuncs.com/google_containers \
+  --base-image=registry.cn-hangzhou.aliyuncs.com/google_containers/kicbase:v0.0.50 \
+  --binary-mirror=https://nexus.ihome.sxxpqp.top:8443/repository/kubernetes-binaries \
+  --kubernetes-version=v1.28.3 \
+  --cpus=2 \
+  --memory=4g \
+  --disk-size=20g \
+
 ```
 
 ## 三、验证
@@ -99,7 +122,7 @@ minikube ip
 minikube addons list
 
 # 启用插件（如 ingress）
-minikube addons enable ingress
+minikube addons enable ingress --images='IngressController=10291y.ihome.sxxpqp.top:8443/google_containers/nginx-ingress-controller:v1.14.3,KubeWebhookCertgenCreate=10291y.ihome.sxxpqp.top:8443/google_containers/kube-webhook-certgen:v1.6.7,KubeWebhookCertgenPatch=10291y.ihome.sxxpqp.top:8443/google_containers/kube-webhook-certgen:v1.6.7'
 
 # SSH 进入节点
 minikube ssh
