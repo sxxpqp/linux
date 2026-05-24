@@ -121,9 +121,16 @@ minikube ip
 # 查看插件列表
 minikube addons list
 
-# 启用插件（如 ingress）
-minikube addons enable ingress --images='IngressController=10291y.ihome.sxxpqp.top:8443/google_containers/nginx-ingress-controller:v1.14.3,KubeWebhookCertgenCreate=10291y.ihome.sxxpqp.top:8443/google_containers/kube-webhook-certgen:v1.6.7,KubeWebhookCertgenPatch=10291y.ihome.sxxpqp.top:8443/google_containers/kube-webhook-certgen:v1.6.7'
+# 启用插件（如 ingress） 
+# minikube addons enable ingress # 国内有点问题
+      ## 下载官方 yaml
+      curl -O https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/baremetal/deploy.yaml
 
+      ## 批量替换镜像地址
+      sed -i 's|registry.k8s.io|k8s.ihome.sxxpqp.top:8443|g' deploy.yaml
+
+      ## 部署
+      kubectl apply -f deploy.yaml
 # SSH 进入节点
 minikube ssh
 
