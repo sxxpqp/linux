@@ -349,9 +349,158 @@ EOF
 kubectl rollout status deployment/petclinic -n test
 ```
 
+### Java 自动注入 vs Go 手动埋点
+
+| | Java | Go |
+|---|---|---|
+| **注入方式** | Operator 自动注入 javaagent | 代码中引入 OTel SDK，手动埋点 |
+| **注解** | 需要 `instrumentation.opentelemetry.io/inject-java: "true"` | **不需要**（注解无效） |
+| **endpoint** | 由 Instrumentation CR 的 `exporter.endpoint` 统一控制 | 通过环境变量 `OTEL_EXPORTER_OTLP_ENDPOINT` 指定 |
+| **endpoint 变量** | `$(OTEL_NODE_IP)` — Operator 注入的变量 | `$(NODE_IP)` — 自定义 fieldRef，K8s 展开 |
+
 ---
 
-## 6. 验证注入
+## 6. Go 语言应用部署
+
+> Go 不支持 Operator 自动注入，需要在代码中手动引入 OTel SDK。
+
+### 代码示例（关键部分）
+
+```go
+import (
+    "go.opentelemetry.io/otel"
+    "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+    "go.opentelemetry.io/otel/sdk/trace"
+    "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+)
+
+func initTracer() (*trace.TracerProvider, error) {
+    // OTLP endpoint 从环境变量读取，无需硬编码
+    exporter, err := otlptracehttp.New(context.Background())
+    if err != nil {
+        return nil, err
+    }
+    tp := trace.NewTracerProvider(
+        trace.WithBatcher(exporter),
+        trace.WithResource(resource.NewWithAttributes(
+            semconv.ServiceNameKey.String(os.Getenv("OTEL_SERVICE_NAME")),
+        )),
+    )
+    otel.SetTracerProvider(tp)
+    return tp, nil
+}
+
+func main() {
+    tp, err := initTracer()
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer tp.Shutdown(context.Background())
+
+    // HTTP handler 自动生成 span
+    http.Handle("/", otelhttp.NewHandler(handler, "root"))
+    http.ListenAndServe(":8080", nil)
+}
+```
+
+### Deployment
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-demo
+  namespace: test
+  labels:
+    app: otel-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: otel-demo
+  template:
+    metadata:
+      labels:
+        app: otel-demo
+      annotations:
+        # Go 不支持自动注入，这个注解不需要
+    spec:
+      containers:
+      - name: app
+        image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/otel-demo:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        env:
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://$(NODE_IP):4318"
+        - name: OTEL_SERVICE_NAME
+          value: "otel-demo"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "deployment.environment=production,service.version=1.0.0"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 3
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 100m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-demo
+  namespace: test
+  labels:
+    app: otel-demo
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  selector:
+    app: otel-demo
+EOF
+
+kubectl rollout status deployment/otel-demo -n test
+```
+
+### Go 环境变量说明
+
+| 环境变量 | 作用 | 展开机制 |
+|---------|------|---------|
+| `NODE_IP` | 获取 Pod 所在节点 IP | `fieldRef: status.hostIP`，K8s 原生展开 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTel SDK 读取该变量，数据发往此处 | `$(NODE_IP)` 由 K8s 先展开，SDK 再读取 |
+| `OTEL_SERVICE_NAME` | 在 Jaeger 中显示的服务名 | SDK 标准变量，自动识别 |
+| `OTEL_RESOURCE_ATTRIBUTES` | 附加到每条 span 的属性 | SDK 标准变量 |
+
+> ⚠️ Go 和 Java 的关键区别：
+> 
+> - **Java**：endpoint 在 Instrumentation CR 中配置，Operator 注入 `OTEL_NODE_IP` 变量，**不要**在 Deployment 中手动定义 `OTEL_EXPORTER_OTLP_ENDPOINT`
+> - **Go**：endpoint 在 Deployment 的 `env` 中直接定义，用 `fieldRef` 获取 `NODE_IP`，**不经过** Instrumentation CR
+
+---
+
+## 7. 验证注入
 
 ```bash
 # 1. 确认 initContainer 注入成功
@@ -385,7 +534,7 @@ kubectl logs -l app=petclinic -n test | head -5
 
 ---
 
-## 7. 发送请求查看 Trace
+## 8. 发送请求查看 Trace
 
 ```bash
 # 转发端口
