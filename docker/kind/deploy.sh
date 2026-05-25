@@ -38,6 +38,14 @@ server = "https://registry-1.docker.io"
   capabilities = ["pull", "resolve"]
   skip_verify = true
 TOML
+# 创建 ghcr.io 加速配置
+  mkdir -p /etc/containerd/certs.d/ghcr.io
+  cat > /etc/containerd/certs.d/ghcr.io/hosts.toml << 'TOML'
+server = "https://ghcr.io"
+
+[host."https://ghcr.ihome.sxxpqp.top:8443"]
+  capabilities = ["pull", "resolve"]
+TOML
   # 重启 containerd 使配置生效
   systemctl restart containerd
 SCRIPT

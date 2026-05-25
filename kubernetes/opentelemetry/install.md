@@ -1,54 +1,66 @@
-# OpenTelemetry Operator 安装指南
+# OpenTelemetry Operator 安装指南（kind 测试环境）
 
 ## 架构概览
 
 ```
-┌─────────────┐     OTLP (4317)     ┌──────────────────┐     OTLP      ┌──────────┐
-│  应用 Pod    │ ──────────────────→ │  DaemonSet Agent  │ ───────────→ │  Jaeger  │
-│ (auto-instr) │    本节点 hostPort   │  (k8sattributes)  │              │  (UI)    │
-└─────────────┘                      └──────────────────┘              └──────────┘
+┌─────────────┐   OTLP (节点IP:4317)   ┌──────────────────┐    OTLP     ┌──────────┐
+│  应用 Pod    │ ──────────────────────→ │  DaemonSet Agent  │ ──────────→ │  Jaeger  │
+│ (auto-instr) │    hostPort 同节点      │  batch 处理       │             │  UI      │
+└─────────────┘                          └──────────────────┘             └──────────┘
 ```
 
 | 组件 | 说明 |
 |------|------|
 | **OTel Operator** | 管理 Instrumentation CR，自动注入 javaagent |
-| **DaemonSet Collector** | 每节点一个，通过 hostPort 接收 Pod 数据，附上 k8s 元数据后转发 |
-| **Jaeger all-in-one** | 测试环境用，同时接收 OTLP 并提供 UI 查看 Trace |
+| **DaemonSet Collector** | 每节点一个，通过 hostPort 接收 Pod 数据后转发 |
+| **Jaeger all-in-one** | 测试环境用，接收 OTLP 并提供 UI 查看 Trace |
+
+> ⚠️ k8sattributes processor 需要访问 K8s API，kind 环境中不稳定，测试环境先去掉。
+
+---
+
+## 前置条件
+
+```bash
+kubectl get pods -n cert-manager
+
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+helm install cert-manager jetstack/cert-manager \
+  --namespace cert-manager \
+  --create-namespace \
+  --set installCRDs=true
+
+kubectl wait --for=condition=ready pod \
+  -l app.kubernetes.io/instance=cert-manager \
+  -n cert-manager --timeout=120s
+```
 
 ---
 
 ## 1. 安装 OTel Operator
 
 ```bash
-# 添加 Helm 仓库
 helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
 helm repo update
 
-# 创建命名空间
 kubectl create namespace observability
 
-# 安装 Operator
 helm install opentelemetry-operator open-telemetry/opentelemetry-operator \
   --namespace observability \
   --set manager.collectorImage.repository=otel/opentelemetry-collector-contrib \
   --set admissionWebhooks.certManager.enabled=true
 
-# 等待 Operator 就绪
 kubectl wait --for=condition=ready pod \
   -l app.kubernetes.io/name=opentelemetry-operator \
-  -n observability \
-  --timeout=120s
+  -n observability --timeout=120s
 
-# 验证
 kubectl get pods -n observability
-# 预期输出：opentelemetry-operator-xxx Running
 ```
 
 ---
 
 ## 2. 部署 Jaeger（测试后端）
-
-> 测试环境用 Jaeger all-in-one 最简单，无需 Tempo + Grafana 全套。
 
 ```bash
 kubectl apply -f - <<'EOF'
@@ -74,9 +86,9 @@ spec:
         - name: COLLECTOR_OTLP_ENABLED
           value: "true"
         ports:
-        - containerPort: 16686   # UI
-        - containerPort: 4317    # OTLP gRPC
-        - containerPort: 4318    # OTLP HTTP
+        - containerPort: 16686
+        - containerPort: 4317
+        - containerPort: 4318
 ---
 apiVersion: v1
 kind: Service
@@ -86,10 +98,12 @@ metadata:
 spec:
   selector:
     app: jaeger
+  type: NodePort
   ports:
   - name: ui
     port: 16686
     targetPort: 16686
+    nodePort: 30686
   - name: otlp-grpc
     port: 4317
     targetPort: 4317
@@ -100,14 +114,24 @@ EOF
 
 kubectl wait --for=condition=ready pod \
   -l app=jaeger -n observability --timeout=60s
+
+# 记录 ClusterIP，下一步要用
+kubectl get svc jaeger -n observability
 ```
 
 ---
 
 ## 3. 部署 DaemonSet Collector
 
+> ⚠️ **关键**：endpoint 用 Jaeger 的 ClusterIP，不要用域名。
+> kind 环境 DaemonSet Pod 跨节点 DNS 解析不稳定。
+
 ```bash
-kubectl apply -f - <<'EOF'
+# 获取 Jaeger ClusterIP
+JAEGER_IP=$(kubectl get svc jaeger -n observability -o jsonpath='{.spec.clusterIP}')
+echo "Jaeger ClusterIP: $JAEGER_IP"
+
+cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -128,21 +152,13 @@ data:
         limit_mib: 400
         spike_limit_mib: 100
         check_interval: 5s
-      k8sattributes:
-        auth_type: serviceAccount
-        extract:
-          metadata:
-            - k8s.pod.name
-            - k8s.namespace.name
-            - k8s.node.name
-            - k8s.deployment.name
       batch:
         send_batch_size: 512
         timeout: 5s
 
     exporters:
       otlp/jaeger:
-        endpoint: "jaeger.observability.svc.cluster.local:4317"
+        endpoint: "${JAEGER_IP}:4317"
         tls:
           insecure: true
       debug:
@@ -152,9 +168,11 @@ data:
       pipelines:
         traces:
           receivers:  [otlp]
-          processors: [memory_limiter, k8sattributes, batch]
+          processors: [memory_limiter, batch]
           exporters:  [otlp/jaeger, debug]
----
+EOF
+
+kubectl apply -f - <<'EOF'
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -224,45 +242,24 @@ spec:
       - name: config
         configMap:
           name: otel-agent-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: otel-collector-agent
-  namespace: observability
-spec:
-  selector:
-    app: otel-collector-agent
-  ports:
-  - name: otlp-grpc
-    port: 4317
-    targetPort: 4317
-  - name: otlp-http
-    port: 4318
-    targetPort: 4318
 EOF
 
 kubectl wait --for=condition=ready pod \
   -l app=otel-collector-agent -n observability --timeout=60s
 ```
 
-### 数据流向
-
-```
-应用 Pod → hostPort:4317 → DaemonSet Collector → jaeger.observability:4317
-                              │
-                              ├─ k8sattributes（附上 pod/ns/node 元数据）
-                              ├─ batch（攒满 512 条或 5s 再发）
-                              └─ debug（控制台打印 span，测试用）
-```
-
 ---
 
 ## 4. 创建 Instrumentation CR
 
-> Instrumentation 必须和应用在**同一个 namespace**。
+> ⚠️ **关键**：endpoint 必须用 `$(OTEL_NODE_IP)`，不能用 `$(NODE_IP)`。
+>
+> - `OTEL_NODE_IP` 是 Operator **自动注入**的变量，值为节点 IP，K8s 会在容器启动时展开
+> - `NODE_IP` 是自定义变量，Operator 注入时不认识，不会展开，变成字面字符串导致连接失败
 
 ```bash
+kubectl create namespace test --dry-run=client -o yaml | kubectl apply -f -
+
 kubectl apply -f - <<'EOF'
 apiVersion: opentelemetry.io/v1alpha1
 kind: Instrumentation
@@ -271,7 +268,7 @@ metadata:
   namespace: test
 spec:
   exporter:
-    endpoint: http://$(NODE_IP):4317
+    endpoint: http://$(OTEL_NODE_IP):4317
   propagators:
     - tracecontext
     - baggage
@@ -287,41 +284,42 @@ spec:
 EOF
 ```
 
-### 关键参数说明
-
-| 参数 | 说明 |
-|------|------|
-| `spec.exporter.endpoint` | `$(NODE_IP)` 由应用 env 注入，指向本节点 DaemonSet |
-| `propagators[0]: tracecontext` | W3C 标准，跨服务传播 TraceID |
-| `sampler: parentbased_always_on` | 采样决策交给上游/Collector |
-| `java.image` | 自动注入用的 javaagent 镜像 |
-
 ---
 
 ## 5. 部署应用
 
+> ⚠️ **注意**：Spring Boot AOT（native image）不支持 Java agent 注入。
+> `springcommunity/spring-petclinic` 是 AOT 版本，必须换用普通 JVM 镜像。
+
 ```bash
+# 先在宿主机拉取，再 load 进 kind
+docker pull docker.io/arey/springboot-petclinic:latest
+kind load docker-image docker.io/arey/springboot-petclinic:latest --name kind
+
 kubectl apply -f - <<'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: order-service
+  name: petclinic
   namespace: test
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: order-service
+      app: petclinic
   template:
     metadata:
       labels:
-        app: order-service
+        app: petclinic
       annotations:
         instrumentation.opentelemetry.io/inject-java: "true"
     spec:
       containers:
       - name: app
-        image: your-registry/order-service:latest
+        image: docker.io/arey/springboot-petclinic:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
         resources:
           requests:
             memory: 512Mi
@@ -330,27 +328,31 @@ spec:
             memory: 1Gi
             cpu: 1000m
         env:
+        # 内存配置用 JDK_JAVA_OPTIONS（Java 9+），不占用 JAVA_TOOL_OPTIONS
+        # JAVA_TOOL_OPTIONS 留给 Operator 注入 -javaagent，不要手写
         - name: JDK_JAVA_OPTIONS
-          value: "-XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC"
+          value: "-XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0"
         - name: OTEL_SERVICE_NAME
-          value: "order-service"
+          value: "petclinic"
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: "deployment.environment=test,service.version=1.0.0"
-        - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
+        # 不要自己定义 NODE_IP 和 OTEL_EXPORTER_OTLP_ENDPOINT
+        # 由 Instrumentation CR 的 exporter.endpoint 统一控制
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: petclinic
+  namespace: test
+spec:
+  selector:
+    app: petclinic
+  ports:
+  - port: 8080
+    targetPort: 8080
 EOF
-```
 
-### 注入原理
-
-```
-Operator 监听到 Pod 带有注解 ──→ 注入 initContainer（复制 javaagent.jar）
-                                    │
-                                    ▼
-                              注入 JAVA_TOOL_OPTIONS = -javaagent:xxx.jar
-                              （不覆盖 JDK_JAVA_OPTIONS，两个变量独立）
+kubectl rollout status deployment/petclinic -n test
 ```
 
 ---
@@ -358,21 +360,33 @@ Operator 监听到 Pod 带有注解 ──→ 注入 initContainer（复制 java
 ## 6. 验证注入
 
 ```bash
-# 1. 检查 initContainer 是否注入
-kubectl describe pod -l app=order-service -n test | grep -A 10 "Init Containers"
+# 1. 确认 initContainer 注入成功
+kubectl describe pod -l app=petclinic -n test | grep -A5 "Init Containers"
 # 预期：opentelemetry-auto-instrumentation-java
 
-# 2. 检查 JAVA_TOOL_OPTIONS
-kubectl get pod -l app=order-service -n test -o yaml | grep -A 2 "JAVA_TOOL_OPTIONS"
-# 预期：-javaagent:/otel-auto-instrumentation/javaagent.jar
+# 2. 确认 JAVA_TOOL_OPTIONS 有 javaagent
+kubectl get pod -l app=petclinic -n test \
+  -o jsonpath='{.items[0].spec.containers[0].env}' \
+  | python3 -m json.tool | grep -A2 "JAVA_TOOL_OPTIONS"
+# 预期：-javaagent:/otel-auto-instrumentation-java-app/javaagent.jar
 
-# 3. 确认 JDK_JAVA_OPTIONS 未被覆盖
-kubectl get pod -l app=order-service -n test -o yaml | grep -A 2 "JDK_JAVA_OPTIONS"
-# 预期：你配的内存参数仍在
+# 3. 确认 JDK_JAVA_OPTIONS 内存参数未被覆盖
+kubectl get pod -l app=petclinic -n test \
+  -o jsonpath='{.items[0].spec.containers[0].env}' \
+  | python3 -m json.tool | grep -A2 "JDK_JAVA_OPTIONS"
+# 预期：-XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0
 
-# 4. 检查 agent 加载日志
-kubectl logs -l app=order-service -n test | grep -i "opentelemetry\|javaagent"
-# 预期：[otel.javaagent ... ] INFO ... OpenTelemetry agent loaded
+# 4. 确认 OTLP endpoint 用了 OTEL_NODE_IP
+kubectl get pod -l app=petclinic -n test \
+  -o jsonpath='{.items[0].spec.containers[0].env}' \
+  | python3 -m json.tool | grep -A2 "OTLP_ENDPOINT"
+# 预期：http://$(OTEL_NODE_IP):4317
+
+# 5. 确认 agent 加载成功
+kubectl logs -l app=petclinic -n test | head -5
+# 预期：
+# Picked up JAVA_TOOL_OPTIONS: -javaagent:...
+# [otel.javaagent ...] INFO ... opentelemetry-javaagent - version: 1.32.0
 ```
 
 ---
@@ -380,26 +394,70 @@ kubectl logs -l app=order-service -n test | grep -i "opentelemetry\|javaagent"
 ## 7. 发送请求查看 Trace
 
 ```bash
-# 转发 Jaeger UI 到本地
-kubectl port-forward svc/jaeger -n observability 16686:16686
+# 转发端口
+kubectl port-forward svc/petclinic -n test 8080:8080 &
 
-# 发送测试请求
-curl http://localhost:8080/api/orders
+# 打请求（arey/springboot-petclinic 是 REST API）
+for i in {1..10}; do
+  curl -s http://localhost:8080/api/owners > /dev/null
+  curl -s http://localhost:8080/api/vets > /dev/null
+done
 
-# 浏览器打开 Jaeger UI
-# http://localhost:16686
-# Service 下拉选 order-service → Find Traces
+# 确认 Collector 收到数据
+kubectl logs -n observability -l app=otel-collector-agent --since=30s \
+  | grep -i "span\|ResourceSpan\|traces"
+
+# 访问 Jaeger UI（NodePort，其他主机也可访问）
+# http://<机器IP>:30686
+# Service 选 petclinic，点 Find Traces
 ```
 
 ---
 
-## 常见问题排查
+## 常见问题
 
-### Pod Pending / InitContainer 失败
+### Collector 连不上 Jaeger（DNS 解析失败）
 
 ```bash
-kubectl describe pod -l app=order-service -n test
-# 检查 initContainer 镜像拉取状态，如果失败换成可访问的镜像仓库
+# 症状：dial tcp: lookup jaeger.observability.svc.cluster.local: connection refused
+# 原因：kind DaemonSet Pod 跨节点 DNS 不稳定
+
+JAEGER_IP=$(kubectl get svc jaeger -n observability -o jsonpath='{.spec.clusterIP}')
+kubectl get configmap otel-agent-config -n observability -o yaml \
+  | sed "s|jaeger.observability.svc.cluster.local|${JAEGER_IP}|g" \
+  | kubectl apply -f -
+kubectl rollout restart daemonset otel-collector-agent -n observability
+```
+
+### agent 未加载（日志没有 otel.javaagent）
+
+```bash
+# 检查是否是 AOT/native image
+kubectl logs -l app=petclinic -n test | head -3
+# 看到 "AOT-processed" 说明是 native image，必须换镜像
+# 推荐：docker.io/arey/springboot-petclinic:latest（标准 JVM）
+```
+
+### OTLP endpoint 未展开（显示字面字符串）
+
+```bash
+# 症状：OTEL_EXPORTER_OTLP_ENDPOINT = http://$(NODE_IP):4317
+# 原因：用了自定义变量名，Operator 不认识，改用 $(OTEL_NODE_IP)
+
+kubectl patch instrumentation auto-instrumentation -n test \
+  --type=merge \
+  -p '{"spec":{"exporter":{"endpoint":"http://$(OTEL_NODE_IP):4317"}}}'
+kubectl rollout restart deployment/petclinic -n test
+```
+
+### Pod 重启后数据又断了
+
+```bash
+# 症状：硬编码了 Collector Pod IP，Pod 重启后 IP 变了
+# 原因：Pod IP 不固定，不能硬编码
+# 解法：用 $(OTEL_NODE_IP) + hostPort
+#       DaemonSet 在每个节点监听固定 hostPort 4317
+#       无论 Pod 调度到哪个节点，永远打到同节点 Collector
 ```
 
 ### Operator 未触发注入
@@ -408,15 +466,9 @@ kubectl describe pod -l app=order-service -n test
 kubectl logs -n observability \
   deployment/opentelemetry-operator-controller-manager \
   -c manager | grep -i "inject\|error"
-```
 
-### Collector 收不到数据
-
-```bash
-# 查看 DaemonSet 日志
-kubectl logs -n observability -l app=otel-collector-agent | tail -50
-
-# 确认 hostPort 4317 在节点上监听
-kubectl get pods -n observability -o wide
-ss -tlnp | grep 4317
+# 常见原因：
+# 1. 注解拼写错误，正确写法：
+#    instrumentation.opentelemetry.io/inject-java: "true"
+# 2. Instrumentation CR 和应用不在同一 namespace
 ```
