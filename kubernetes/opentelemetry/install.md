@@ -1,5 +1,26 @@
-第一步：安装 OTel Operator
-bash# 加 helm repo
+# OpenTelemetry Operator 安装指南
+
+## 架构概览
+
+```
+┌─────────────┐     OTLP (4317)     ┌──────────────────┐     OTLP      ┌──────────┐
+│  应用 Pod    │ ──────────────────→ │  DaemonSet Agent  │ ───────────→ │  Jaeger  │
+│ (auto-instr) │    本节点 hostPort   │  (k8sattributes)  │              │  (UI)    │
+└─────────────┘                      └──────────────────┘              └──────────┘
+```
+
+| 组件 | 说明 |
+|------|------|
+| **OTel Operator** | 管理 Instrumentation CR，自动注入 javaagent |
+| **DaemonSet Collector** | 每节点一个，通过 hostPort 接收 Pod 数据，附上 k8s 元数据后转发 |
+| **Jaeger all-in-one** | 测试环境用，同时接收 OTLP 并提供 UI 查看 Trace |
+
+---
+
+## 1. 安装 OTel Operator
+
+```bash
+# 添加 Helm 仓库
 helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
 helm repo update
 
@@ -12,7 +33,7 @@ helm install opentelemetry-operator open-telemetry/opentelemetry-operator \
   --set manager.collectorImage.repository=otel/opentelemetry-collector-contrib \
   --set admissionWebhooks.certManager.enabled=true
 
-# 等 Operator 就绪
+# 等待 Operator 就绪
 kubectl wait --for=condition=ready pod \
   -l app.kubernetes.io/name=opentelemetry-operator \
   -n observability \
@@ -20,11 +41,17 @@ kubectl wait --for=condition=ready pod \
 
 # 验证
 kubectl get pods -n observability
-# 应该看到 opentelemetry-operator-xxx Running
+# 预期输出：opentelemetry-operator-xxx Running
+```
 
-第二步：部署测试后端（Jaeger，看 Trace 用）
-测试环境用 Jaeger all-in-one 最简单，不用配 Tempo + Grafana 那一套：
-bashkubectl apply -f - <<'EOF'
+---
+
+## 2. 部署 Jaeger（测试后端）
+
+> 测试环境用 Jaeger all-in-one 最简单，无需 Tempo + Grafana 全套。
+
+```bash
+kubectl apply -f - <<'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -73,9 +100,14 @@ EOF
 
 kubectl wait --for=condition=ready pod \
   -l app=jaeger -n observability --timeout=60s
+```
 
-第三步：部署 DaemonSet Collector
-bashkubectl apply -f - <<'EOF'
+---
+
+## 3. 部署 DaemonSet Collector
+
+```bash
+kubectl apply -f - <<'EOF'
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -114,7 +146,7 @@ data:
         tls:
           insecure: true
       debug:
-        verbosity: basic          # 测试时开着，能在日志里看到 span
+        verbosity: basic
 
     service:
       pipelines:
@@ -182,7 +214,7 @@ spec:
             memory: 500Mi
         ports:
         - containerPort: 4317
-          hostPort: 4317            # 暴露到节点端口，Pod 才能访问
+          hostPort: 4317
         - containerPort: 4318
           hostPort: 4318
         volumeMounts:
@@ -212,25 +244,39 @@ EOF
 
 kubectl wait --for=condition=ready pod \
   -l app=otel-collector-agent -n observability --timeout=60s
+```
 
-第四步：创建 Instrumentation CR
-bashkubectl apply -f - <<'EOF'
+### 数据流向
+
+```
+应用 Pod → hostPort:4317 → DaemonSet Collector → jaeger.observability:4317
+                              │
+                              ├─ k8sattributes（附上 pod/ns/node 元数据）
+                              ├─ batch（攒满 512 条或 5s 再发）
+                              └─ debug（控制台打印 span，测试用）
+```
+
+---
+
+## 4. 创建 Instrumentation CR
+
+> Instrumentation 必须和应用在**同一个 namespace**。
+
+```bash
+kubectl apply -f - <<'EOF'
 apiVersion: opentelemetry.io/v1alpha1
 kind: Instrumentation
 metadata:
   name: auto-instrumentation
-  namespace: test                 # 和你的应用在同一个 namespace
+  namespace: test
 spec:
   exporter:
-    endpoint: http://$(NODE_IP):4317   # 打到本节点 DaemonSet
-
+    endpoint: http://$(NODE_IP):4317
   propagators:
-    - tracecontext                # W3C 标准，跨服务传播 TraceID
+    - tracecontext
     - baggage
-
   sampler:
-    type: parentbased_always_on   # 采样决策交给 Collector
-
+    type: parentbased_always_on
   java:
     image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:1.32.0
     env:
@@ -239,9 +285,23 @@ spec:
     - name: OTEL_INSTRUMENTATION_SPRING_WEB_ENABLED
       value: "true"
 EOF
+```
 
-第五步：部署你的应用
-bashkubectl apply -f - <<'EOF'
+### 关键参数说明
+
+| 参数 | 说明 |
+|------|------|
+| `spec.exporter.endpoint` | `$(NODE_IP)` 由应用 env 注入，指向本节点 DaemonSet |
+| `propagators[0]: tracecontext` | W3C 标准，跨服务传播 TraceID |
+| `sampler: parentbased_always_on` | 采样决策交给上游/Collector |
+| `java.image` | 自动注入用的 javaagent 镜像 |
+
+---
+
+## 5. 部署应用
+
+```bash
+kubectl apply -f - <<'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -257,7 +317,6 @@ spec:
       labels:
         app: order-service
       annotations:
-        # 关键注解，触发自动注入
         instrumentation.opentelemetry.io/inject-java: "true"
     spec:
       containers:
@@ -271,68 +330,93 @@ spec:
             memory: 1Gi
             cpu: 1000m
         env:
-        # 内存配置，和 limit 联动
         - name: JDK_JAVA_OPTIONS
           value: "-XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC"
-
-        # OTel 服务信息
         - name: OTEL_SERVICE_NAME
           value: "order-service"
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: "deployment.environment=test,service.version=1.0.0"
-
-        # NODE_IP，让应用知道往哪里打数据
         - name: NODE_IP
           valueFrom:
             fieldRef:
               fieldPath: status.hostIP
-
-        # JAVA_TOOL_OPTIONS 不写，留给 Operator 注入 -javaagent
 EOF
+```
 
-第六步：验证注入是否成功
-bash# 1. 看 Pod 是否有 initContainer
+### 注入原理
+
+```
+Operator 监听到 Pod 带有注解 ──→ 注入 initContainer（复制 javaagent.jar）
+                                    │
+                                    ▼
+                              注入 JAVA_TOOL_OPTIONS = -javaagent:xxx.jar
+                              （不覆盖 JDK_JAVA_OPTIONS，两个变量独立）
+```
+
+---
+
+## 6. 验证注入
+
+```bash
+# 1. 检查 initContainer 是否注入
 kubectl describe pod -l app=order-service -n test | grep -A 10 "Init Containers"
-# 应该看到 opentelemetry-auto-instrumentation-java
+# 预期：opentelemetry-auto-instrumentation-java
 
-# 2. 看注入的环境变量
+# 2. 检查 JAVA_TOOL_OPTIONS
 kubectl get pod -l app=order-service -n test -o yaml | grep -A 2 "JAVA_TOOL_OPTIONS"
-# 应该看到 -javaagent:/otel-auto-instrumentation/javaagent.jar
+# 预期：-javaagent:/otel-auto-instrumentation/javaagent.jar
 
-# 3. 同时确认 JDK_JAVA_OPTIONS 还在
+# 3. 确认 JDK_JAVA_OPTIONS 未被覆盖
 kubectl get pod -l app=order-service -n test -o yaml | grep -A 2 "JDK_JAVA_OPTIONS"
-# 应该看到你配的内存参数，没有被覆盖
+# 预期：你配的内存参数仍在
 
-# 4. 看应用日志，JVM 启动时会打印 agent 加载信息
+# 4. 检查 agent 加载日志
 kubectl logs -l app=order-service -n test | grep -i "opentelemetry\|javaagent"
-# 应该看到类似：
-# [otel.javaagent 2024-xx-xx] INFO ... OpenTelemetry agent loaded
+# 预期：[otel.javaagent ... ] INFO ... OpenTelemetry agent loaded
+```
 
-第七步：打几个请求，看 Trace
-bash# 转发 Jaeger UI 到本地
+---
+
+## 7. 发送请求查看 Trace
+
+```bash
+# 转发 Jaeger UI 到本地
 kubectl port-forward svc/jaeger -n observability 16686:16686
 
-# 另开终端打请求
+# 发送测试请求
 curl http://localhost:8080/api/orders
 
-# 浏览器打开
-open http://localhost:16686
-# Service 下拉选 order-service，点 Find Traces
+# 浏览器打开 Jaeger UI
+# http://localhost:16686
+# Service 下拉选 order-service → Find Traces
+```
 
-常见报错速查
-bash# Pod 一直 Pending，看 initContainer 状态
+---
+
+## 常见问题排查
+
+### Pod Pending / InitContainer 失败
+
+```bash
 kubectl describe pod -l app=order-service -n test
-# 如果 initContainer 拉镜像失败，换成能访问的镜像仓库地址
+# 检查 initContainer 镜像拉取状态，如果失败换成可访问的镜像仓库
+```
 
-# Operator 没有触发注入，看 Operator 日志
+### Operator 未触发注入
+
+```bash
 kubectl logs -n observability \
   deployment/opentelemetry-operator-controller-manager \
   -c manager | grep -i "inject\|error"
+```
 
-# Collector 收不到数据，看 DaemonSet 日志
+### Collector 收不到数据
+
+```bash
+# 查看 DaemonSet 日志
 kubectl logs -n observability -l app=otel-collector-agent | tail -50
 
 # 确认 hostPort 4317 在节点上监听
-kubectl get pods -n observability -o wide   # 看 DaemonSet 跑在哪个节点
-# ssh 上去
+kubectl get pods -n observability -o wide
 ss -tlnp | grep 4317
+```
