@@ -123,14 +123,8 @@ kubectl get svc jaeger -n observability
 
 ## 3. 部署 DaemonSet Collector
 
-> ⚠️ **关键**：endpoint 用 Jaeger 的 ClusterIP，不要用域名。
-> kind 环境 DaemonSet Pod 跨节点 DNS 解析不稳定。
-
 ```bash
 # 获取 Jaeger ClusterIP
-JAEGER_IP=$(kubectl get svc jaeger -n observability -o jsonpath='{.spec.clusterIP}')
-echo "Jaeger ClusterIP: $JAEGER_IP"
-
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: ConfigMap
@@ -158,7 +152,7 @@ data:
 
     exporters:
       otlp/jaeger:
-        endpoint: "${JAEGER_IP}:4317"
+        endpoint: "jaeger:4317"
         tls:
           insecure: true
       debug:
