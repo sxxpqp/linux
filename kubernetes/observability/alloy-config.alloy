@@ -20,21 +20,14 @@ otelcol.processor.batch "default" {
 
   output {
     traces  = [otelcol.exporter.otlp.tempo.input]
-    metrics = [prometheus.remote_write.metrics.receiver]
+    metrics = [otelcol.exporter.otlp.tempo.input]
   }
 }
 
-// 1. 发送链路给 Tempo
+// 发送链路给 Tempo
 otelcol.exporter.otlp "tempo" {
   client {
     endpoint = "tempo-distributor:4317"
     tls { insecure = true }
-  }
-}
-
-// 2. 发送指标给 Prometheus（Remote Write）
-prometheus.remote_write "metrics" {
-  endpoint {
-    url = "http://prometheus-kube-prometheus-prometheus.monitoring:9090/api/v1/write"
   }
 }
