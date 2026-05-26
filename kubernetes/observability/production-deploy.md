@@ -76,14 +76,7 @@
 ### Cert Manager
 
 ```bash
-helm repo add jetstack https://charts.jetstack.io
-helm repo update
-
-helm install cert-manager jetstack/cert-manager \
-  --namespace cert-manager \
-  --create-namespace \
-  --set installCRDs=true
-
+kubectl apply -f cert-manager/cert-manager.yaml
 kubectl wait --for=condition=ready pod \
   -l app.kubernetes.io/instance=cert-manager \
   -n cert-manager --timeout=120s
@@ -129,44 +122,7 @@ helm install tempo grafana/tempo \
 
 ### 3.2 values 文件
 
-```yaml
-# tempo-values.yaml
-tempo:
-  replicas: 3
-
-  storage:
-    trace:
-      backend: s3
-      s3:
-        bucket: tempo-traces
-        endpoint: minio.observability:9000
-        access_key: minioadmin
-        secret_key: minioadmin
-        insecure: true
-      wal:
-        path: /var/tempo/wal
-
-  receivers:
-    otlp:
-      protocols:
-        grpc:
-          endpoint: 0.0.0.0:4317
-        http:
-          endpoint: 0.0.0.0:4318
-
-service:
-  type: ClusterIP
-  ports:
-    - name: otlp-grpc
-      port: 4317
-      targetPort: 4317
-    - name: otlp-http
-      port: 4318
-      targetPort: 4318
-    - name: http
-      port: 3100
-      targetPort: 3100
-```
+> 完整配置见 [tempo-values.yaml](tempo-values.yaml)。核心变更：`replicas: 3` + `backend: s3`。
 
 ### 3.3 验证
 
@@ -221,62 +177,10 @@ otelcol.exporter.otlp "tempo" {
 }
 ```
 
-### 4.3 部署 Alloy DaemonSet
+### 4.3 部署 Alloy
 
 ```bash
-kubectl apply -f - <<'EOF'
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: alloy
-  namespace: observability
-spec:
-  selector:
-    matchLabels:
-      app: alloy
-  template:
-    metadata:
-      labels:
-        app: alloy
-    spec:
-      containers:
-      - name: alloy
-        image: grafana/alloy:latest
-        args:
-          - "run"
-          - "/etc/alloy/config.alloy"
-        ports:
-        - containerPort: 4317
-          hostPort: 4317
-          name: otlp-grpc
-        - containerPort: 4318
-          hostPort: 4318
-          name: otlp-http
-        volumeMounts:
-        - name: config
-          mountPath: /etc/alloy
-      volumes:
-      - name: config
-        configMap:
-          name: alloy-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: alloy
-  namespace: observability
-spec:
-  selector:
-    app: alloy
-  ports:
-  - name: otlp-grpc
-    port: 4317
-    targetPort: 4317
-  - name: otlp-http
-    port: 4318
-    targetPort: 4318
-EOF
-
+kubectl apply -f alloy.yaml
 kubectl wait --for=condition=ready pod -l app=alloy -n observability --timeout=120s
 ```
 
@@ -292,114 +196,12 @@ kubectl wait --for=condition=ready pod -l app=alloy -n observability --timeout=1
 
 ## 5. 部署 Beyla（eBPF 自动埋点）
 
-### 5.1 RBAC
-
 ```bash
-kubectl apply -f - <<'EOF'
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: beyla
-  namespace: observability
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: beyla
-rules:
-- apiGroups: [""]
-  resources: ["pods", "nodes", "services", "endpoints"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: ["apps"]
-  resources: ["replicasets", "deployments"]
-  verbs: ["get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: beyla
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: beyla
-subjects:
-- kind: ServiceAccount
-  name: beyla
-  namespace: observability
-EOF
+kubectl apply -f beyla.yaml
+kubectl rollout status daemonset/beyla -n observability --timeout=120s
 ```
 
-### 5.2 ConfigMap + DaemonSet
-
-```bash
-kubectl apply -f - <<'EOF'
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: beyla-config
-  namespace: observability
-data:
-  beyla-config.yml: |
-    discovery:
-      instrument:
-        - k8s_namespace: default
-    features:
-      - http2
-      - tls
-    otel_traces_export:
-      endpoint: http://alloy.observability:4318
-      protocol: http/protobuf
-    otel_metrics_export:
-      endpoint: http://alloy.observability:4318
-      protocol: http/protobuf
-    attributes:
-      kubernetes:
-        enable: true
-    log_level: info
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: beyla
-  namespace: observability
-spec:
-  selector:
-    matchLabels:
-      app: beyla
-  template:
-    metadata:
-      labels:
-        app: beyla
-    spec:
-      hostPID: true
-      hostNetwork: true
-      serviceAccountName: beyla
-      containers:
-      - name: beyla
-        image: grafana/beyla:latest
-        securityContext:
-          privileged: true
-          runAsUser: 0
-        env:
-        - name: BEYLA_CONFIG_PATH
-          value: /etc/beyla/beyla-config.yml
-        volumeMounts:
-        - name: beyla-config
-          mountPath: /etc/beyla
-        - name: sys-kernel
-          mountPath: /sys/kernel
-          readOnly: true
-      volumes:
-      - name: beyla-config
-        configMap:
-          name: beyla-config
-      - name: sys-kernel
-        hostPath:
-          path: /sys/kernel
-EOF
-```
-
-> ⚠️ **Beyla 的 endpoint 用 Service DNS `alloy.observability:4318`**，不再硬编码 IP。只要 Alloy Service 不删，IP 随便变。
+> beyla.yaml 包含 ServiceAccount + ClusterRole + ClusterRoleBinding + ConfigMap + DaemonSet，见 [beyla.yaml](beyla.yaml)。
 
 ---
 
@@ -415,29 +217,7 @@ helm install grafana grafana/grafana \
 
 ### 6.2 values 文件
 
-```yaml
-# grafana-values.yaml
-adminPassword: "admin123"
-
-service:
-  type: NodePort
-  nodePort: 30300
-
-datasources:
-  datasources.yaml:
-    apiVersion: 1
-    datasources:
-      - name: Tempo
-        type: tempo
-        url: http://tempo.observability:3100      # 查询端口 3100，不是 4317
-        access: proxy
-        isDefault: true
-        jsonData:
-          nodeGraph:
-            enabled: true
-          lokiSearch:
-            datasourceUid: loki
-```
+> 完整配置见 [grafana-values.yaml](grafana-values.yaml)。NodePort:30300，Tempo 数据源连 `tempo.observability:3100`。
 
 ---
 

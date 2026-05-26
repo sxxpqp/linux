@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: beyla
+  namespace: observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: beyla
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["replicasets", "deployments"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: beyla
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: beyla
+subjects:
+- kind: ServiceAccount
+  name: beyla
+  namespace: observability
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-config
+  namespace: observability
+data:
+  beyla-config.yml: |
+    discovery:
+      instrument:
+        - k8s_namespace: default
+    features:
+      - http2
+      - tls
+    otel_traces_export:
+      endpoint: http://alloy.observability:4318
+      protocol: http/protobuf
+    otel_metrics_export:
+      endpoint: http://alloy.observability:4318
+      protocol: http/protobuf
+    attributes:
+      kubernetes:
+        enable: true
+    log_level: info
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app: beyla
+  template:
+    metadata:
+      labels:
+        app: beyla
+    spec:
+      hostPID: true
+      hostNetwork: true
+      serviceAccountName: beyla
+      containers:
+      - name: beyla
+        image: grafana/beyla:latest
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        env:
+        - name: BEYLA_CONFIG_PATH
+          value: /etc/beyla/beyla-config.yml
+        volumeMounts:
+        - name: beyla-config
+          mountPath: /etc/beyla
+        - name: sys-kernel
+          mountPath: /sys/kernel
+          readOnly: true
+      volumes:
+      - name: beyla-config
+        configMap:
+          name: beyla-config
+      - name: sys-kernel
+        hostPath:
+          path: /sys/kernel

@@ -1,0 +1,20 @@
+adminPassword: "admin123"
+
+service:
+  type: NodePort
+  nodePort: 30300
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        type: tempo
+        url: http://tempo.observability:3100
+        access: proxy
+        isDefault: true
+        jsonData:
+          nodeGraph:
+            enabled: true
+          lokiSearch:
+            datasourceUid: loki
