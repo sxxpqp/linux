@@ -116,7 +116,7 @@ spec:
         image: margaritamedel/python-hello:latest
         imagePullPolicy: Always
         ports:
-        - containerPort: 8080
+        - containerPort: 5000
         resources:
           requests:
             cpu: 100m
@@ -133,8 +133,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-  - port: 8080
-    targetPort: 8080
+  - port: 5000
+    targetPort: 5000
     name: http
   selector:
     app: python-hello
@@ -146,4 +146,4 @@ spec:
 #   kubectl create deployment java-hello   --image=mononoke/spring-boot-hello:29
 #   kubectl expose deployment java-hello   --port=8000 --target-port=8000
 #   kubectl create deployment python-hello --image=margaritamedel/python-hello:latest
-#   kubectl expose deployment python-hello --port=8080 --target-port=8080
+#   kubectl expose deployment python-hello --port=5000 --target-port=5000
