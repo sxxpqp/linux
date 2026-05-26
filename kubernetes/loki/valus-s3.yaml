@@ -22,8 +22,8 @@ loki:
     type: s3
     s3:  
       endpoint: minio.observability:9000
-      accessKeyId: admin
-      secretAccessKey: admin
+      accessKeyId: minioadmin
+      secretAccessKey: minioadmin
       insecure: true
       http_config:
         insecure_skip_verify: true  
