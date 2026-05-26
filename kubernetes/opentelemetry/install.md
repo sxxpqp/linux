@@ -3,17 +3,41 @@
 ## 架构概览
 
 ```
-┌─────────────┐   OTLP (节点IP:4317)   ┌──────────────────┐    OTLP     ┌──────────┐
-│  应用 Pod    │ ──────────────────────→ │  DaemonSet Agent  │ ──────────→ │  Jaeger  │
-│ (auto-instr) │    hostPort 同节点      │  batch 处理       │             │  UI      │
-└─────────────┘                          └──────────────────┘             └──────────┘
+                    ┌─────────────────────────┐
+                    │    OTel Operator         │  ← Deployment，集群唯一
+                    │                          │
+                    │  1. 监听到 Pod 带有注解   │
+                    │  2. 注入 initContainer   │
+                    │  3. 注入 JAVA_TOOL_OPTIONS│
+                    └─────┬───────────────────┘
+                          │ 注入 javaagent + 环境变量
+                          ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  Node                                                           │
+│                                                                 │
+│  ┌─────────────┐   OTLP (hostPort:4317)   ┌──────────────────┐ │
+│  │  应用 Pod    │ ────────────────────────→│  DaemonSet Agent │ │
+│  │ (javaagent) │    $(OTEL_NODE_IP):4317  │  - 就近接收      │ │
+│  └─────────────┘                          │  - 批量攒批      │ │
+│                                           │  - 限流保护      │ │
+│                                           └────────┬─────────┘ │
+│                                                    │            │
+└────────────────────────────────────────────────────┼────────────┘
+                                                     │ OTLP
+                                                     ▼
+                                             ┌──────────────┐
+                                             │    Jaeger     │
+                                             │  (Trace 存储) │
+                                             └──────────────┘
 ```
 
-| 组件 | 说明 |
-|------|------|
-| **OTel Operator** | 管理 Instrumentation CR，自动注入 javaagent |
-| **DaemonSet Collector** | 每节点一个，通过 hostPort 接收 Pod 数据后转发 |
-| **Jaeger all-in-one** | 测试环境用，接收 OTLP 并提供 UI 查看 Trace |
+| 组件 | 部署方式 | 负责 |
+|------|---------|------|
+| **OTel Operator** | Deployment | 管理 Instrumentation CR，自动注入 javaagent（Pod 层面） |
+| **DaemonSet Agent** | DaemonSet | 每节点一个，通过 hostPort 接收 Pod 数据，攒批后转发（数据层面） |
+| **Jaeger all-in-one** | Deployment | 接收 OTLP，存储并提供 UI 查看 Trace |
+
+> **OTel 做了两件事**：Operator 做 **Pod 注入**（改 Pod spec，注入 agent + 环境变量），DaemonSet Agent 做 **数据采集**（收 Pod 发来的 Trace，处理后转给 Jaeger）。
 
 > ⚠️ k8sattributes processor 需要访问 K8s API，kind 环境中不稳定，测试环境先去掉。
 
