@@ -10,7 +10,7 @@ datasources:
     datasources:
       - name: Tempo
         type: tempo
-        url: http://tempo.observability:3200
+        url: http://tempo-query-frontend.observability:3200
         access: proxy
         isDefault: true
         jsonData:
