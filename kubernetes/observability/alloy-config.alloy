@@ -15,23 +15,26 @@ otelcol.receiver.otlp "default" {
 }
 
 otelcol.processor.batch "default" {
-  // 512 条或 5s，先到先发
   send_batch_size = 512
   timeout         = "5s"
 
   output {
     traces  = [otelcol.exporter.otlp.tempo.input]
-    metrics = [otelcol.exporter.otlp.tempo.input]
+    metrics = [prometheus.remote_write.metrics.receiver]
   }
 }
 
+// 1. 发送链路给 Tempo
 otelcol.exporter.otlp "tempo" {
   client {
-    // 用 Service DNS 而非硬编码 IP
-    // K8s DNS 自动解析，3 副本自动负载均衡
-    endpoint = "tempo-distributor.observability:4317"
-    tls {
-      insecure = true
-    }
+    endpoint = "tempo-distributor:4317"
+    tls { insecure = true }
+  }
+}
+
+// 2. 发送指标给 Prometheus（Remote Write）
+prometheus.remote_write "metrics" {
+  endpoint {
+    url = "http://prometheus-kube-prometheus-prometheus.monitoring:9090/api/v1/write"
   }
 }
