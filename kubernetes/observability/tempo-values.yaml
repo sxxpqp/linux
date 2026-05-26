@@ -24,16 +24,14 @@ ingester:
 
 distributor:
   replicas: 2
-  # ⬇️ 必须使用 extraPorts 才能把端口注入到 Service 中 ⬇️
-  extraPorts:
-    - name: otlp-grpc
-      port: 4317
-      targetPort: 4317
-      protocol: TCP
-    - name: otlp-http
-      port: 4318
-      targetPort: 4318
-      protocol: TCP
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
 
 querier:
   replicas: 2
@@ -43,6 +41,18 @@ queryFrontend:
 
 compactor:
   replicas: 1
+
+# chart 级别控制 Service 端口
+traces:
+  otlp:
+    grpc:
+      enabled: true
+      receiverConfig:
+        endpoint: 0.0.0.0:4317
+    http:
+      enabled: true
+      receiverConfig:
+        endpoint: 0.0.0.0:4318
 
 # Tempo 核心配置
 tempo:
