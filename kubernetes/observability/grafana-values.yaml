@@ -1,5 +1,4 @@
 adminPassword: "admin123"
-
 service:
   type: NodePort
   nodePort: 30300
@@ -10,11 +9,55 @@ datasources:
     datasources:
       - name: Tempo
         type: tempo
-        url: http://tempo-query-frontend.observability:3200
+        uid: tempo
+        url: http://tempo-query-frontend.observability.svc.cluster.local:3200
         access: proxy
         isDefault: true
         jsonData:
           nodeGraph:
             enabled: true
+          serviceMap:
+            datasourceUid: prometheus        # 开启服务拓扑图
           lokiSearch:
             datasourceUid: loki
+          traceToLogs:
+            datasourceUid: loki
+            tags: ["service.name", "pod"]
+            filterByTraceID: true
+            filterBySpanID: false
+            spanStartTimeShift: "-1m"
+            spanEndTimeShift: "1m"
+            mapTagNamesEnabled: true
+            mappedTags:
+              - key: service.name
+                value: app
+          traceToMetrics:
+            datasourceUid: prometheus
+            queries:
+              - name: "Request Rate"
+                query: 'sum(rate(traces_spanmetrics_duration_milliseconds_count{service="$__tags.service.name"}[5m]))'
+              - name: "P99 Latency"
+                query: 'histogram_quantile(0.99, sum(rate(traces_spanmetrics_duration_milliseconds_bucket{service="$__tags.service.name"}[5m])) by (le))'
+
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://loki-gateway.monitoring.svc.cluster.local
+        access: proxy
+        jsonData:
+          derivedFields:
+            - name: "TraceID"
+              regex: '(?i)(?:trace_?id|traceid)["\s:=]+([a-f0-9]{16,32})'
+              url: ""
+              internalLinkEnabled: true
+              datasourceUid: tempo
+
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+        access: proxy
+        jsonData:
+          exemplarTraceIdDestinations:
+            - name: traceID
+              datasourceUid: tempo
