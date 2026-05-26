@@ -45,7 +45,7 @@
 - Kubernetes 集群（v1.19+）
 - Helm 3 已安装
 - kubectl 已配置集群访问权限
-- 存储后端二选一：MinIO（自动部署）或外部 S3 服务
+- 已安装 **local-path-provisioner** StorageClass（[rancher.io/local-path](https://github.com/rancher/local-path-provisioner)），若未安装参考 [local-path-storage.md](../storageclass/local-path-storage.md)
 
 ---
 
@@ -102,6 +102,43 @@ helm upgrade --install loki grafana/loki \
 | `write` | `3` | 写入节点，保证数据持久化和复制 |
 | `read` | `2` | 读取/查询节点 |
 | `backend` | `2` | 后台节点（Compactor、索引管理） |
+
+### PVC 持久化存储
+
+各组件使用 `local-path` StorageClass 自动创建 PVC，数据保存在节点本地磁盘：
+
+| 组件 | 默认大小 | 用途 |
+|---|---|---|
+| `write` | `50Gi` | WAL 预写日志，对磁盘 I/O 要求高 |
+| `read` | `20Gi` | 查询缓存 |
+| `backend` | `50Gi` | Compacted 索引存储 |
+| `minio` | `100Gi` | 仅方案一，存储日志 chunk 数据 |
+
+对应 values 配置段：
+
+```yaml
+write:
+  replicas: 3
+  persistence:
+    storageClass: local-path
+    size: 50Gi
+read:
+  replicas: 2
+  persistence:
+    storageClass: local-path
+    size: 20Gi
+backend:
+  replicas: 2
+  persistence:
+    storageClass: local-path
+    size: 50Gi
+minio:
+  persistence:
+    storageClass: local-path
+    size: 100Gi
+```
+
+> [local-path-provisioner](https://github.com/rancher/local-path-provisioner) 会按 `WaitForFirstConsumer` 策略在 Pod 调度的节点上自动创建 `hostPath` 目录，无需手动管理裸盘路径。
 
 ### 存储配置
 

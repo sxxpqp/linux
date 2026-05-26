@@ -47,11 +47,20 @@ loki:
 deploymentMode: SimpleScalable
 auth_enabled: false
 backend:
-  replicas: 2 
+  replicas: 2
+  persistence:
+    storageClass: local-path
+    size: 50Gi
 read:
-  replicas: 2 
+  replicas: 2
+  persistence:
+    storageClass: local-path
+    size: 20Gi
 write:
-  replicas: 3 # To ensure data durability with replication
+  replicas: 3
+  persistence:
+    storageClass: local-path
+    size: 50Gi
 
 # Enable minio for storage
 minio:
