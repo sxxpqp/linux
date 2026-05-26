@@ -34,5 +34,5 @@ service:
       port: 4318
       targetPort: 4318
     - name: http
-      port: 3100
-      targetPort: 3100
+      port: 3200
+      targetPort: 3200

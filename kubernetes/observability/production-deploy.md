@@ -112,7 +112,7 @@ kubectl logs -n observability -l job-name=minio-create-bucket
 ### 3.1 Helm 安装
 
 ```bash
-helm repo add grafana https://grafana.github.io/helm-charts
+helm repo add grafana https://nexus.ihome.sxxpqp.top:8443/repository/grafana/
 helm repo update
 
 helm install tempo grafana/tempo \
@@ -130,8 +130,8 @@ helm install tempo grafana/tempo \
 kubectl get pods -n observability -l app.kubernetes.io/name=tempo
 # 预期 3 个 Running
 
-kubectl port-forward svc/tempo -n observability 3100:3100 &
-curl http://localhost:3100/ready   # 返回 200
+kubectl port-forward svc/tempo -n observability 3200:3200 &
+curl http://localhost:3200/ready   # 返回 200
 ```
 
 ---
@@ -217,7 +217,7 @@ helm install grafana grafana/grafana \
 
 ### 6.2 values 文件
 
-> 完整配置见 [grafana-values.yaml](grafana-values.yaml)。NodePort:30300，Tempo 数据源连 `tempo.observability:3100`。
+> 完整配置见 [grafana-values.yaml](grafana-values.yaml)。NodePort:30300，Tempo 数据源连 `tempo.observability:3200`。
 
 ---
 
@@ -335,13 +335,13 @@ ls /sys/kernel/btf/vmlinux
 kubectl get pods -n default
 ```
 
-### Tempo UI（3100）和 OTLP 端口（4317）的区别
+### Tempo 查询端口（3200）和 OTLP 端口（4317）的区别
 
 | 端口 | 协议 | 用途 | 谁用 |
 |------|------|------|------|
 | 4317 | OTLP gRPC | 接收 Trace 数据 | Alloy → Tempo |
 | 4318 | OTLP HTTP | 接收 Trace 数据 | 备用 |
-| 3100 | HTTP | 查询 Trace | Grafana → Tempo |
+| 3200 | HTTP | 查询 Trace | Grafana → Tempo |
 
 ---
 
