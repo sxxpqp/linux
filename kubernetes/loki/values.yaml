@@ -1,6 +1,6 @@
 loki:
   common:
-    replication_factor: 1               # 哈希环副本因子，必须 ≤ write 节点数
+    replication_factor: 3               # 哈希环副本因子，生产 3 副本
 
   schemaConfig:
     configs:
@@ -25,17 +25,17 @@ loki:
 deploymentMode: SimpleScalable
 auth_enabled: false
 backend:
-  replicas: 1
+  replicas: 2
   persistence:
     storageClass: local-path
     size: 50Gi
 read:
-  replicas: 1
+  replicas: 2
   persistence:
     storageClass: local-path
     size: 20Gi
 write:
-  replicas: 1
+  replicas: 3
   persistence:
     storageClass: local-path
     size: 50Gi

@@ -99,9 +99,9 @@ helm upgrade --install loki grafana/loki \
 
 | 组件 | 副本数 | 说明 |
 |---|---|---|
-| `write` | `1` | 写入节点 |
-| `read` | `1` | 读取/查询节点 |
-| `backend` | `1` | 后台节点（Compactor、索引管理） |
+| `write` | `3` | 写入节点，保证数据持久化和复制 |
+| `read` | `2` | 读取/查询节点 |
+| `backend` | `2` | 后台节点（Compactor、索引管理） |
 
 ### PVC 持久化存储
 
@@ -156,9 +156,9 @@ minio:
 limits_config:
   retention_period: 8760h          # 日志保留 365 天
 
-# 哈希环副本因子，单 write 节点必须设为 1
+# 哈希环副本因子
 common:
-  replication_factor: 1
+  replication_factor: 3            # 生产 3 副本，单节点改为 1
 
 compactor:
   retention_enabled: true           # 必须开启，否则 retention 不生效
