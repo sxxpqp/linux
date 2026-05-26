@@ -1,0 +1,37 @@
+// Grafana Alloy 配置（生产环境）
+// 部署方式：kubectl create configmap alloy-config -n observability --from-file=config.alloy=alloy-config.alloy
+
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  output {
+    traces  = [otelcol.processor.batch.default.input]
+    metrics = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  // 512 条或 5s，先到先发
+  send_batch_size = 512
+  timeout         = "5s"
+
+  output {
+    traces  = [otelcol.exporter.otlp.tempo.input]
+    metrics = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    // 用 Service DNS 而非硬编码 IP
+    // K8s DNS 自动解析，3 副本自动负载均衡
+    endpoint = "tempo.observability:4317"
+    tls {
+      insecure = true
+    }
+  }
+}

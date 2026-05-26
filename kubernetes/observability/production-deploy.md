@@ -1,0 +1,587 @@
+# Grafana LGTM + Beyla 生产环境部署指南
+
+## 架构概览
+
+```
+                               ┌────────────────────┐
+                               │  MinIO (S3 共享存储) │
+                               │  9000               │
+                               └──────────┬─────────┘
+                                          │ S3 读写
+                          ┌───────────────┼───────────────┐
+                          ▼               ▼               ▼
+                    ┌──────────┐  ┌──────────┐  ┌──────────┐
+                    │ Tempo-0  │  │ Tempo-1  │  │ Tempo-2  │   ← 3 副本
+                    │ :4317    │  │ :4317    │  │ :4317    │
+                    └────┬─────┘  └────┬─────┘  └────┬─────┘
+                         │   OTLP      │              │
+                         └─────────┬────┴─────────────┘
+                                   │ tempo.observability:4317  ← Service DNS 负载均衡
+                                   ▲
+            ┌──────────────────────┼──────────────────────┐
+            │  Node 1              │  Node 2              │
+            │                      │                      │
+            │  ┌──────────────┐    │  ┌──────────────┐    │
+            │  │  Alloy  Pod  │    │  │  Alloy  Pod  │    │  ← DaemonSet
+            │  │  :4317 gRPC  │    │  │  :4317 gRPC  │    │
+            │  │  :4318 HTTP  │    │  │  :4318 HTTP  │    │
+            │  └──────▲───────┘    │  └──────▲───────┘    │
+            │         │            │         │            │
+            │    OTLP │            │    OTLP │            │
+            │         │            │         │            │
+            │  ┌──────┴───────┐    │  ┌──────┴───────┐    │
+            │  │  Beyla Pod   │    │  │  Beyla Pod   │    │  ← DaemonSet
+            │  │  hostNetwork │    │  │  hostNetwork │    │
+            │  └──────▲───────┘    │  └──────▲───────┘    │
+            │         │ eBPF       │         │ eBPF       │
+            │  ┌──────┴───────┐    │  ┌──────┴───────┐    │
+            │  │  应用 Pod     │    │  │  应用 Pod     │    │
+            │  │  (零侵入)     │    │  │  (零侵入)     │    │
+            │  └──────────────┘    │  └──────────────┘    │
+            └──────────────────────┴──────────────────────┘
+
+                          ┌───────────────────────────┐
+                          │  Grafana (Helm)           │
+                          │  NodePort:30300           │
+                          │                           │
+                          │  数据源：                  │
+                          │  Tempo ← Traces            │
+                          │  Loki  ← Logs              │
+                          │  Mimir/Prometheus ← Metrics│
+                          └───────────────────────────┘
+```
+
+| 组件 | 部署方式 | 作用 | 副本数 |
+|------|---------|------|--------|
+| **Beyla** | DaemonSet | eBPF 零侵入，自动生成 Trace + Metrics | 每节点 1 |
+| **Alloy** | DaemonSet | OTLP 接收 → 攒批 → 转发 Tempo | 每节点 1 |
+| **Tempo** | Deployment (Helm) | Trace 存储 | 3 |
+| **MinIO** | Deployment | S3 共享存储，Tempo 后端 | 1 |
+| **Grafana** | Deployment (Helm) | 统一可视化 | 1 |
+
+> **高可用要点**：Tempo 3 副本共享 MinIO S3 存储；Alloy 通过 Service DNS `tempo.observability:4317` 自动负载均衡；任意一个 Tempo Pod 挂了不影响全链路。
+
+---
+
+## 部署顺序
+
+```
+1. Cert Manager → 2. 命名空间 → 3. MinIO → 4. Tempo → 5. Alloy → 6. Beyla → 7. Grafana
+```
+
+---
+
+## 前置条件
+
+### Cert Manager
+
+```bash
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+
+helm install cert-manager jetstack/cert-manager \
+  --namespace cert-manager \
+  --create-namespace \
+  --set installCRDs=true
+
+kubectl wait --for=condition=ready pod \
+  -l app.kubernetes.io/instance=cert-manager \
+  -n cert-manager --timeout=120s
+```
+
+---
+
+## 1. 创建命名空间
+
+```bash
+kubectl create namespace observability
+```
+
+---
+
+## 2. 部署 MinIO（S3 共享存储）
+
+```bash
+kubectl apply -f minio.yaml
+kubectl wait --for=condition=ready pod -l app=minio -n observability --timeout=120s
+
+# 确认 bucket 创建成功
+kubectl logs -n observability -l job-name=minio-create-bucket
+# 预期：bucket tempo-traces ready
+```
+
+> `minio.yaml` 包含 PVC + Deployment + Service + 自建 bucket 的 Job，见 [minio.yaml](minio.yaml)。
+
+---
+
+## 3. 部署 Tempo（3 副本 + S3 后端）
+
+### 3.1 Helm 安装
+
+```bash
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+
+helm install tempo grafana/tempo \
+  --namespace observability \
+  --values tempo-values.yaml
+```
+
+### 3.2 values 文件
+
+```yaml
+# tempo-values.yaml
+tempo:
+  replicas: 3
+
+  storage:
+    trace:
+      backend: s3
+      s3:
+        bucket: tempo-traces
+        endpoint: minio.observability:9000
+        access_key: minioadmin
+        secret_key: minioadmin
+        insecure: true
+      wal:
+        path: /var/tempo/wal
+
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+service:
+  type: ClusterIP
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+    - name: http
+      port: 3100
+      targetPort: 3100
+```
+
+### 3.3 验证
+
+```bash
+kubectl get pods -n observability -l app.kubernetes.io/name=tempo
+# 预期 3 个 Running
+
+kubectl port-forward svc/tempo -n observability 3100:3100 &
+curl http://localhost:3100/ready   # 返回 200
+```
+
+---
+
+## 4. 部署 Alloy（OTel 采集管道）
+
+### 4.1 创建 ConfigMap
+
+```bash
+kubectl create configmap alloy-config -n observability \
+  --from-file=config.alloy=alloy-config.alloy
+```
+
+### 4.2 配置说明
+
+```alloy
+// alloy-config.alloy
+otelcol.receiver.otlp "default" {
+  grpc  { endpoint = "0.0.0.0:4317" }
+  http  { endpoint = "0.0.0.0:4318" }
+  output {
+    traces  = [otelcol.processor.batch.default.input]
+    metrics = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  send_batch_size = 512
+  timeout         = "5s"
+  output {
+    traces  = [otelcol.exporter.otlp.tempo.input]
+    metrics = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo.observability:4317"    // Service DNS，自动负载均衡
+    tls {
+      insecure = true
+    }
+  }
+}
+```
+
+### 4.3 部署 Alloy DaemonSet
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: alloy
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app: alloy
+  template:
+    metadata:
+      labels:
+        app: alloy
+    spec:
+      containers:
+      - name: alloy
+        image: grafana/alloy:latest
+        args:
+          - "run"
+          - "/etc/alloy/config.alloy"
+        ports:
+        - containerPort: 4317
+          hostPort: 4317
+          name: otlp-grpc
+        - containerPort: 4318
+          hostPort: 4318
+          name: otlp-http
+        volumeMounts:
+        - name: config
+          mountPath: /etc/alloy
+      volumes:
+      - name: config
+        configMap:
+          name: alloy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alloy
+  namespace: observability
+spec:
+  selector:
+    app: alloy
+  ports:
+  - name: otlp-grpc
+    port: 4317
+    targetPort: 4317
+  - name: otlp-http
+    port: 4318
+    targetPort: 4318
+EOF
+
+kubectl wait --for=condition=ready pod -l app=alloy -n observability --timeout=120s
+```
+
+### 4.4 关键设计
+
+| 项 | 做法 | 原因 |
+|----|------|------|
+| Tempo 地址 | `tempo.observability:4317` | Service DNS 自动解析到 3 个 Tempo Pod，K8s 轮询 |
+| hostPort | 4317 / 4318 | Pod 通过节点 IP 就近发送，不经过 Service 跳转 |
+| 不设资源 limit | Beyla 改用 Service DNS 发 | 避免 IP 变化导致 Beyla 得改配置 |
+
+---
+
+## 5. 部署 Beyla（eBPF 自动埋点）
+
+### 5.1 RBAC
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: beyla
+  namespace: observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: beyla
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["replicasets", "deployments"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: beyla
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: beyla
+subjects:
+- kind: ServiceAccount
+  name: beyla
+  namespace: observability
+EOF
+```
+
+### 5.2 ConfigMap + DaemonSet
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-config
+  namespace: observability
+data:
+  beyla-config.yml: |
+    discovery:
+      instrument:
+        - k8s_namespace: default
+    features:
+      - http2
+      - tls
+    otel_traces_export:
+      endpoint: http://alloy.observability:4318
+      protocol: http/protobuf
+    otel_metrics_export:
+      endpoint: http://alloy.observability:4318
+      protocol: http/protobuf
+    attributes:
+      kubernetes:
+        enable: true
+    log_level: info
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app: beyla
+  template:
+    metadata:
+      labels:
+        app: beyla
+    spec:
+      hostPID: true
+      hostNetwork: true
+      serviceAccountName: beyla
+      containers:
+      - name: beyla
+        image: grafana/beyla:latest
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        env:
+        - name: BEYLA_CONFIG_PATH
+          value: /etc/beyla/beyla-config.yml
+        volumeMounts:
+        - name: beyla-config
+          mountPath: /etc/beyla
+        - name: sys-kernel
+          mountPath: /sys/kernel
+          readOnly: true
+      volumes:
+      - name: beyla-config
+        configMap:
+          name: beyla-config
+      - name: sys-kernel
+        hostPath:
+          path: /sys/kernel
+EOF
+```
+
+> ⚠️ **Beyla 的 endpoint 用 Service DNS `alloy.observability:4318`**，不再硬编码 IP。只要 Alloy Service 不删，IP 随便变。
+
+---
+
+## 6. 部署 Grafana
+
+### 6.1 Helm 安装
+
+```bash
+helm install grafana grafana/grafana \
+  --namespace observability \
+  --values grafana-values.yaml
+```
+
+### 6.2 values 文件
+
+```yaml
+# grafana-values.yaml
+adminPassword: "admin123"
+
+service:
+  type: NodePort
+  nodePort: 30300
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        type: tempo
+        url: http://tempo.observability:3100      # 查询端口 3100，不是 4317
+        access: proxy
+        isDefault: true
+        jsonData:
+          nodeGraph:
+            enabled: true
+          lokiSearch:
+            datasourceUid: loki
+```
+
+---
+
+## 7. 验证全链路
+
+### 7.1 确认所有组件
+
+```bash
+kubectl get pods -n observability
+# 预期：
+# minio-xxxxx            1/1 Running
+# tempo-0                1/1 Running
+# tempo-1                1/1 Running
+# tempo-2                1/1 Running
+# alloy-xxxxx            1/1 Running  (每节点)
+# beyla-xxxxx            1/1 Running  (每节点)
+# grafana-xxxxx          1/1 Running
+```
+
+### 7.2 确认 MinIO bucket 就绪
+
+```bash
+kubectl logs -n observability -l app=minio | grep bucket
+kubectl port-forward svc/minio -n observability 9001:9001 &
+# 浏览器打开 http://localhost:9001  → 用 minioadmin / minioadmin 登录
+# 确认 Buckets 里有 tempo-traces
+```
+
+### 7.3 确认 Tempo 在写数据
+
+```bash
+kubectl logs -n observability tempo-0 | grep -i "trace\|ingester\|written"
+```
+
+### 7.4 确认 Beyla 发现服务
+
+```bash
+kubectl logs -n observability -l app=beyla | grep -i "instrument\|trace"
+# 预期：instrumenting service default/xxx
+```
+
+### 7.5 确认 Alloy 转发正常
+
+```bash
+kubectl logs -n observability -l app=alloy --tail=20
+# 预期：Exporting traces 等日志
+```
+
+### 7.6 访问 Grafana
+
+```
+浏览器打开：http://<任意节点IP>:30300
+登录：admin / admin123
+Explore → 数据源选 Tempo → Search → Find Traces
+```
+
+---
+
+## 8. 与测试环境对比
+
+| | 测试环境（OTel Operator） | 生产环境（Beyla + LGTM） |
+|---|---|---|
+| **埋点方式** | javaagent initContainer 注入 | eBPF 内核拦截，零侵入 |
+| **需改代码** | 否 | 否 |
+| **需改镜像** | 否 | 否 |
+| **支持语言** | Java / Node.js / Python / .NET | **任意语言**（eBPF 协议层） |
+| **采集器** | OTel Collector | Alloy |
+| **Trace 存储** | Jaeger | Tempo（3 副本 + MinIO S3） |
+| **高可用** | 无（单 Jaeger Pod） | ✅ Tempo 多副本 + S3 |
+| **开销** | ~5% CPU | ~2% CPU |
+
+---
+
+## 9. 常见问题
+
+### MinIO bucket 创建失败
+
+```bash
+kubectl logs -n observability -l job-name=minio-create-bucket
+# 如果提示 connection refused，手动创建：
+kubectl exec -n observability deploy/minio -- mc alias set local http://localhost:9000 minioadmin minioadmin
+kubectl exec -n observability deploy/minio -- mc mb local/tempo-traces --ignore-existing
+```
+
+### Tempo 连不上 MinIO
+
+```bash
+# 确认 MinIO Service DNS 可解析
+kubectl run -it --rm debug --image=busybox -n observability -- nslookup minio.observability
+
+# 确认 Tempo 日志没有 S3 报错
+kubectl logs -n observability tempo-0 | grep -i "s3\|minio\|error"
+```
+
+### Alloy 连不上 Tempo
+
+```bash
+# 确认 Service DNS 可解析
+kubectl run -it --rm debug --image=busybox -n observability -- nslookup tempo.observability
+
+# 确认 Tempo 4317 端口在监听
+kubectl exec -n observability tempo-0 -- ss -tlnp | grep 4317
+```
+
+### Beyla 发现不了服务
+
+```bash
+# 内核版本
+uname -r   # 需要 ≥ 5.14
+
+# eBPF 支持
+ls /sys/kernel/btf/vmlinux
+
+# 确认监控的 namespace 有 Pod
+kubectl get pods -n default
+```
+
+### Tempo UI（3100）和 OTLP 端口（4317）的区别
+
+| 端口 | 协议 | 用途 | 谁用 |
+|------|------|------|------|
+| 4317 | OTLP gRPC | 接收 Trace 数据 | Alloy → Tempo |
+| 4318 | OTLP HTTP | 接收 Trace 数据 | 备用 |
+| 3100 | HTTP | 查询 Trace | Grafana → Tempo |
+
+---
+
+## 10. 代码里保留 OTel SDK（互补）
+
+Beyla 在 eBPF 层只能看 HTTP/gRPC 调用，如果要看 **SQL 查询、Redis、Kafka、方法级调用链**，代码里保留 OTel SDK：
+
+```yaml
+# 应用 Deployment 添加环境变量，让 SDK 往 Alloy 发
+env:
+- name: OTEL_EXPORTER_OTLP_ENDPOINT
+  value: "http://alloy.observability:4318"
+```
+
+两条线并行，共用一套 Alloy + Tempo 管道：
+
+```
+Beyla (eBPF) → HTTP/gRPC 调用耗时，服务间拓扑
+    +
+代码 OTel SDK → SQL 查询、Redis、方法级 Trace
+    ↓
+Alloy → Tempo（统一存储）→ Grafana（统一展示）
+```
