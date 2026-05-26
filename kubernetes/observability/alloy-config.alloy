@@ -29,7 +29,7 @@ otelcol.exporter.otlp "tempo" {
   client {
     // 用 Service DNS 而非硬编码 IP
     // K8s DNS 自动解析，3 副本自动负载均衡
-    endpoint = "tempo.observability:4317"
+    endpoint = "tempo-distributor.observability:4317"
     tls {
       insecure = true
     }
