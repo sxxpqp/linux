@@ -48,14 +48,14 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /data
-      # hostPath:   
       volumes:
       - name: data
-        hostPath: /data
-      # volumes:
+        persistentVolumeClaim:
+          claimName: minio-pvc
+      # 如果没有 PVC，可以用 hostPath（仅测试）：
       # - name: data
-      #   persistentVolumeClaim:
-      #     claimName: minio-pvc
+      #   hostPath:
+      #     path: /data
 ---
 apiVersion: v1
 kind: Service
