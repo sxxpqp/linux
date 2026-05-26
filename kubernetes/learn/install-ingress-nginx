@@ -1,0 +1,5 @@
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+ helm fetch ingress-nginx/ingress-nginx 
+tar -xvf ingress-nginx-4.0.13.tgz && cd ingress-nginxkubectl create ns ingress-nginx
+ helm upgrade --install ingress-nginx . -f ./ci/daemonset-prod.yaml --namespace ingress-nginx
