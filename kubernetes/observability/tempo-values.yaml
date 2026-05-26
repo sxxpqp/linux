@@ -7,10 +7,8 @@ metricsGenerator:
   replicas: 1
   config:
     processor:
-      span_metrics:
-        enabled: true
-      service_graphs:
-        enabled: true
+      span_metrics: {}
+      service_graphs: {}
     storage:
       path: /var/tempo/generator_wal
     registry:
