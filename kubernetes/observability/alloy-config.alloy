@@ -24,7 +24,7 @@ otelcol.processor.batch "default" {
 // 发送链路给 Tempo
 otelcol.exporter.otlp "tempo" {
   client {
-    endpoint = "tempo-distributor:4317"
+    endpoint = "tempo-distributor.observability.svc.cluster.local:4317"
     tls { insecure = true }
   }
 }
