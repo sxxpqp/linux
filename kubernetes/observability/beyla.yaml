@@ -38,7 +38,7 @@ data:
   beyla-config.yml: |
     discovery:
       instrument:
-        - k8s_namespace: default
+        - k8s_namespace: ""
     features:
       - http2
       - tls
