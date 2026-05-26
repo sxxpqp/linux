@@ -24,6 +24,26 @@ tempo:
         http:
           endpoint: 0.0.0.0:4318
 
+  metrics_generator:
+    enabled: true
+    processor:
+      span_metrics:
+        enabled: true
+      service_graphs:
+        enabled: true
+    storage:
+      path: /var/tempo/generator_wal
+    registry:
+      collection_interval: 30s
+
+overrides:
+  defaults:
+    metrics_generator:
+      generate_on_adjust: true
+      processors:
+      - span-metrics
+      - service-graphs
+
 service:
   type: ClusterIP
   ports:
