@@ -89,6 +89,15 @@ spec:
         - /bin/sh
         - -c
         - |
+          echo "等待 MinIO 启动..."
+          for i in $(seq 1 30); do
+            if curl -s http://minio.observability:9000/minio/health/live; then
+              echo " MinIO 就绪"
+              break
+            fi
+            echo "  第 ${i} 次重试..."
+            sleep 2
+          done
           mc alias set local http://minio.observability:9000 minioadmin minioadmin
           mc mb local/tempo-traces --ignore-existing
           echo "bucket tempo-traces ready"
