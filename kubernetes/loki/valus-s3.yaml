@@ -5,7 +5,11 @@ deploymentMode: SimpleScalable
 
 loki:
   # 关键：多租户关闭开关，必须在 loki 子层级下才生效！
-  auth_enabled: false  
+  auth_enabled: false
+
+  # 哈希环副本因子（必须 ≤ write 节点数，单节点设为 1）
+  common:
+    replication_factor: 1
 
   schemaConfig:
     configs:
@@ -33,7 +37,6 @@ loki:
     volume_enabled: true
     retention_period: 8760h             # 365天存储有效期
     reject_old_samples_max_age: 8760h
-    replication_factor: 1               # 降为 1，配合 write 单副本
 
   # 已合并所有清理器参数
   compactor:
