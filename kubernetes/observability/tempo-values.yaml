@@ -24,14 +24,16 @@ ingester:
 
 distributor:
   replicas: 2
-  service:
-    ports:
-      - name: otlp-grpc
-        port: 4317
-        targetPort: 4317
-      - name: otlp-http
-        port: 4318
-        targetPort: 4318
+  # ⬇️ 必须使用 extraPorts 才能把端口注入到 Service 中 ⬇️
+  extraPorts:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
 
 querier:
   replicas: 2
