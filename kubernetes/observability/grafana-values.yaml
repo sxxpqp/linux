@@ -47,7 +47,7 @@ datasources:
         jsonData:
           derivedFields:
             - name: "TraceID"
-              regex: '(?i)(?:trace_?id|traceid)["\s:=]+([a-f0-9]{16,32})'
+              regex: '"traceID"\s*:\s*"([a-f0-9]{32})"'
               url: ""
               internalLinkEnabled: true
               datasourceUid: tempo
