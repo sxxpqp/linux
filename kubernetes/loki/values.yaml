@@ -18,6 +18,7 @@ loki:
   limits_config:
     allow_structured_metadata: true
     volume_enabled: true
+    replication_factor: 1               # 降为 1，配合 write 单副本
 
 deploymentMode: SimpleScalable
 auth_enabled: false

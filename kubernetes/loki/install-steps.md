@@ -155,6 +155,7 @@ minio:
 ```yaml
 limits_config:
   retention_period: 8760h          # 日志保留 365 天
+  replication_factor: 1            # 写入副本数，必须 ≤ write 节点数
 
 compactor:
   retention_enabled: true           # 必须开启，否则 retention 不生效
