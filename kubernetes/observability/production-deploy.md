@@ -210,7 +210,7 @@ kubectl rollout status daemonset/beyla -n observability --timeout=120s
 ### 6.1 Helm 安装
 
 ```bash
-helm install grafana grafana/grafana \
+helm upgrade --install grafana grafana/grafana \
   --namespace observability \
   --values grafana-values.yaml
 ```

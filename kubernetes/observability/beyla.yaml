@@ -69,6 +69,7 @@ spec:
     spec:
       hostPID: true
       hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: beyla
       containers:
       - name: beyla
