@@ -21,9 +21,9 @@ loki:
   storage:
     type: s3
     s3:  
-      endpoint: 58.49.56.57:8060
-      accessKeyId: oxezmsj6gzy3p2mx7amp
-      secretAccessKey: md5ba21fsxwwb8w25d0xmm632wjh9pjpqsz4mqni
+      endpoint: minio.observability:9000
+      accessKeyId: admin
+      secretAccessKey: admin
       insecure: true
       http_config:
         insecure_skip_verify: true  
