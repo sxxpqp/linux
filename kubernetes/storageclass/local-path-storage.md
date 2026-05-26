@@ -9,7 +9,7 @@ local-path是一个Kubernetes StorageClass的插件，它可以将PV（Persisten
 2. 在该命名空间中创建local-path-storage的deployments和service：
 
    ```
-   kubectl apply -f https://github.com/rancher/local-path-provisioner/blob/master/deploy/local-path-storage.yaml
+   kubectl apply -f local-path-storage.yaml
    ```
 
 3. 等待local-path-storage pod变为“Running”状态：
