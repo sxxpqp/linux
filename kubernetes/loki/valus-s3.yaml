@@ -67,17 +67,17 @@ loki:
 # 2. 组件副本、持久化及网关配置（最外层）
 # ==========================================
 backend:
-  replicas: 2
+  replicas: 1
   persistence:
     storageClass: local-path
     size: 50Gi
 read:
-  replicas: 2
+  replicas: 1
   persistence:
     storageClass: local-path
     size: 20Gi
 write:
-  replicas: 3
+  replicas: 1
   persistence:
     storageClass: local-path
     size: 50Gi

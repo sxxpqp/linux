@@ -99,9 +99,9 @@ helm upgrade --install loki grafana/loki \
 
 | 组件 | 副本数 | 说明 |
 |---|---|---|
-| `write` | `3` | 写入节点，保证数据持久化和复制 |
-| `read` | `2` | 读取/查询节点 |
-| `backend` | `2` | 后台节点（Compactor、索引管理） |
+| `write` | `1` | 写入节点 |
+| `read` | `1` | 读取/查询节点 |
+| `backend` | `1` | 后台节点（Compactor、索引管理） |
 
 ### PVC 持久化存储
 
@@ -198,8 +198,14 @@ Promtail 部署在集群每个节点收集容器日志并推送到 Loki：
 ```bash
 helm upgrade --install promtail grafana/promtail \
   --namespace monitoring \
-  --set config.clients[0].url=http://loki-gateway.monitoring.svc:80/loki/api/v1/push
+  --set config.clients[0].url=http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push \
+  --set config.clients[0].tenant_id=""
 ```
+
+| 参数 | 说明 |
+|---|---|
+| `config.clients[0].url` | Loki Gateway 地址，集群内用完整 DNS |
+| `config.clients[0].tenant_id=""` | 关闭 Promtail 的租户 ID 发送（配合 `auth_enabled: false`） |
 
 > Promtail 会以 DaemonSet 方式在每个节点运行，自动采集 `/var/log/pods` 下的容器日志。
 
