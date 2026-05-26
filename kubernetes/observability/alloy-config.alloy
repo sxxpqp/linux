@@ -10,17 +10,14 @@ otelcol.receiver.otlp "default" {
   }
   output {
     traces  = [otelcol.processor.batch.default.input]
-    metrics = [otelcol.processor.batch.default.input]
   }
 }
 
 otelcol.processor.batch "default" {
   send_batch_size = 512
   timeout         = "5s"
-
   output {
-    traces  = [otelcol.exporter.otlp.tempo.input]
-    metrics = [otelcol.exporter.otlp.tempo.input]
+    traces = [otelcol.exporter.otlp.tempo.input]
   }
 }
 
