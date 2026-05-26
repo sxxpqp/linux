@@ -203,6 +203,34 @@ helm upgrade --install promtail grafana/promtail \
 
 > Promtail 会以 DaemonSet 方式在每个节点运行，自动采集 `/var/log/pods` 下的容器日志。
 
+### 验证日志是否成功写入
+
+```bash
+# 端口转发 Loki Gateway
+kubectl -n monitoring port-forward svc/loki-gateway 3100:80
+```
+
+```bash
+# 查看所有标签（有标签说明日志已在写入）
+curl -s http://localhost:3100/loki/api/v1/labels | jq '.data'
+
+# 查询日志
+curl -s -G http://localhost:3100/loki/api/v1/query_range \
+  --data-urlencode 'query={namespace="monitoring"}' \
+  --data-urlencode 'limit=5' | jq '.data.result'
+```
+
+如果返回 `labels` 为空，检查 Promtail 日志：
+
+```bash
+kubectl -n monitoring logs -l app.kubernetes.io/name=promtail --tail=50
+```
+
+常见原因：
+- `config.clients[0].url` 地址不对 — 确认 Loki Gateway Service 名称和端口
+- Loki Gateway 未 Ready — `kubectl -n monitoring get pods -l app.kubernetes.io/name=loki`
+- Promtail DaemonSet 未调度到所有节点 — `kubectl -n monitoring get ds promtail`
+
 ---
 
 ## 5. 在 Grafana 中添加 Loki 数据源
@@ -274,3 +302,66 @@ count_over_time({namespace="production"} |= "ERROR" [5m])
 |---|---|
 | [values.yaml](values.yaml) | MinIO 存储方案配置（SimpleScalable，3x write / 2x read / 2x backend） |
 | [valus-s3.yaml](valus-s3.yaml) | 外部 S3 存储方案配置（生产环境推荐） |
+
+---
+
+## 9. 常见问题
+
+### 9.1 StatefulSet 升级失败：spec is invalid
+
+添加 `persistence` 到已有 Loki 时，StatefulSet 的 `volumeClaimTemplates` 不可修改，报错：
+
+```
+StatefulSet.apps "loki-backend" is invalid: spec: Forbidden: updates to statefulset spec ...
+```
+
+解决：卸载后重新安装（日志数据在对象存储中，不会丢失）。
+
+```bash
+helm uninstall loki -n monitoring
+kubectl -n monitoring wait --for=delete pod -l app.kubernetes.io/name=loki --timeout=120s
+
+# 清理旧 PVC（如果带 storageClass 的 PVC 也异常）
+kubectl -n monitoring delete pvc -l app.kubernetes.io/name=loki
+
+# 重新安装
+helm upgrade --install loki grafana/loki \
+  --namespace monitoring \
+  --values valus-s3.yaml
+```
+
+### 9.2 PVC 长时间 Pending
+
+```bash
+kubectl -n monitoring get pvc
+kubectl -n monitoring describe pvc <pvc-name>
+```
+
+常见原因：
+
+| 原因 | 解决 |
+|---|---|
+| 没有默认 StorageClass | `kubectl get sc` 确认 `local-path` 存在且标记为 default，或 values 中显式指定 `storageClass: local-path` |
+| `WaitForFirstConsumer` 模式下 Pod 未调度 | PVC 等 Pod 创建后才触发绑定，确认对应 Pod Running：`kubectl -n monitoring get pods -l app.kubernetes.io/name=loki` |
+| 节点磁盘不足 | `kubectl describe pvc` 查看 Events，扩容或清理节点磁盘 |
+
+### 9.3 Promtail 运行但 Loki 查不到日志
+
+```bash
+# 检查 Promtail 日志
+kubectl -n monitoring logs -l app.kubernetes.io/name=promtail --tail=20
+
+# 确认 client URL 正确（末尾路径不能少）
+kubectl -n monitoring get svc loki-gateway
+
+# 确认 Loki write 节点 Ready
+kubectl -n monitoring get pods -l app.kubernetes.io/name=loki,app.kubernetes.io/component=write
+```
+
+### 9.4 Loki 日志保留不生效
+
+确认 `compactor.retention_enabled: true` 且 `limits_config.retention_period` 已设置。查看 Compactor 是否正常工作：
+
+```bash
+kubectl -n monitoring logs -l app.kubernetes.io/component=backend --tail=30 | grep -i retention
+```
