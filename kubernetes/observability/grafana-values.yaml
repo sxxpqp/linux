@@ -22,9 +22,12 @@ datasources:
             filterBySpanID: true
           tracesToMetrics:
             datasourceUid: prometheus
+            tags:
+              - key: "service.name"
+                value: "service"
             queries:
               - name: "Request Rate"
-                query: 'rate(traces_spanmetrics_calls_total{service="$__tags{service}"}[5m])'
+                query: 'rate(traces_spanmetrics_calls_total{$$__tags}[5m])'
           serviceMap:
             datasourceUid: prometheus
 
