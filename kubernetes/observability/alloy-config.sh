@@ -1,35 +1,20 @@
 cat > /tmp/alloy-config.alloy << 'EOF'
-// 1. 接收端：OTLP（来自 OTel SDK + Beyla）
+// ============================
+// 接收 OTLP（OTel SDK + Beyla）
+// ============================
 otelcol.receiver.otlp "default" {
   grpc { endpoint = "0.0.0.0:4317" }
   http { endpoint = "0.0.0.0:4318" }
   output {
-    traces = [
-      otelcol.connector.servicegraph.default.input,
-      otelcol.connector.spanmetrics.default.input,
-      otelcol.processor.batch.traces.input,
-    ]
+    traces  = [otelcol.processor.batch.traces.input]
     metrics = [otelcol.processor.batch.metrics.input]
+    logs    = [otelcol.processor.batch.logs.input]
   }
 }
 
-// 2. 服务拓扑图
-otelcol.connector.servicegraph "default" {
-  dimensions = ["http.method", "http.status_code"]
-  output {
-    metrics = [otelcol.processor.batch.metrics.input]
-  }
-}
-
-// 3. RED 指标
-otelcol.connector.spanmetrics "default" {
-  histogram { explicit {} }
-  output {
-    metrics = [otelcol.processor.batch.metrics.input]
-  }
-}
-
-// 4. 批处理
+// ============================
+// 批处理
+// ============================
 otelcol.processor.batch "traces" {
   send_batch_size = 512
   timeout         = "5s"
@@ -42,11 +27,21 @@ otelcol.processor.batch "metrics" {
   send_batch_size = 512
   timeout         = "5s"
   output {
-    metrics = [otelcol.exporter.prometheus.default.input]
+    metrics = [otelcol.exporter.otlphttp.prometheus.input]
   }
 }
 
-// 5. 导出 Tempo
+otelcol.processor.batch "logs" {
+  send_batch_size = 512
+  timeout         = "5s"
+  output {
+    logs = [otelcol.exporter.otlphttp.loki.input]
+  }
+}
+
+// ============================
+// 导出 Tempo（traces）
+// ============================
 otelcol.exporter.otlp "tempo" {
   client {
     endpoint = "tempo-distributor.observability:4317"
@@ -54,18 +49,31 @@ otelcol.exporter.otlp "tempo" {
   }
 }
 
-// 6. 导出 Prometheus
-otelcol.exporter.prometheus "default" {
-  forward_to = [prometheus.remote_write.default.receiver]
-}
-
-prometheus.remote_write "default" {
-  endpoint {
-    url = "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/write"
+// ============================
+// 导出 Prometheus OTLP endpoint（metrics）
+// 22784 要求直接走 OTLP，不是 remote write
+// ============================
+otelcol.exporter.otlphttp "prometheus" {
+  client {
+    endpoint = "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/otlp"
+    tls { insecure = true }
   }
 }
 
-// 7. 日志文件发现
+// ============================
+// 导出 Loki OTLP endpoint（logs）
+// 22784 要求用 Loki OTLP，不是文件采集
+// ============================
+otelcol.exporter.otlphttp "loki" {
+  client {
+    endpoint = "http://loki-gateway.monitoring.svc:80/otlp"
+    tls { insecure = true }
+  }
+}
+
+// ============================
+// 文件采集日志（兜底，非 OTel SDK 的服务也能采）
+// ============================
 local.file_match "pod_logs" {
   path_targets = [{
     __path__ = "/var/log/pods/*/*/*.log",
@@ -74,17 +82,14 @@ local.file_match "pod_logs" {
   sync_period = "5s"
 }
 
-// 8. 读取日志文件
 loki.source.file "pod_logs" {
   targets    = local.file_match.pod_logs.targets
   forward_to = [loki.process.labels.receiver]
 }
 
-// 9. 日志处理
 loki.process "labels" {
   stage.cri {}
 
-  // 从路径提取 namespace/pod/container
   stage.regex {
     expression = "/var/log/pods/(?P<namespace>[^_]+)_(?P<pod>[^_]+)_[^/]+/(?P<container>[^/]+)/"
     source     = "filename"
@@ -98,20 +103,17 @@ loki.process "labels" {
     }
   }
 
-  // 解析 JSON 日志体
   stage.json {
     expressions = {
-      level                        = "level",
-      service_name                 = "service_name",
-      service_namespace            = "k8s_namespace",
-      deployment_environment_name  = "environment",
-      service_version              = "service_version",
-      trace_id                     = "trace_id",
-      span_id                      = "span_id",
+      level                       = "level",
+      service_name                = "service_name",
+      service_namespace           = "k8s_namespace",
+      deployment_environment_name = "environment",
+      trace_id                    = "trace_id",
+      span_id                     = "span_id",
     }
   }
 
-  // label：低基数字段（用于 Loki 流过滤）
   stage.labels {
     values = {
       level                       = ""
@@ -121,19 +123,16 @@ loki.process "labels" {
     }
   }
 
-  // structured_metadata：带点格式，和 Tempo tag 名字对齐（22784 大盘联动用）
   stage.structured_metadata {
     values = {
-      trace_id           = ""
-      span_id            = ""
-      service_version    = ""
+      trace_id = ""
+      span_id  = ""
     }
   }
 
   forward_to = [loki.write.default.receiver]
 }
 
-// 10. 写入 Loki Gateway
 loki.write "default" {
   endpoint {
     url = "http://loki-gateway.monitoring.svc:80/loki/api/v1/push"
