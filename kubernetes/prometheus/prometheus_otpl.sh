@@ -7,19 +7,14 @@ pushgateway:
 
 server:
   extraArgs:
-    web.enable-remote-write-receiver: ""
-    enable-feature: otlp-write-receiver    # 开启 OTLP endpoint
-
-  # Prometheus 配置文件加 otlp 资源属性提升
-  extraConfigmapMounts: []
+    - web.enable-remote-write-receiver
+    - enable-feature=otlp-receiver
 
   global:
     scrape_interval: 15s
 
   serverFiles:
     prometheus.yml:
-      global:
-        scrape_interval: 15s
       otlp:
         keep_identifying_resource_attributes: true
         promote_resource_attributes:
@@ -35,8 +30,13 @@ server:
           - k8s.node.name
 EOF
 
+# 1. 升级 Helm Release
 helm upgrade prometheus prometheus-community/prometheus \
   -n monitoring \
-  -f prometheus-values.yaml
+  -f /tmp/prometheus-values.yaml
 
+# 2. 强行删除旧 Pod，确保加载最新的 ConfigMap（有些版本的 Prometheus 在 rollout 时不会立刻重载 extraArgs）
+kubectl delete pods -n monitoring -l app.kubernetes.io/component=server,app.kubernetes.io/name=prometheus
+
+# 3. 等待新的 Deployment 滚动就绪
 kubectl rollout status deployment prometheus-server -n monitoring
