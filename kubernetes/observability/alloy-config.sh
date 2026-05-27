@@ -65,7 +65,7 @@ prometheus.remote_write "default" {
   }
 }
 
-// 7. 日志文件发现（新版 Alloy 推荐方式）
+// 7. 日志文件发现
 local.file_match "pod_logs" {
   path_targets = [{
     __path__ = "/var/log/pods/*/*/*.log",
@@ -80,7 +80,7 @@ loki.source.file "pod_logs" {
   forward_to = [loki.process.labels.receiver]
 }
 
-// 9. 日志处理：CRI 格式解析 + 标签提取
+// 9. 日志处理：合并 CRI 解析 + 路径提取 + JSON 解析
 loki.process "labels" {
   // 解析 containerd CRI 格式
   stage.cri {}
@@ -99,6 +99,30 @@ loki.process "labels" {
     }
   }
 
+  // 解析 JSON 日志体
+  stage.json {
+    expressions = {
+      level    = "level",
+      trace_id = "trace_id",
+      service  = "service_name",
+    }
+  }
+
+  // level 和 service 设为 label（低基数，适合过滤）
+  stage.labels {
+    values = {
+      level   = "",
+      service = "",
+    }
+  }
+
+  // trace_id 设为结构化元数据（高基数，不能做 label）
+  stage.structured_metadata {
+    values = {
+      trace_id = "",
+    }
+  }
+
   forward_to = [loki.write.default.receiver]
 }
 
@@ -114,3 +138,11 @@ kubectl create configmap alloy-config \
   -n observability \
   --from-file=config.alloy=/tmp/alloy-config.alloy \
   --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl rollout restart daemonset alloy -n observability
+
+kubectl wait --for=condition=ready pod \
+  -l app=alloy -n observability --timeout=60s
+
+kubectl logs -n observability -l app=alloy --since=30s \
+  | grep -i "error\|warn\|loki" | head -10

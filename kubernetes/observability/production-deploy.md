@@ -61,6 +61,31 @@
 
 > **高可用要点**：Tempo 3 副本共享 MinIO S3 存储；Alloy 通过 Service DNS `tempo.observability:4317` 自动负载均衡；任意一个 Tempo Pod 挂了不影响全链路。
 
+
+```
+{
+  "timestamp": "2026-05-27T02:52:01.548Z",
+  "level": "INFO",
+  "service_name": "otel-demo",
+  "service_version": "1.0.0",
+  "environment": "production",
+
+  "trace_id": "6a2d0abfb93ad433dbf78fec0ec2eff3",
+  "span_id": "8f3c2b1a0d9e4f7b",
+  "trace_flags": "01",
+
+  "msg": "User login successfully",
+  "user_id": "10086",
+  "http_method": "POST",
+  "http_path": "/api/login",
+  "http_status": 200,
+  "duration_ms": 23,
+
+  "k8s_namespace": "default",
+  "k8s_pod": "otel-demo-xxx",
+  "k8s_node": "node-1"
+}
+```
 ---
 
 ## 部署顺序
