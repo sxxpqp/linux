@@ -1,6 +1,6 @@
 cat > /tmp/alloy-config.alloy << 'EOF'
 // ============================
-// 接收 OTLP（OTel SDK / Beyla / App）
+// 接收 OTLP
 // ============================
 otelcol.receiver.otlp "default" {
   grpc {
@@ -19,7 +19,7 @@ otelcol.receiver.otlp "default" {
 }
 
 // ============================
-// Metrics 资源标签增强
+// Metrics Resource Processor
 // ============================
 otelcol.processor.resource "metrics" {
   attributes {
@@ -34,7 +34,7 @@ otelcol.processor.resource "metrics" {
 }
 
 // ============================
-// Trace 批处理
+// Batch Processors
 // ============================
 otelcol.processor.batch "traces" {
   send_batch_size = 512
@@ -45,9 +45,6 @@ otelcol.processor.batch "traces" {
   }
 }
 
-// ============================
-// Metrics 批处理
-// ============================
 otelcol.processor.batch "metrics" {
   send_batch_size = 512
   timeout         = "5s"
@@ -57,9 +54,6 @@ otelcol.processor.batch "metrics" {
   }
 }
 
-// ============================
-// Logs 批处理
-// ============================
 otelcol.processor.batch "logs" {
   send_batch_size = 512
   timeout         = "5s"
@@ -70,7 +64,7 @@ otelcol.processor.batch "logs" {
 }
 
 // ============================
-// 导出 Tempo
+// Tempo Exporter
 // ============================
 otelcol.exporter.otlp "tempo" {
   client {
@@ -83,7 +77,7 @@ otelcol.exporter.otlp "tempo" {
 }
 
 // ============================
-// 导出 Prometheus OTLP Receiver
+// Prometheus Exporter
 // ============================
 otelcol.exporter.otlphttp "prometheus" {
   client {
@@ -92,7 +86,7 @@ otelcol.exporter.otlphttp "prometheus" {
 }
 
 // ============================
-// 导出 Loki OTLP
+// Loki OTLP Exporter
 // ============================
 otelcol.exporter.otlphttp "loki" {
   client {
@@ -101,21 +95,19 @@ otelcol.exporter.otlphttp "loki" {
 }
 
 // ============================
-// Kubernetes Pod 日志发现
+// File Discovery
 // ============================
 local.file_match "pod_logs" {
-  path_targets = [
-    {
-      __path__ = "/var/log/pods/*/*/*.log"
-      job      = "kubernetes-pods"
-    }
-  ]
+  path_targets = [{
+    __path__ = "/var/log/pods/*/*/*.log",
+    job      = "kubernetes-pods",
+  }]
 
   sync_period = "5s"
 }
 
 // ============================
-// 文件日志采集
+// File Source
 // ============================
 loki.source.file "pod_logs" {
   targets    = local.file_match.pod_logs.targets
@@ -123,55 +115,49 @@ loki.source.file "pod_logs" {
 }
 
 // ============================
-// 日志处理 Pipeline
+// Log Processing
 // ============================
 loki.process "logs" {
 
-  // CRI 格式解析
   stage.cri {}
 
-  // 从文件路径提取 K8s 元信息
   stage.regex {
     expression = "/var/log/pods/(?P<namespace>[^_]+)_(?P<pod>[^_]+)_[^/]+/(?P<container>[^/]+)/"
     source     = "filename"
   }
 
-  // Kubernetes Labels
   stage.labels {
     values = {
-      namespace = ""
-      pod       = ""
-      container = ""
+      namespace = "",
+      pod       = "",
+      container = "",
     }
   }
 
-  // JSON 日志解析
   stage.json {
     expressions = {
-      level                       = "level"
-      service_name                = "service_name"
-      service_namespace           = "k8s_namespace"
-      deployment_environment_name = "environment"
-      trace_id                    = "trace_id"
-      span_id                     = "span_id"
+      level                       = "level",
+      service_name                = "service_name",
+      service_namespace           = "k8s_namespace",
+      deployment_environment_name = "environment",
+      trace_id                    = "trace_id",
+      span_id                     = "span_id",
     }
   }
 
-  // 业务 Labels
   stage.labels {
     values = {
-      level                       = ""
-      service_name                = ""
-      service_namespace           = ""
-      deployment_environment_name = ""
+      level                       = "",
+      service_name                = "",
+      service_namespace           = "",
+      deployment_environment_name = "",
     }
   }
 
-  // Trace 关联
   stage.structured_metadata {
     values = {
-      trace_id = ""
-      span_id  = ""
+      trace_id = "",
+      span_id  = "",
     }
   }
 
@@ -179,7 +165,7 @@ loki.process "logs" {
 }
 
 // ============================
-// 写入 Loki
+// Loki Write
 // ============================
 loki.write "default" {
   endpoint {
