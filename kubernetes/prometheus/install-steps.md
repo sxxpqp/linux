@@ -1,28 +1,34 @@
 # Prometheus 监控栈安装步骤
 
-基于 kube-prometheus-stack，集成 Alertmanager、Blackbox Exporter、PrometheusAlert 等组件。
+两套 Prometheus 分工：
+
+| 部署 | 命名空间 | 用途 |
+|---|---|---|
+| **kube-prometheus-stack** | `monitoring` | 集群基础设施监控（kubelet/etcd/Node）、告警、Grafana 面板 |
+| **Prometheus standalone** | `observability` | 接收 Alloy remote_write（RED 指标、服务拓扑），供 Grafana Tempo 面板关联查询 |
 
 ## 部署架构
 
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│                      监控架构                                 │
-├──────────────────────────────────────────────────────────────┤
-│                   kube-prometheus-stack                       │
-│  ┌──────────┐  ┌──────────┐  ┌───────────┐                   │
-│  │Prometheus│  │Alertmanager│  │  Grafana  │                   │
-│  │ Operator │  │  :9093    │  │  :3000    │                   │
-│  └────┬─────┘  └────┬─────┘  └───────────┘                   │
-│       │              │                                        │
-│  ┌────┴─────┐  ┌────┴─────────────┐                           │
-│  │CRD 发现  │  │  告警路由          │                          │
-│  │- Service │  │ → wx-webhook      │                          │
-│  │  Monitor │  │ → PrometheusAlert │                          │
-│  │- PodMon  │  │ → 企业微信         │                          │
-│  │- Probe   │  └──────────────────┘                          │
-│  │- PromRule│                                                  │
-│  └──────────┘                                                  │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│  monitoring 命名空间                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────┐               │
+│  │ kube-prometheus│  │ Alertmanager │  │  Grafana   │               │
+│  │ -stack        │  │  :9093       │  │  :3000     │               │
+│  └──────┬───────┘  └──────┬───────┘  └─────┬─────┘               │
+│         │ CRD 发现          │ 告警路由        │ 面板               │
+│         ▼                  ▼                │                    │
+│  ServiceMonitor          wx-webhook          │                    │
+│  PodMonitor              PrometheusAlert     │                    │
+│  Probe                                       │                    │
+│  PrometheusRule                              │                    │
+├──────────────────────────────────────────────┼────────────────────┤
+│  observability 命名空间                       │                    │
+│  ┌──────────────┐                            │                    │
+│  │  Prometheus   │← remote_write ─ Alloy ───→│ Tempo/Loki 关联    │
+│  │  standalone   │   (RED/拓扑指标)            │                    │
+│  └──────────────┘                            │                    │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ## 前置条件
@@ -45,17 +51,106 @@ helm repo update
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   --namespace monitoring --create-namespace \
   --set grafana.adminPassword=admin \
-  --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
+  --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
+  --set prometheus.prometheusSpec.enableRemoteWriteReceiver=true
 ```
 
 | 参数 | 说明 |
 |---|---|
 | `grafana.adminPassword` | Grafana 管理员密码（生产环境请修改） |
 | `serviceMonitorSelectorNilUsesHelmValues=false` | 允许自动发现所有 ServiceMonitor/PodMonitor/Probe，不限于 Helm 标签 |
+| `enableRemoteWriteReceiver=true` | 开启 Prometheus remote_write 接收端，供 Alloy 推送 RED/拓扑指标 |
 
 ---
 
-## 2. 配置 Alertmanager 告警路由
+## 2. Alloy 指标写入配置
+
+kube-prometheus-stack 已在步骤 1 中开启了 `enableRemoteWriteReceiver=true`，可直接作为 Alloy 的指标后端。
+
+Alloy 中生成并推送 RED/拓扑指标的完整流水线：
+
+```alloy
+// 1. 接收 OTLP Trace
+otelcol.receiver.otlp "default" {
+  grpc { endpoint = "0.0.0.0:4317" }
+  http { endpoint = "0.0.0.0:4318" }
+  output {
+    traces = [
+      otelcol.connector.servicegraph.default.input,  // → 拓扑指标
+      otelcol.connector.spanmetrics.default.input,   // → RED 指标
+      otelcol.processor.batch.traces.input,          // → Tempo
+    ]
+  }
+}
+
+// 2. 服务拓扑图 → 指标
+otelcol.connector.servicegraph "default" {
+  dimensions = ["http.method", "http.status_code"]
+  output {
+    metrics = [otelcol.processor.batch.metrics.input]
+  }
+}
+
+// 3. RED 指标（QPS/错误率/P99）
+otelcol.connector.spanmetrics "default" {
+  histogram { explicit {} }
+  output {
+    metrics = [otelcol.processor.batch.metrics.input]
+  }
+}
+
+// 4. 指标攒批
+otelcol.processor.batch "metrics" {
+  send_batch_size = 512
+  timeout         = "5s"
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+  }
+}
+
+// 5. OTel 指标 → Prometheus 格式 → remote_write
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/write"
+  }
+}
+```
+
+> 写入的指标：`traces_service_graph_*`（服务拓扑）、`traces_spanmetrics_*`（RED：QPS/延迟/错误率）
+>
+> Grafana Tempo 面板通过 `tracesToMetrics` / `serviceMap` 关联查询这些指标。
+
+### 备选：observability 命名空间部署独立 Prometheus
+
+如果不想往 monitoring 的 Prometheus 混入 Alloy 指标，可额外部署一个轻量 Prometheus：
+
+```bash
+helm upgrade prometheus prometheus-community/prometheus \
+  -n observability \
+  --set server.extraArgs.web\\.enable-remote-write-receiver="" \
+  --set alertmanager.enabled=false \
+  --set pushgateway.enabled=false
+
+kubectl rollout status deployment prometheus-server -n observability
+```
+
+此时 Alloy remote_write 地址改为：
+
+```alloy
+  endpoint {
+    url = "http://prometheus-server.observability:9090/api/v1/write"
+  }
+```
+
+Grafana 需新增对应 Prometheus 数据源（`prometheus-server.observability:9090`）。
+
+---
+
+## 4. 配置 Alertmanager 告警路由
 
 ### 2.1 部署 Alertmanager 实例 CRD
 
@@ -91,7 +186,7 @@ kubectl apply -f alertmanager-config.yaml
 
 ---
 
-## 3. 采集控制面组件指标
+## 5. 采集控制面组件指标
 
 ### 3.1 kube-controller-manager / kube-scheduler
 
@@ -125,7 +220,7 @@ kubectl apply -f node-export.yaml
 
 ---
 
-## 4. 外部黑盒监控（Blackbox Exporter）
+## 6. 外部黑盒监控（Blackbox Exporter）
 
 ### 4.1 安装 Blackbox Exporter
 
@@ -144,7 +239,7 @@ kubectl apply -f probe.yaml
 
 ---
 
-## 5. 部署告警通知
+## 7. 部署告警通知
 
 ### 方案一：PrometheusAlert 聚合中心（推荐）
 
@@ -176,7 +271,7 @@ Grafana 中配置告警通知通道指向 `http://wx-webhook.monitoring:5001`。
 
 ---
 
-## 6. 应用监控（以 Nacos 为例）
+## 8. 应用监控（以 Nacos 为例）
 
 ```bash
 # 6.1 部署 Nacos
@@ -196,7 +291,7 @@ kubectl apply -f prometheusrule.yaml
 
 ---
 
-## 7. 验证
+## 9. 验证
 
 ```bash
 # 查看所有 Pod
@@ -227,7 +322,7 @@ kubectl -n monitoring port-forward svc/prometheus-grafana 3000:80
 
 ---
 
-## 8. 文件索引
+## 10. 文件索引
 
 | 文件 | 用途 |
 |---|---|

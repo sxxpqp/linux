@@ -10,11 +10,43 @@ datasources:
     datasources:
       - name: Tempo
         type: tempo
-        url: http://tempo.observability:3200
+        uid: tempo
+        url: http://tempo-query-frontend.observability:3200
         access: proxy
         isDefault: true
         jsonData:
           nodeGraph:
             enabled: true
-          lokiSearch:
+          tracesToLogs:
             datasourceUid: loki
+            filterByTraceID: true
+            filterBySpanID: true
+          tracesToMetrics:
+            datasourceUid: prometheus
+            queries:
+              - name: "Request Rate"
+                query: 'rate(traces_spanmetrics_calls_total{service="$__tags{service}"}[5m])'
+          serviceMap:
+            datasourceUid: prometheus
+
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://loki-gateway.monitoring.svc:80
+        access: proxy
+        jsonData:
+          derivedFields:
+            - name: TraceID
+              matcherRegex: '"trace_id":"(\w+)"'
+              url: '$${__value.raw}'
+              datasourceUid: tempo
+
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090
+        access: proxy
+        jsonData:
+          exemplarTraceIdDestinations:
+            - name: traceID
+              datasourceUid: tempo

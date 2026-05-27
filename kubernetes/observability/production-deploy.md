@@ -130,7 +130,7 @@ helm install tempo grafana/tempo \
 kubectl get pods -n observability -l app.kubernetes.io/name=tempo
 # 预期 3 个 Running
 
-kubectl port-forward svc/tempo -n observability 3200:3200 &
+kubectl port-forward svc/tempo-query-frontend -n observability 3200:3200 &
 curl http://localhost:3200/ready   # 返回 200
 ```
 
@@ -148,38 +148,54 @@ kubectl create configmap alloy-config -n observability \
 ### 4.2 配置说明
 
 ```alloy
-// alloy-config.alloy
+// alloy-config.alloy（嵌入 alloy.yaml 的 ConfigMap 中）
 otelcol.receiver.otlp "default" {
   grpc  { endpoint = "0.0.0.0:4317" }
   http  { endpoint = "0.0.0.0:4318" }
   output {
-    traces  = [otelcol.processor.batch.default.input]
-    metrics = [otelcol.processor.batch.default.input]
+    traces = [
+      otelcol.connector.servicegraph.default.input,
+      otelcol.connector.spanmetrics.default.input,
+      otelcol.processor.batch.traces.input,
+    ]
   }
 }
 
-otelcol.processor.batch "default" {
+otelcol.processor.batch "traces" {
   send_batch_size = 512
   timeout         = "5s"
   output {
-    traces  = [otelcol.exporter.otlp.tempo.input]
-    metrics = [otelcol.exporter.otlp.tempo.input]
+    traces = [otelcol.exporter.otlp.tempo.input]
   }
 }
 
 otelcol.exporter.otlp "tempo" {
   client {
-    endpoint = "tempo.observability:4317"    // Service DNS，自动负载均衡
-    tls {
-      insecure = true
-    }
+    endpoint = "tempo-distributor.observability:4317"  // Distributor OTLP 接收
+    tls { insecure = true }
+  }
+}
+
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/write"
   }
 }
 ```
 
+> 配置要点：
+> - Traces → **servicegraph / spanmetrics connectors** 生成 RED + 拓扑指标 → Prometheus
+> - Traces → **batch processor** 攒批 → **tempo-distributor** OTLP 接收
+> - Tempo 微服务模式下 `tempo-distributor` 是 Trace 写入入口，`tempo-query-frontend` 是查询入口
+
 ### 4.3 部署 Alloy
 
 ```bash
+# ConfigMap + DaemonSet + Service 已合并在 alloy.yaml 中，一个文件部署
 kubectl apply -f alloy.yaml
 kubectl wait --for=condition=ready pod -l app=alloy -n observability --timeout=120s
 ```
@@ -188,7 +204,7 @@ kubectl wait --for=condition=ready pod -l app=alloy -n observability --timeout=1
 
 | 项 | 做法 | 原因 |
 |----|------|------|
-| Tempo 地址 | `tempo.observability:4317` | Service DNS 自动解析到 3 个 Tempo Pod，K8s 轮询 |
+| Tempo 地址 | `tempo-distributor.observability:4317` | Service DNS → Distributor，Trace 写入入口 |
 | hostPort | 4317 / 4318 | Pod 通过节点 IP 就近发送，不经过 Service 跳转 |
 | 不设资源 limit | Beyla 改用 Service DNS 发 | 避免 IP 变化导致 Beyla 得改配置 |
 
@@ -316,10 +332,10 @@ kubectl logs -n observability tempo-0 | grep -i "s3\|minio\|error"
 
 ```bash
 # 确认 Service DNS 可解析
-kubectl run -it --rm debug --image=busybox -n observability -- nslookup tempo.observability
+kubectl run -it --rm debug --image=busybox -n observability -- nslookup tempo-distributor.observability
 
-# 确认 Tempo 4317 端口在监听
-kubectl exec -n observability tempo-0 -- ss -tlnp | grep 4317
+# 确认 Distributor 4317 端口在监听
+kubectl exec -n observability deploy/tempo-distributor -- ss -tlnp | grep 4317
 ```
 
 ### Beyla 发现不了服务
@@ -339,7 +355,7 @@ kubectl get pods -n default
 
 | 端口 | 协议 | 用途 | 谁用 |
 |------|------|------|------|
-| 4317 | OTLP gRPC | 接收 Trace 数据 | Alloy → Tempo |
+| 4317 | OTLP gRPC | 接收 Trace 数据 | Alloy → Distributor |
 | 4318 | OTLP HTTP | 接收 Trace 数据 | 备用 |
 | 3200 | HTTP | 查询 Trace | Grafana → Tempo |
 

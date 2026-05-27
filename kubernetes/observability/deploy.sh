@@ -51,10 +51,7 @@ echo "  Tempo 就绪"
 echo ""
 
 # ---------- Alloy ----------
-echo "[4/6] 部署 Alloy (OTel 采集管道)..."
-kubectl create configmap alloy-config -n ${NAMESPACE} \
-  --from-file=config.alloy=alloy-config.alloy \
-  --dry-run=client -o yaml | kubectl apply -f -
+echo "[4/6] 部署 Alloy (ConfigMap + DaemonSet + Service)..."
 kubectl apply -f alloy.yaml -n ${NAMESPACE}
 kubectl wait --for=condition=ready pod -l app=alloy -n ${NAMESPACE} --timeout=120s
 echo "  Alloy 就绪"

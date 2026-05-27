@@ -61,3 +61,46 @@
 | [extenalservice.yaml](extenalservice.yaml) | 外部服务 Service 定义 |
 
 > 详细部署步骤请参考 [deploy-guide.md](deploy-guide.md)。
+
+---
+
+## Prometheus standalone（observability 命名空间）
+
+用于接收 Alloy 推来的 RED/拓扑指标（remote_write），与 kube-prometheus-stack 独立部署，互不影响。
+
+### 安装
+
+```bash
+helm upgrade prometheus prometheus-community/prometheus \
+  -n observability \
+  --set server.extraArgs.web\\.enable-remote-write-receiver="" \
+  --set alertmanager.enabled=false \
+  --set pushgateway.enabled=false
+
+kubectl rollout status deployment prometheus-server -n observability
+```
+
+### 验证 remote_write 接收端已开启
+
+```bash
+kubectl get pod -n observability -l app.kubernetes.io/name=prometheus \
+  -o jsonpath='{.items[0].spec.containers[0].args}' | python3 -m json.tool | grep remote
+```
+
+预期输出：`--web.enable-remote-write-receiver`
+
+### Alloy remote_write 地址
+
+```alloy
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus-server.observability:9090/api/v1/write"
+  }
+}
+```
+
+| 参数 | 说明 |
+|---|---|
+| `web.enable-remote-write-receiver` | 开启 Prometheus 接收 remote_write 数据 |
+| `alertmanager.enabled=false` | observability 命名空间不需要独立 Alertmanager |
+| `pushgateway.enabled=false` | 不需要 Pushgateway |
