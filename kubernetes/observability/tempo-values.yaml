@@ -9,12 +9,20 @@ metricsGenerator:
     processor:
       span_metrics: {}
       service_graphs: {}
+      # local-blocks 默认会把最近的 trace 块写到内存 + 本地盘
+      # 启用后可供 TraceQL metrics 查询（count_over_time、rate 等）
+      local_blocks:
+        # 把完成的块也 flush 到长期存储（让历史查询也能命中）
+        flush_to_storage: true
     storage:
       remote_write:
       - url: http://prometheus-k8s.monitoring.svc:9090/api/v1/write
         send_exemplars: true
     registry:
       collection_interval: 30s
+  # local-blocks 需要本地临时存储（默认 emptyDir 也行，生产可换 PVC）
+  persistence:
+    enabled: false
 
 # tempo-distributed chart 1.61.x 的租户 override 渲染入口
 # chart 模板读的是顶层 overrides.defaults（不是 global_overrides，那是更老版本的 key）
@@ -25,8 +33,9 @@ overrides:
     metrics_generator:
       generate_native_histograms: classic
       processors:
-        - service-graphs
-        - span-metrics
+        - service-graphs   # 服务依赖拓扑图
+        - span-metrics     # RED 指标（rate / errors / duration）
+        - local-blocks     # TraceQL metrics: rate(), count_over_time(), quantile_over_time()
 
 # 各组件副本数
 ingester:
