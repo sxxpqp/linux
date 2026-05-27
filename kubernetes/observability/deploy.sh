@@ -52,6 +52,10 @@ echo ""
 
 # ---------- Alloy ----------
 echo "[4/6] 部署 Alloy (ConfigMap + DaemonSet + Service)..."
+# 必须先创建 alloy-config ConfigMap（alloy.yaml 里只有 DaemonSet+Service，挂载它）
+kubectl create configmap alloy-config -n ${NAMESPACE} \
+  --from-file=config.alloy=alloy-config.alloy \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f alloy.yaml -n ${NAMESPACE}
 kubectl wait --for=condition=ready pod -l app=alloy -n ${NAMESPACE} --timeout=120s
 echo "  Alloy 就绪"
