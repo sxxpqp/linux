@@ -13,23 +13,8 @@ otelcol.receiver.otlp "default" {
 
   output {
     traces  = [otelcol.processor.batch.traces.input]
-    metrics = [otelcol.processor.resource.metrics.input]
-    logs    = [otelcol.processor.batch.logs.input]
-  }
-}
-
-// ============================
-// Metrics Resource Processor
-// ============================
-otelcol.processor.resource "metrics" {
-  attributes {
-    action = "insert"
-    key    = "cluster"
-    value  = "prod-k8s"
-  }
-
-  output {
     metrics = [otelcol.processor.batch.metrics.input]
+    logs    = [otelcol.processor.batch.logs.input]
   }
 }
 
@@ -77,7 +62,7 @@ otelcol.exporter.otlp "tempo" {
 }
 
 // ============================
-// Prometheus Exporter
+// Prometheus OTLP Exporter
 // ============================
 otelcol.exporter.otlphttp "prometheus" {
   client {
