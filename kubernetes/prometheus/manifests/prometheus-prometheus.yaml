@@ -16,7 +16,23 @@ spec:
       name: alertmanager-main
       namespace: monitoring
       port: web
-  enableFeatures: []
+  
+  # 🎯 修正 1：在特性开关中激活 otlp-receiver
+  enableFeatures:
+    - otlp-receiver
+
+  # 🎯 修正 2：添加 OTLP 资源属性向指标标签转换的官方声明（平级缩进在 spec 下）
+  otlp:
+    translationStrategy: "prefer-resource-attributes"
+    resourceAttributes:
+      - service.name
+      - service.namespace
+      - deployment.environment.name
+      - service.version
+      - k8s.cluster.name
+      - k8s.namespace.name
+      - k8s.pod.name
+
   externalLabels: {}
   image: quay.io/prometheus/prometheus:v3.11.3
   nodeSelector:
