@@ -68,9 +68,12 @@ spec:
   nodeSelector:
     kubernetes.io/os: linux
 
-  # 开启 OTLP Receiver
+  # 开启 OTLP Receiver + Remote-Write Receiver
+  # 注：spec.enableRemoteWriteReceiver 字段在 prometheus-operator v0.59 才加，
+  # 旧版 operator 会静默忽略，必须用 additionalArgs 兜底
   additionalArgs:
     - name: web.enable-otlp-receiver
+    - name: web.enable-remote-write-receiver
 
   alerting:
     alertmanagers:

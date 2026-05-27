@@ -12,8 +12,19 @@ metricsGenerator:
     storage:
       remote_write:
       - url: http://prometheus-k8s.monitoring.svc:9090/api/v1/write
+        send_exemplars: true
     registry:
       collection_interval: 30s
+
+# tempo-distributed chart 的租户 override 渲染入口
+# 必须在顶层 global_overrides，不能写到 tempo.config.overrides 里（chart 模板不读那块）
+global_overrides:
+  defaults:
+    metrics_generator:
+      generate_native_histograms: classic
+      processors:
+        - service-graphs
+        - span-metrics
 
 # 各组件副本数
 ingester:
@@ -92,11 +103,6 @@ tempo:
           path: /var/tempo/wal
     querier: {}
     query_frontend: {}
-    overrides:
-      defaults:
-        metrics_generator:
-          generate_on_adjust: true
-          processors: [span-metrics, service-graphs]
 
 # MinIO 存储配置
 storage:
