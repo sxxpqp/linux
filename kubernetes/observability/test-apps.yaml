@@ -38,8 +38,12 @@ spec:
               value: "production"
             - name: OTEL_SERVICE_NAME
               value: "otel-demo"
+            # Dashboard 22784 用 deployment_environment_name 作为模板变量
+            # 必须用新版语义约定 deployment.environment.name（不是旧的 deployment.environment）
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "deployment.environment=production,service.version=1.0.0"
+              value: "deployment.environment.name=production,service.namespace=default,service.version=1.0.0"
+            - name: OTEL_SEMCONV_STABILITY_OPT_IN
+              value: "http"
             # K8s metadata for structured logging
             - name: K8S_NAMESPACE
               valueFrom:

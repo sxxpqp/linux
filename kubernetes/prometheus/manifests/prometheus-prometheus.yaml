@@ -21,6 +21,23 @@ spec:
   serviceDiscoveryRole: EndpointSlice
   enableFeatures:
   - otlp-write-receiver
+  - exemplar-storage
+
+  # OTLP 接收：把 OTel resource attribute 提升为 metric label
+  # Dashboard 22784 (Lightweight APM for OpenTelemetry) 依赖这些 label
+  otlp:
+    promoteResourceAttributes:
+      - service.instance.id
+      - service.name
+      - service.namespace
+      - deployment.environment.name
+      - k8s.cluster.name
+      - k8s.namespace.name
+      - k8s.pod.name
+      - k8s.node.name
+    keepIdentifyingResourceAttributes: true
+    translationStrategy: UnderscoreEscapingWithSuffixes
+
   resources:
     requests:
       memory: 400Mi
