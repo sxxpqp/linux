@@ -9,22 +9,42 @@ metadata:
     app.kubernetes.io/version: 3.11.3
   name: k8s
   namespace: monitoring
+
 spec:
-  alerting:
-    alertmanagers:
-    - apiVersion: v2
-      name: alertmanager-main
-      namespace: monitoring
-      port: web
-  enableFeatures:
-    - otlp-write-receiver
-  additionalScrapeConfigs:
-    name: prometheus-additional-config
-    key: otlp-config.yaml
-  externalLabels: {}
+  replicas: 2
+
   image: quay.io/prometheus/prometheus:v3.11.3
+  version: 3.11.3
+
+  serviceAccountName: prometheus-k8s
+
+  serviceDiscoveryRole: EndpointSlice
+
+  resources:
+    requests:
+      memory: 400Mi
+
+  securityContext:
+    fsGroup: 2000
+    runAsNonRoot: true
+    runAsUser: 1000
+
   nodeSelector:
     kubernetes.io/os: linux
+
+  # 开启 OTLP Receiver
+  additionalArgs:
+    - name: web.enable-otlp-receiver
+
+  alerting:
+    alertmanagers:
+      - apiVersion: v2
+        name: alertmanager-main
+        namespace: monitoring
+        port: web
+
+  externalLabels: {}
+
   podMetadata:
     labels:
       app.kubernetes.io/component: prometheus
@@ -32,24 +52,18 @@ spec:
       app.kubernetes.io/name: prometheus
       app.kubernetes.io/part-of: kube-prometheus
       app.kubernetes.io/version: 3.11.3
+
   podMonitorNamespaceSelector: {}
   podMonitorSelector: {}
+
   probeNamespaceSelector: {}
   probeSelector: {}
-  replicas: 2
-  resources:
-    requests:
-      memory: 400Mi
+
   ruleNamespaceSelector: {}
   ruleSelector: {}
+
   scrapeConfigNamespaceSelector: {}
   scrapeConfigSelector: {}
-  securityContext:
-    fsGroup: 2000
-    runAsNonRoot: true
-    runAsUser: 1000
-  serviceAccountName: prometheus-k8s
-  serviceDiscoveryRole: EndpointSlice
+
   serviceMonitorNamespaceSelector: {}
   serviceMonitorSelector: {}
-  version: 3.11.3
