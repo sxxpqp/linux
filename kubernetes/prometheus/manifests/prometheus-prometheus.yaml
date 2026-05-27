@@ -17,23 +17,14 @@ spec:
       namespace: monitoring
       port: web
   
-  # 🎯 核心修正 1：利用官方特性开关在启动参数中激活 otlp-receiver 接收口
+  # 🎯 1. 正常激活 OTLP 接收器的特征开关（这个老版本算子认识）
   enableFeatures:
     - otlp-receiver
 
-  # 🎯 核心修正 2：利用 inline 语法，将 3.x 官方标准的 otlp 配置无缝揉进最终生成的 prometheus.yml 中
-  # 这样既能绕过旧版本 CRD 的字段校验错误，又符合 Prometheus 3.x 只能将 OTLP 配置写在文件里的官方规范
-  extraConfigFile: |
-    otlp:
-      translation_strategy: "prefer-resource-attributes"
-      resource_attributes:
-        - service.name
-        - service.namespace
-        - deployment.environment.name
-        - service.version
-        - k8s.cluster.name
-        - k8s.namespace.name
-        - k8s.pod.name
+  # 🎯 2. 用旧版本算子 100% 认识的 secrets 关键字，把上面的 OTLP 配置文件强行挂载进容器
+  # Operator 算子看到这个后，会自动把它作为额外的配置文件合并注入到 prometheus.yml 中
+  secrets:
+    - prometheus-additional-config
 
   externalLabels: {}
   image: quay.io/prometheus/prometheus:v3.11.3

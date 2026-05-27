@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-additional-config
+  namespace: monitoring
+stringData:
+  otlp-config.yaml: |
+    otlp:
+      translation_strategy: "prefer-resource-attributes"
+      resource_attributes:
+        - service.name
+        - service.namespace
+        - deployment.environment.name
+        - service.version
+        - k8s.cluster.name
+        - k8s.namespace.name
+        - k8s.pod.name
