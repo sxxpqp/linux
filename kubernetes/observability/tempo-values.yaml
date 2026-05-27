@@ -15,8 +15,11 @@ metricsGenerator:
         # 把完成的块也 flush 到长期存储（让历史查询也能命中）
         flush_to_storage: true
     storage:
+      # HA 双推：每个 Prometheus pod 都写一份，避免 Service round-robin 命中单 pod
       remote_write:
-      - url: http://prometheus-k8s.monitoring.svc:9090/api/v1/write
+      - url: http://prometheus-k8s-0.prometheus-operated.monitoring.svc:9090/api/v1/write
+        send_exemplars: true
+      - url: http://prometheus-k8s-1.prometheus-operated.monitoring.svc:9090/api/v1/write
         send_exemplars: true
     registry:
       collection_interval: 30s

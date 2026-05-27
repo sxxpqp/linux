@@ -33,8 +33,12 @@ otelcol.processor.batch "metrics" {
   send_batch_size = 512
   timeout         = "5s"
 
+  // HA 双推：Service round-robin 只会命中一个 pod，必须显式指向每个副本
   output {
-    metrics = [otelcol.exporter.otlphttp.prometheus.input]
+    metrics = [
+      otelcol.exporter.otlphttp.prometheus_0.input,
+      otelcol.exporter.otlphttp.prometheus_1.input,
+    ]
   }
 }
 
@@ -61,11 +65,17 @@ otelcol.exporter.otlp "tempo" {
 }
 
 // ============================
-// Prometheus OTLP Exporter
+// Prometheus OTLP Exporter（双推到每个 pod，prometheus-operated 是 headless service）
 // ============================
-otelcol.exporter.otlphttp "prometheus" {
+otelcol.exporter.otlphttp "prometheus_0" {
   client {
-    endpoint = "http://prometheus-k8s.monitoring.svc:9090/api/v1/otlp"
+    endpoint = "http://prometheus-k8s-0.prometheus-operated.monitoring.svc:9090/api/v1/otlp"
+  }
+}
+
+otelcol.exporter.otlphttp "prometheus_1" {
+  client {
+    endpoint = "http://prometheus-k8s-1.prometheus-operated.monitoring.svc:9090/api/v1/otlp"
   }
 }
 
