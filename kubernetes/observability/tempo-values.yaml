@@ -10,7 +10,8 @@ metricsGenerator:
       span_metrics: {}
       service_graphs: {}
     storage:
-      path: /var/tempo/generator_wal
+      remote_write:
+      - url: http://prometheus-k8s.monitoring.svc:9090/api/v1/write
     registry:
       collection_interval: 30s
 
