@@ -10,17 +10,12 @@ datasources:
       - name: Tempo
         type: tempo
         uid: tempo
-<<<<<<< HEAD
         url: http://tempo-query-frontend.observability:3200
-=======
-        url: http://tempo-query-frontend.observability.svc.cluster.local:3200
->>>>>>> af50729c04618128758f8cb8e0c93caecbc43a7e
         access: proxy
         isDefault: true
         jsonData:
           nodeGraph:
             enabled: true
-<<<<<<< HEAD
           tracesToLogs:
             datasourceUid: loki
             filterByTraceID: true
@@ -32,35 +27,10 @@ datasources:
                 query: 'rate(traces_spanmetrics_calls_total{service="$__tags{service}"}[5m])'
           serviceMap:
             datasourceUid: prometheus
-=======
-          serviceMap:
-            datasourceUid: prometheus        # 开启服务拓扑图
-          lokiSearch:
-            datasourceUid: loki
-          traceToLogs:
-            datasourceUid: loki
-            tags: ["service.name", "pod"]
-            filterByTraceID: true
-            filterBySpanID: false
-            spanStartTimeShift: "-1m"
-            spanEndTimeShift: "1m"
-            mapTagNamesEnabled: true
-            mappedTags:
-              - key: service.name
-                value: app
-          traceToMetrics:
-            datasourceUid: prometheus
-            queries:
-              - name: "Request Rate"
-                query: 'sum(rate(traces_spanmetrics_duration_milliseconds_count{service="$__tags.service.name"}[5m]))'
-              - name: "P99 Latency"
-                query: 'histogram_quantile(0.99, sum(rate(traces_spanmetrics_duration_milliseconds_bucket{service="$__tags.service.name"}[5m])) by (le))'
->>>>>>> af50729c04618128758f8cb8e0c93caecbc43a7e
 
       - name: Loki
         type: loki
         uid: loki
-<<<<<<< HEAD
         url: http://loki-gateway.monitoring.svc:80
         access: proxy
         jsonData:
@@ -68,32 +38,14 @@ datasources:
             - name: TraceID
               matcherRegex: '"trace_id":"(\w+)"'
               url: '$${__value.raw}'
-=======
-        url: http://loki-gateway.monitoring.svc.cluster.local
-        access: proxy
-        jsonData:
-          derivedFields:
-            - name: "TraceID"
-              regex: '"traceID"\s*:\s*"([a-f0-9]{32})"'
-              url: ""
-              internalLinkEnabled: true
->>>>>>> af50729c04618128758f8cb8e0c93caecbc43a7e
               datasourceUid: tempo
 
       - name: Prometheus
         type: prometheus
         uid: prometheus
-<<<<<<< HEAD
         url: http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090
-=======
-        url: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
->>>>>>> af50729c04618128758f8cb8e0c93caecbc43a7e
         access: proxy
         jsonData:
           exemplarTraceIdDestinations:
             - name: traceID
-<<<<<<< HEAD
               datasourceUid: tempo
-=======
-              datasourceUid: tempo
->>>>>>> af50729c04618128758f8cb8e0c93caecbc43a7e
