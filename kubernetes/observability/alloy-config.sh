@@ -1,6 +1,6 @@
 cat > /tmp/alloy-config.alloy << 'EOF'
 // ============================
-// 接收 OTLP（应用 / OTel SDK / Beyla）
+// 接收 OTLP（OTel SDK / Beyla / App）
 // ============================
 otelcol.receiver.otlp "default" {
   grpc {
@@ -92,7 +92,7 @@ otelcol.exporter.otlphttp "prometheus" {
 }
 
 // ============================
-// 导出 Loki OTLP Endpoint
+// 导出 Loki OTLP
 // ============================
 otelcol.exporter.otlphttp "loki" {
   client {
@@ -101,12 +101,12 @@ otelcol.exporter.otlphttp "loki" {
 }
 
 // ============================
-// Kubernetes Pod 日志采集
+// Kubernetes Pod 日志发现
 // ============================
 local.file_match "pod_logs" {
   path_targets = [
     {
-      __path__ = "/var/log/pods/*/*/*.log",
+      __path__ = "/var/log/pods/*/*/*.log"
       job      = "kubernetes-pods"
     }
   ]
@@ -115,7 +115,7 @@ local.file_match "pod_logs" {
 }
 
 // ============================
-// Loki 文件日志 Source
+// 文件日志采集
 // ============================
 loki.source.file "pod_logs" {
   targets    = local.file_match.pod_logs.targets
@@ -123,11 +123,11 @@ loki.source.file "pod_logs" {
 }
 
 // ============================
-// 日志处理
+// 日志处理 Pipeline
 // ============================
 loki.process "logs" {
 
-  // 解析 CRI 日志格式
+  // CRI 格式解析
   stage.cri {}
 
   // 从文件路径提取 K8s 元信息
@@ -136,42 +136,42 @@ loki.process "logs" {
     source     = "filename"
   }
 
-  // 设置 Loki Labels
+  // Kubernetes Labels
   stage.labels {
     values = {
-      namespace = "",
-      pod       = "",
-      container = "",
+      namespace = ""
+      pod       = ""
+      container = ""
     }
   }
 
   // JSON 日志解析
   stage.json {
     expressions = {
-      level                       = "level",
-      service_name                = "service_name",
-      service_namespace           = "k8s_namespace",
-      deployment_environment_name = "environment",
-      trace_id                    = "trace_id",
-      span_id                     = "span_id",
+      level                       = "level"
+      service_name                = "service_name"
+      service_namespace           = "k8s_namespace"
+      deployment_environment_name = "environment"
+      trace_id                    = "trace_id"
+      span_id                     = "span_id"
     }
   }
 
   // 业务 Labels
   stage.labels {
     values = {
-      level                       = "",
-      service_name                = "",
-      service_namespace           = "",
-      deployment_environment_name = "",
+      level                       = ""
+      service_name                = ""
+      service_namespace           = ""
+      deployment_environment_name = ""
     }
   }
 
-  // Trace 关联元数据
+  // Trace 关联
   stage.structured_metadata {
     values = {
-      trace_id = "",
-      span_id  = "",
+      trace_id = ""
+      span_id  = ""
     }
   }
 
