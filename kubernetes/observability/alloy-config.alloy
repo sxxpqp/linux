@@ -1,9 +1,15 @@
 // ============================
-// 接收 OTLP（OTel SDK + Beyla）
+// 接收 OTLP
 // ============================
 otelcol.receiver.otlp "default" {
-  grpc { endpoint = "0.0.0.0:4317" }
-  http { endpoint = "0.0.0.0:4318" }
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
   output {
     traces  = [otelcol.processor.batch.traces.input]
     metrics = [otelcol.processor.batch.metrics.input]
@@ -12,11 +18,12 @@ otelcol.receiver.otlp "default" {
 }
 
 // ============================
-// 批处理
+// Batch Processors
 // ============================
 otelcol.processor.batch "traces" {
   send_batch_size = 512
   timeout         = "5s"
+
   output {
     traces = [otelcol.exporter.otlp.tempo.input]
   }
@@ -25,6 +32,7 @@ otelcol.processor.batch "traces" {
 otelcol.processor.batch "metrics" {
   send_batch_size = 512
   timeout         = "5s"
+
   output {
     metrics = [otelcol.exporter.otlphttp.prometheus.input]
   }
@@ -33,58 +41,68 @@ otelcol.processor.batch "metrics" {
 otelcol.processor.batch "logs" {
   send_batch_size = 512
   timeout         = "5s"
+
   output {
     logs = [otelcol.exporter.otlphttp.loki.input]
   }
 }
 
 // ============================
-// 导出 Tempo
+// Tempo Exporter
 // ============================
 otelcol.exporter.otlp "tempo" {
   client {
-    endpoint = "tempo-distributor.observability:4317"
-    tls { insecure = true }
+    endpoint = "tempo-distributor.observability.svc:4317"
+
+    tls {
+      insecure = true
+    }
   }
 }
 
 // ============================
-// 导出 Prometheus OTLP endpoint
+// Prometheus OTLP Exporter
 // ============================
 otelcol.exporter.otlphttp "prometheus" {
   client {
-    endpoint = "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/otlp"
-    tls { insecure = true }
+    endpoint = "http://prometheus-k8s.monitoring.svc:9090/api/v1/otlp"
   }
 }
 
 // ============================
-// 导出 Loki OTLP endpoint
+// Loki OTLP Exporter
 // ============================
 otelcol.exporter.otlphttp "loki" {
   client {
     endpoint = "http://loki-gateway.monitoring.svc:80/otlp"
-    tls { insecure = true }
   }
 }
 
 // ============================
-// 文件采集日志（兜底：非 OTel SDK 的容器日志）
+// File Discovery
 // ============================
 local.file_match "pod_logs" {
   path_targets = [{
     __path__ = "/var/log/pods/*/*/*.log",
     job      = "kubernetes-pods",
   }]
+
   sync_period = "5s"
 }
 
+// ============================
+// File Source
+// ============================
 loki.source.file "pod_logs" {
   targets    = local.file_match.pod_logs.targets
-  forward_to = [loki.process.labels.receiver]
+  forward_to = [loki.process.logs.receiver]
 }
 
-loki.process "labels" {
+// ============================
+// Log Processing
+// ============================
+loki.process "logs" {
+
   stage.cri {}
 
   stage.regex {
@@ -130,6 +148,9 @@ loki.process "labels" {
   forward_to = [loki.write.default.receiver]
 }
 
+// ============================
+// Loki Write
+// ============================
 loki.write "default" {
   endpoint {
     url = "http://loki-gateway.monitoring.svc:80/loki/api/v1/push"

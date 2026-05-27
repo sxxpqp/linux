@@ -99,4 +99,7 @@ spec:
             sleep 2
           done
           mc mb local/tempo-traces --ignore-existing
-          echo "bucket tempo-traces ready"
+          mc mb local/loki-data --ignore-existing
+          mc mb local/loki-admin --ignore-existing
+          mc mb local/testlog --ignore-existing
+          echo "buckets ready: tempo-traces, loki-data, loki-admin, testlog"
