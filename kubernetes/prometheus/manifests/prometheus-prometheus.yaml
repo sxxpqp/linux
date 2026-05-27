@@ -19,7 +19,8 @@ spec:
   serviceAccountName: prometheus-k8s
 
   serviceDiscoveryRole: EndpointSlice
-
+  enableFeatures:
+  - otlp-write-receiver
   resources:
     requests:
       memory: 400Mi
