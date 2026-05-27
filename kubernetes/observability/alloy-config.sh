@@ -87,7 +87,7 @@ otelcol.exporter.otlp "tempo" {
 // ============================
 otelcol.exporter.otlphttp "prometheus" {
   client {
-    endpoint = "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/otlp/v1/metrics"
+    endpoint = "http://prometheus-k8s.monitoring.svc:9090/api/v1/otlp/v1/metrics"
   }
 }
 
