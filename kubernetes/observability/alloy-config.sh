@@ -40,7 +40,7 @@ otelcol.processor.batch "logs" {
 }
 
 // ============================
-// 导出 Tempo（traces）
+// 导出 Tempo
 // ============================
 otelcol.exporter.otlp "tempo" {
   client {
@@ -50,8 +50,7 @@ otelcol.exporter.otlp "tempo" {
 }
 
 // ============================
-// 导出 Prometheus OTLP endpoint（metrics）
-// 22784 要求直接走 OTLP，不是 remote write
+// 导出 Prometheus OTLP endpoint
 // ============================
 otelcol.exporter.otlphttp "prometheus" {
   client {
@@ -61,8 +60,7 @@ otelcol.exporter.otlphttp "prometheus" {
 }
 
 // ============================
-// 导出 Loki OTLP endpoint（logs）
-// 22784 要求用 Loki OTLP，不是文件采集
+// 导出 Loki OTLP endpoint
 // ============================
 otelcol.exporter.otlphttp "loki" {
   client {
@@ -72,7 +70,7 @@ otelcol.exporter.otlphttp "loki" {
 }
 
 // ============================
-// 文件采集日志（兜底，非 OTel SDK 的服务也能采）
+// 文件采集日志（兜底）
 // ============================
 local.file_match "pod_logs" {
   path_targets = [{
@@ -116,17 +114,17 @@ loki.process "labels" {
 
   stage.labels {
     values = {
-      level                       = ""
-      service_name                = ""
-      service_namespace           = ""
-      deployment_environment_name = ""
+      level                       = "",
+      service_name                = "",
+      service_namespace           = "",
+      deployment_environment_name = "",
     }
   }
 
   stage.structured_metadata {
     values = {
-      trace_id = ""
-      span_id  = ""
+      trace_id = "",
+      span_id  = "",
     }
   }
 
@@ -149,3 +147,5 @@ kubectl rollout restart daemonset alloy -n observability
 
 kubectl wait --for=condition=ready pod \
   -l app=alloy -n observability --timeout=60s
+
+kubectl logs -n observability -l app=alloy --since=30s | tail -10
