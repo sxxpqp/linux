@@ -37,6 +37,6 @@ EOF
 
 helm upgrade prometheus prometheus-community/prometheus \
   -n monitoring \
-  -f /tmp/prometheus-values.yaml
+  -f prometheus-values.yaml
 
 kubectl rollout status deployment prometheus-server -n monitoring
