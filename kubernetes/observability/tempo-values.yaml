@@ -16,9 +16,11 @@ metricsGenerator:
     registry:
       collection_interval: 30s
 
-# tempo-distributed chart 的租户 override 渲染入口
-# 必须在顶层 global_overrides，不能写到 tempo.config.overrides 里（chart 模板不读那块）
-global_overrides:
+# tempo-distributed chart 1.61.x 的租户 override 渲染入口
+# chart 模板读的是顶层 overrides.defaults（不是 global_overrides，那是更老版本的 key）
+# 该配置写到 tempo-runtime ConfigMap 的 overrides.yaml，Tempo metrics-generator
+# 必须在这里启用 processors，否则不会处理任何 span
+overrides:
   defaults:
     metrics_generator:
       generate_native_histograms: classic
