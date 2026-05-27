@@ -27,9 +27,6 @@ spec:
           hostPort: 4318
           name: otlp-http
         resources:
-          requests:
-            cpu: 100m
-            memory: 256Mi
           limits:
             cpu: 500m
             memory: 512Mi
