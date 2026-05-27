@@ -1,4 +1,5 @@
 adminPassword: "admin123"
+
 service:
   type: NodePort
   nodePort: 30300
@@ -20,17 +21,23 @@ datasources:
             datasourceUid: loki
             filterByTraceID: true
             filterBySpanID: true
+            lokiSearch: true
+            tags:
+              - key: service.name
+                value: service_name
+              - key: service.namespace
+                value: service_namespace
+              - key: deployment.environment
+                value: deployment_environment_name
           tracesToMetrics:
             datasourceUid: prometheus
-            tags:
-              - key: "service.name"
-                value: "service"
             queries:
               - name: "Request Rate"
-                query: 'rate(traces_spanmetrics_calls_total{$$__tags}[5m])'
+                query: 'rate(traces_spanmetrics_calls_total{service_name="${__tags{service.name}}"}[5m])'
           serviceMap:
             datasourceUid: prometheus
-
+          lokiSearch:
+            datasourceUid: loki
       - name: Loki
         type: loki
         uid: loki
@@ -38,11 +45,11 @@ datasources:
         access: proxy
         jsonData:
           derivedFields:
-            - name: TraceID
+            - name: trace_id
               matcherRegex: '"trace_id":"([a-f0-9]{32})"'
-              url: '$${__value.raw}'
+              url: "${__value.raw}"
               datasourceUid: tempo
-
+              urlDisplayLabel: "View in Tempo"
       - name: Prometheus
         type: prometheus
         uid: prometheus

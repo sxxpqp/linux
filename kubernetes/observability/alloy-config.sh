@@ -80,10 +80,11 @@ loki.source.file "pod_logs" {
   forward_to = [loki.process.labels.receiver]
 }
 
-// 9. 日志处理：CRI 解析 + 路径提取 + JSON 解析
+// 9. 日志处理
 loki.process "labels" {
   stage.cri {}
 
+  // 从路径提取 namespace/pod/container
   stage.regex {
     expression = "/var/log/pods/(?P<namespace>[^_]+)_(?P<pod>[^_]+)_[^/]+/(?P<container>[^/]+)/"
     source     = "filename"
@@ -97,30 +98,35 @@ loki.process "labels" {
     }
   }
 
+  // 解析 JSON 日志体
   stage.json {
     expressions = {
-      "level"                       = "level",
-      "service_name"                = "service_name",
-      "service_namespace"           = "k8s_namespace",
-      "deployment_environment_name" = "environment",
-      "trace_id"                    = "trace_id",
-      "span_id"                     = "span_id",
+      level                        = "level",
+      service_name                 = "service_name",
+      service_namespace            = "k8s_namespace",
+      deployment_environment_name  = "environment",
+      service_version              = "service_version",
+      trace_id                     = "trace_id",
+      span_id                      = "span_id",
     }
   }
 
+  // label：低基数字段（用于 Loki 流过滤）
   stage.labels {
     values = {
-      "level"                       = "",
-      "service_name"                = "",
-      "service_namespace"           = "",
-      "deployment_environment_name" = "",
+      level                       = ""
+      service_name                = ""
+      service_namespace           = ""
+      deployment_environment_name = ""
     }
   }
 
+  // structured_metadata：带点格式，和 Tempo tag 名字对齐（22784 大盘联动用）
   stage.structured_metadata {
     values = {
-      "trace_id" = "",
-      "span_id"  = "",
+      trace_id           = ""
+      span_id            = ""
+      service_version    = ""
     }
   }
 
@@ -144,6 +150,3 @@ kubectl rollout restart daemonset alloy -n observability
 
 kubectl wait --for=condition=ready pod \
   -l app=alloy -n observability --timeout=60s
-
-kubectl logs -n observability -l app=alloy --since=30s \
-  | grep -i "error\|warn\|loki" | head -10
