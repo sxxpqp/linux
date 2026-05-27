@@ -17,21 +17,17 @@ spec:
       namespace: monitoring
       port: web
   
-  # 🎯 修正 1：在特性开关中激活 otlp-receiver
+  # 🎯 核心修正 1：利用官方提供的内置特征开关激活 otlp 接收器
   enableFeatures:
     - otlp-receiver
 
-  # 🎯 修正 2：添加 OTLP 资源属性向指标标签转换的官方声明（平级缩进在 spec 下）
-  otlp:
-    translationStrategy: "prefer-resource-attributes"
-    resourceAttributes:
-      - service.name
-      - service.namespace
-      - deployment.environment.name
-      - service.version
-      - k8s.cluster.name
-      - k8s.namespace.name
-      - k8s.pod.name
+  # 🎯 核心修正 2：利用 additionalArgs 把 OTLP 的资源属性提升直接作为启动 Flag 强行喂给容器
+  # 这样可以完美绕过你集群内旧版本 CRD 的字段合法性检查（Strict Decoding Error）
+  additionalArgs:
+    - name: "otlp.translation-strategy"
+      value: "prefer-resource-attributes"
+    - name: "otlp.resource-attributes"
+      value: "service.name,service.namespace,deployment.environment.name,service.version,k8s.cluster.name,k8s.namespace.name,k8s.pod.name"
 
   externalLabels: {}
   image: quay.io/prometheus/prometheus:v3.11.3
