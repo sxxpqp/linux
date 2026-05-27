@@ -40,17 +40,15 @@ data:
       instrument:
         - k8s_namespace: ""
     features:
-      - http2
-      - tls
-    otel_traces_export:
-      endpoint: http://alloy.observability:4318
-      protocol: http/protobuf
-    otel_metrics_export:
-      endpoint: http://alloy.observability:4318
-      protocol: http/protobuf
+      - application
+      - network
     attributes:
       kubernetes:
         enable: true
+    otel_traces_export:
+      endpoint: http://alloy.observability:4318/v1/traces
+    otel_metrics_export:
+      endpoint: http://alloy.observability:4318/v1/metrics
     log_level: info
 ---
 apiVersion: apps/v1
