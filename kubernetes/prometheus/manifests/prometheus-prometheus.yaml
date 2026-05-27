@@ -20,11 +20,13 @@ spec:
 
   serviceDiscoveryRole: EndpointSlice
   enableFeatures:
-  - otlp-write-receiver
   - exemplar-storage
+  # 注意：不要写 otlp-write-receiver / remote-write-receiver 这种 flag
+  # operator v0.78+ 在配了 spec.otlp 时自动加 --web.enable-otlp-receiver
+  # spec.enableRemoteWriteReceiver 自动加 --web.enable-remote-write-receiver
+  # 在 additionalArgs 重复声明会被 operator 拒绝整个 reconcile
 
   # 接收 Tempo metrics-generator 推送的 traces_service_graph_* / traces_spanmetrics_*
-  # Grafana Tempo 数据源的 serviceMap 拓扑图依赖这些指标
   enableRemoteWriteReceiver: true
 
   # OTLP 接收：把 OTel resource attribute 提升为 metric label
@@ -67,13 +69,6 @@ spec:
 
   nodeSelector:
     kubernetes.io/os: linux
-
-  # 开启 OTLP Receiver + Remote-Write Receiver
-  # 注：spec.enableRemoteWriteReceiver 字段在 prometheus-operator v0.59 才加，
-  # 旧版 operator 会静默忽略，必须用 additionalArgs 兜底
-  additionalArgs:
-    - name: web.enable-otlp-receiver
-    - name: web.enable-remote-write-receiver
 
   alerting:
     alertmanagers:
