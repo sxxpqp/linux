@@ -140,7 +140,7 @@ kubectl logs -n observability -l job-name=minio-create-bucket
 helm repo add grafana https://nexus.ihome.sxxpqp.top:8443/repository/grafana/
 helm repo update
 
-helm install tempo grafana/tempo \
+helm install tempo grafana/tempo-distributed \
   --namespace observability \
   --values tempo-values.yaml
 ```
