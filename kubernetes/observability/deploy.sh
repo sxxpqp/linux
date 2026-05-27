@@ -42,7 +42,7 @@ echo ""
 
 # ---------- Tempo ----------
 echo "[3/6] 部署 Tempo (3副本 + S3后端)..."
-helm repo add grafana https://grafana.github.io/helm-charts --force-update 2>/dev/null
+helm repo add grafana https://nexus.ihome.sxxpqp.top:8443/repository/grafana --force-update 2>/dev/null
 helm upgrade --install tempo grafana/tempo-distributed \
   -n ${NAMESPACE} \
   -f tempo-values.yaml \
