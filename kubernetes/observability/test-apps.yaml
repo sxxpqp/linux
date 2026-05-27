@@ -6,7 +6,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: otel-demo
-  namespace: default
   labels:
     app: otel-demo
 spec:
@@ -18,45 +17,74 @@ spec:
     metadata:
       labels:
         app: otel-demo
+      annotations:
+        # Go 不支持自动注入，这个注解不需要
     spec:
       containers:
-      - name: app
-        image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/otel-demo:latest
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 8080
-        env:
-        - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
-        - name: OTEL_EXPORTER_OTLP_ENDPOINT
-          value: "http://$(NODE_IP):4318"
-        - name: ENVIRONMENT
-          value: "production"
-        - name: OTEL_SERVICE_NAME
-          value: "otel-demo"
-        - name: OTEL_RESOURCE_ATTRIBUTES
-          value: "deployment.environment=production,service.version=1.0.0"
-        resources:
-          requests:
-            cpu: 100m
-            memory: 64Mi
-          limits:
-            cpu: 500m
-            memory: 128Mi
+        - name: app
+          image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/otel-demo:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://$(NODE_IP):4318"
+            - name: ENVIRONMENT
+              value: "production"
+            - name: OTEL_SERVICE_NAME
+              value: "otel-demo"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=production,service.version=1.0.0"
+            # K8s metadata for structured logging
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: K8S_POD
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: K8S_NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 128Mi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: otel-demo
-  namespace: default
+  labels:
+    app: otel-demo
 spec:
   type: ClusterIP
   ports:
-  - port: 8080
-    targetPort: 8080
-    name: http
+    - port: 8080
+      targetPort: 8080
+      name: http
   selector:
     app: otel-demo
 ---
