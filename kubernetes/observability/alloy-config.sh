@@ -107,7 +107,7 @@ local.file_match "pod_logs" {
   path_targets = [
     {
       __path__ = "/var/log/pods/*/*/*.log",
-      job      = "kubernetes-pods",
+      job      = "kubernetes-pods"
     }
   ]
 
