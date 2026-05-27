@@ -23,18 +23,36 @@ spec:
   - otlp-write-receiver
   - exemplar-storage
 
+  # 接收 Tempo metrics-generator 推送的 traces_service_graph_* / traces_spanmetrics_*
+  # Grafana Tempo 数据源的 serviceMap 拓扑图依赖这些指标
+  enableRemoteWriteReceiver: true
+
   # OTLP 接收：把 OTel resource attribute 提升为 metric label
-  # Dashboard 22784 (Lightweight APM for OpenTelemetry) 依赖这些 label
+  # 列表对齐官方 dashboard 22784 (Lightweight APM for OpenTelemetry) 推荐配置
+  # https://grafana.com/grafana/dashboards/22784
   otlp:
     promoteResourceAttributes:
+      # Dashboard 22784 必需
       - service.instance.id
       - service.name
       - service.namespace
       - deployment.environment.name
+      # OTel 指标通用推荐
+      - service.version
+      - cloud.availability_zone
+      - cloud.region
+      - container.name
+      - deployment.environment
       - k8s.cluster.name
+      - k8s.container.name
+      - k8s.cronjob.name
+      - k8s.daemonset.name
+      - k8s.deployment.name
+      - k8s.job.name
       - k8s.namespace.name
       - k8s.pod.name
-      - k8s.node.name
+      - k8s.replicaset.name
+      - k8s.statefulset.name
     keepIdentifyingResourceAttributes: true
     translationStrategy: UnderscoreEscapingWithSuffixes
 
