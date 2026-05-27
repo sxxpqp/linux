@@ -1,0 +1,116 @@
+cat > /tmp/alloy-config.alloy << 'EOF'
+// 1. 接收端：OTLP（来自 OTel SDK + Beyla）
+otelcol.receiver.otlp "default" {
+  grpc { endpoint = "0.0.0.0:4317" }
+  http { endpoint = "0.0.0.0:4318" }
+  output {
+    traces = [
+      otelcol.connector.servicegraph.default.input,
+      otelcol.connector.spanmetrics.default.input,
+      otelcol.processor.batch.traces.input,
+    ]
+    metrics = [otelcol.processor.batch.metrics.input]
+  }
+}
+
+// 2. 服务拓扑图
+otelcol.connector.servicegraph "default" {
+  dimensions = ["http.method", "http.status_code"]
+  output {
+    metrics = [otelcol.processor.batch.metrics.input]
+  }
+}
+
+// 3. RED 指标
+otelcol.connector.spanmetrics "default" {
+  histogram { explicit {} }
+  output {
+    metrics = [otelcol.processor.batch.metrics.input]
+  }
+}
+
+// 4. 批处理
+otelcol.processor.batch "traces" {
+  send_batch_size = 512
+  timeout         = "5s"
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+otelcol.processor.batch "metrics" {
+  send_batch_size = 512
+  timeout         = "5s"
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+  }
+}
+
+// 5. 导出 Tempo
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo-distributor.observability:4317"
+    tls { insecure = true }
+  }
+}
+
+// 6. 导出 Prometheus
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/write"
+  }
+}
+
+// 7. 日志文件发现（新版 Alloy 推荐方式）
+local.file_match "pod_logs" {
+  path_targets = [{
+    __path__ = "/var/log/pods/*/*/*.log",
+    job      = "kubernetes-pods",
+  }]
+  sync_period = "5s"
+}
+
+// 8. 读取日志文件
+loki.source.file "pod_logs" {
+  targets    = local.file_match.pod_logs.targets
+  forward_to = [loki.process.labels.receiver]
+}
+
+// 9. 日志处理：CRI 格式解析 + 标签提取
+loki.process "labels" {
+  // 解析 containerd CRI 格式
+  stage.cri {}
+
+  // 从文件路径提取 namespace/pod/container
+  stage.regex {
+    expression = "/var/log/pods/(?P<namespace>[^_]+)_(?P<pod>[^_]+)_[^/]+/(?P<container>[^/]+)/"
+    source     = "filename"
+  }
+
+  stage.labels {
+    values = {
+      namespace = "",
+      pod       = "",
+      container = "",
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+// 10. 写入 Loki Gateway
+loki.write "default" {
+  endpoint {
+    url = "http://loki-gateway.monitoring.svc:80/loki/api/v1/push"
+  }
+}
+EOF
+
+kubectl create configmap alloy-config \
+  -n observability \
+  --from-file=config.alloy=/tmp/alloy-config.alloy \
+  --dry-run=client -o yaml | kubectl apply -f -
