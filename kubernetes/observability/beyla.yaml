@@ -38,7 +38,7 @@ data:
   beyla-config.yml: |
     discovery:
       instrument:
-        - k8s_namespace: default
+        - k8s_namespace: ""
     features:
       - http2
       - tls
@@ -80,6 +80,8 @@ spec:
         env:
         - name: BEYLA_CONFIG_PATH
           value: /etc/beyla/beyla-config.yml
+        - name: OTEL_EBPF_KUBE_CLUSTER_NAME
+          value: "local-cluster"
         volumeMounts:
         - name: beyla-config
           mountPath: /etc/beyla

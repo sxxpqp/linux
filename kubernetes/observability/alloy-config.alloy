@@ -5,6 +5,7 @@ otelcol.receiver.otlp "default" {
   grpc { endpoint = "0.0.0.0:4317" }
   http { endpoint = "0.0.0.0:4318" }
   output {
+<<<<<<< HEAD
     traces = [
       otelcol.connector.servicegraph.default.input,
       otelcol.connector.spanmetrics.default.input,
@@ -37,6 +38,13 @@ otelcol.connector.spanmetrics "default" {
 // 4. 批处理
 // ============================
 otelcol.processor.batch "traces" {
+=======
+    traces  = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+>>>>>>> af50729c04618128758f8cb8e0c93caecbc43a7e
   send_batch_size = 512
   timeout         = "5s"
   output {
@@ -44,6 +52,7 @@ otelcol.processor.batch "traces" {
   }
 }
 
+<<<<<<< HEAD
 otelcol.processor.batch "metrics" {
   send_batch_size = 512
   timeout         = "5s"
@@ -111,5 +120,12 @@ loki.process "labels" {
 loki.write "default" {
   endpoint {
     url = "http://loki-gateway.monitoring.svc:80/loki/api/v1/push"
+=======
+// 发送链路给 Tempo
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo-distributor.observability.svc.cluster.local:4317"
+    tls { insecure = true }
+>>>>>>> af50729c04618128758f8cb8e0c93caecbc43a7e
   }
 }

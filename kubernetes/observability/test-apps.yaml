@@ -25,6 +25,19 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
+        env:
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://$(NODE_IP):4318"
+        - name: ENVIRONMENT
+          value: "production"
+        - name: OTEL_SERVICE_NAME
+          value: "otel-demo"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "deployment.environment=production,service.version=1.0.0"
         resources:
           requests:
             cpu: 100m

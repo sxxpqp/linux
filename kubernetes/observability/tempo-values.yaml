@@ -1,38 +1,113 @@
 # Tempo 高可用配置（生产环境）
-# 使用方式：helm install tempo grafana/tempo -n observability --values tempo-values.yaml
+# 使用方式：helm install tempo grafana/tempo-distributed -n observability --values tempo-values.yaml
 
-tempo:
+# 启用 metrics-generator 组件
+metricsGenerator:
+  enabled: true
+  replicas: 1
+  config:
+    processor:
+      span_metrics: {}
+      service_graphs: {}
+    storage:
+      path: /var/tempo/generator_wal
+    registry:
+      collection_interval: 30s
+
+# 各组件副本数
+ingester:
   replicas: 3
+  config:
+    lifecycler:
+      ring:
+        replication_factor: 3
 
-  storage:
-    trace:
-      backend: s3
-      s3:
-        bucket: tempo-traces
-        endpoint: minio.observability:9000
-        access_key: minioadmin
-        secret_key: minioadmin
-        insecure: true
-      wal:
-        path: /var/tempo/wal
+distributor:
+  replicas: 2
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
 
-  receivers:
-    otlp:
-      protocols:
-        grpc:
-          endpoint: 0.0.0.0:4317
-        http:
-          endpoint: 0.0.0.0:4318
+querier:
+  replicas: 2
 
+queryFrontend:
+  replicas: 2
+
+compactor:
+  replicas: 1
+
+# chart 级别控制 Service 端口
+traces:
+  otlp:
+    grpc:
+      enabled: true
+      receiverConfig:
+        endpoint: 0.0.0.0:4317
+    http:
+      enabled: true
+      receiverConfig:
+        endpoint: 0.0.0.0:4318
+
+# Tempo 核心配置
+tempo:
+  config: |
+    memberlist:
+      cluster_label: "tempo.observability"
+    multitenancy_enabled: false
+    usage_report:
+      reporting_enabled: true
+    compactor:
+      compaction:
+        block_retention: 24h
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+    ingester: {}
+    server:
+      http_listen_port: 3200
+    storage:
+      trace:
+        backend: s3
+        local:
+          path: /var/tempo/traces
+        s3:
+          access_key: minioadmin
+          bucket: tempo-traces
+          endpoint: minio.observability:9000
+          insecure: true
+          secret_key: minioadmin
+        wal:
+          path: /var/tempo/wal
+    querier: {}
+    query_frontend: {}
+    overrides:
+      defaults:
+        metrics_generator:
+          generate_on_adjust: true
+          processors: [span-metrics, service-graphs]
+
+# MinIO 存储配置
+storage:
+  trace:
+    backend: s3
+    s3:
+      access_key: minioadmin
+      secret_key: minioadmin
+      bucket: tempo-traces
+      endpoint: minio.observability:9000
+      insecure: true
+
+# 服务类型
 service:
   type: ClusterIP
-  ports:
-    - name: otlp-grpc
-      port: 4317
-      targetPort: 4317
-    - name: otlp-http
-      port: 4318
-      targetPort: 4318
-    - name: http
-      port: 3200
-      targetPort: 3200
