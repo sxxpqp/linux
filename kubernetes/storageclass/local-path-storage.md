@@ -26,6 +26,12 @@ local-path是一个Kubernetes StorageClass的插件，它可以将PV（Persisten
    ```
 
    您应该会看到一个名为“local-path”的storageclass。
+
+
+
+   ```
+   kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+   ```
 5. 创建测试pvc：
 
    ```
