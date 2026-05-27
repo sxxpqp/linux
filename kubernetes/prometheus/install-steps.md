@@ -59,70 +59,104 @@ helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
 |---|---|
 | `grafana.adminPassword` | Grafana 管理员密码（生产环境请修改） |
 | `serviceMonitorSelectorNilUsesHelmValues=false` | 允许自动发现所有 ServiceMonitor/PodMonitor/Probe，不限于 Helm 标签 |
-| `enableRemoteWriteReceiver=true` | 开启 Prometheus remote_write 接收端，供 Alloy 推送 RED/拓扑指标 |
+| `enableRemoteWriteReceiver=true` | 开启 Prometheus remote_write 接收端 |
 
 ---
 
-## 2. Alloy 指标写入配置
+## 2. 配置 Prometheus OTLP Receiver
 
-kube-prometheus-stack 已在步骤 1 中开启了 `enableRemoteWriteReceiver=true`，可直接作为 Alloy 的指标后端。
+Alloy 通过 OTLP HTTP 协议将 Metrics 推送到 Prometheus，需要额外开启 OTLP 接收器。
 
-Alloy 中生成并推送 RED/拓扑指标的完整流水线：
+### 2.1 创建 OTLP 配置 Secret
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-additional-config
+  namespace: monitoring
+stringData:
+  otlp-config.yaml: |
+    otlp:
+      keep_identifying_resource_attributes: true
+      promote_resource_attributes:
+        - service.instance.id
+        - service.name
+        - service.namespace
+        - deployment.environment.name
+        - service.version
+        - k8s.cluster.name
+        - k8s.namespace.name
+        - k8s.pod.name
+        - k8s.deployment.name
+        - k8s.node.name
+EOF
+```
+
+### 2.2 更新 Prometheus CRD
+
+```bash
+kubectl patch prometheus k8s -n monitoring --type=merge -p '{
+  "spec": {
+    "enableFeatures": ["otlp-write-receiver"],
+    "additionalScrapeConfigs": {
+      "name": "prometheus-additional-config",
+      "key": "otlp-config.yaml"
+    }
+  }
+}'
+
+kubectl rollout status statefulset prometheus-k8s -n monitoring
+```
+
+### 2.3 验证 OTLP 端点
+
+```bash
+kubectl get svc -n monitoring | grep prometheus
+# 确认 prometheus-k8s Service 存在
+```
+
+> Alloy 写入地址：`http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/otlp`
+
+---
+
+## 3. Alloy OTLP 指标写入配置
+
+Alloy 通过 OTLP HTTP 直接推送 Metrics，不再使用 remote_write。指标生成（RED/拓扑）由 Tempo metrics-generator 处理。
 
 ```alloy
-// 1. 接收 OTLP Trace
+// 接收 OTLP
 otelcol.receiver.otlp "default" {
   grpc { endpoint = "0.0.0.0:4317" }
   http { endpoint = "0.0.0.0:4318" }
   output {
-    traces = [
-      otelcol.connector.servicegraph.default.input,  // → 拓扑指标
-      otelcol.connector.spanmetrics.default.input,   // → RED 指标
-      otelcol.processor.batch.traces.input,          // → Tempo
-    ]
-  }
-}
-
-// 2. 服务拓扑图 → 指标
-otelcol.connector.servicegraph "default" {
-  dimensions = ["http.method", "http.status_code"]
-  output {
+    traces  = [otelcol.processor.batch.traces.input]
     metrics = [otelcol.processor.batch.metrics.input]
+    logs    = [otelcol.processor.batch.logs.input]
   }
 }
 
-// 3. RED 指标（QPS/错误率/P99）
-otelcol.connector.spanmetrics "default" {
-  histogram { explicit {} }
-  output {
-    metrics = [otelcol.processor.batch.metrics.input]
-  }
-}
-
-// 4. 指标攒批
+// Metrics 攒批
 otelcol.processor.batch "metrics" {
   send_batch_size = 512
   timeout         = "5s"
   output {
-    metrics = [otelcol.exporter.prometheus.default.input]
+    metrics = [otelcol.exporter.otlphttp.prometheus.input]
   }
 }
 
-// 5. OTel 指标 → Prometheus 格式 → remote_write
-otelcol.exporter.prometheus "default" {
-  forward_to = [prometheus.remote_write.default.receiver]
-}
-
-prometheus.remote_write "default" {
-  endpoint {
-    url = "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/write"
+// Metrics → Prometheus OTLP HTTP
+otelcol.exporter.otlphttp "prometheus" {
+  client {
+    endpoint = "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/otlp"
+    tls { insecure = true }
   }
 }
 ```
 
-> 写入的指标：`traces_service_graph_*`（服务拓扑）、`traces_spanmetrics_*`（RED：QPS/延迟/错误率）
->
-> Grafana Tempo 面板通过 `tracesToMetrics` / `serviceMap` 关联查询这些指标。
+> Tempo metrics-generator 产生 `traces_service_graph_*`（拓扑）和 `traces_spanmetrics_*`（RED），
+> 由 Tempo 内部写入 Prometheus，Grafana 通过 `tracesToMetrics` / `serviceMap` 关联查询。
 
 ### 备选：observability 命名空间部署独立 Prometheus
 

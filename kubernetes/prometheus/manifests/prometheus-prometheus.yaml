@@ -16,16 +16,11 @@ spec:
       name: alertmanager-main
       namespace: monitoring
       port: web
-  
-  # 🎯 1. 正常激活 OTLP 接收器的特征开关（这个老版本算子认识）
   enableFeatures:
-    - otlp-receiver
-
-  # 🎯 2. 用旧版本算子 100% 认识的 secrets 关键字，把上面的 OTLP 配置文件强行挂载进容器
-  # Operator 算子看到这个后，会自动把它作为额外的配置文件合并注入到 prometheus.yml 中
-  secrets:
-    - prometheus-additional-config
-
+    - otlp-write-receiver
+  additionalScrapeConfigs:
+    name: prometheus-additional-config
+    key: otlp-config.yaml
   externalLabels: {}
   image: quay.io/prometheus/prometheus:v3.11.3
   nodeSelector:

@@ -173,16 +173,14 @@ kubectl create configmap alloy-config -n observability \
 ### 4.2 配置说明
 
 ```alloy
-// alloy-config.alloy（嵌入 alloy.yaml 的 ConfigMap 中）
+// alloy-config.alloy
 otelcol.receiver.otlp "default" {
   grpc  { endpoint = "0.0.0.0:4317" }
   http  { endpoint = "0.0.0.0:4318" }
   output {
-    traces = [
-      otelcol.connector.servicegraph.default.input,
-      otelcol.connector.spanmetrics.default.input,
-      otelcol.processor.batch.traces.input,
-    ]
+    traces  = [otelcol.processor.batch.traces.input]
+    metrics = [otelcol.processor.batch.metrics.input]
+    logs    = [otelcol.processor.batch.logs.input]
   }
 }
 
@@ -194,28 +192,62 @@ otelcol.processor.batch "traces" {
   }
 }
 
+otelcol.processor.batch "metrics" {
+  send_batch_size = 512
+  timeout         = "5s"
+  output {
+    metrics = [otelcol.exporter.otlphttp.prometheus.input]
+  }
+}
+
+otelcol.processor.batch "logs" {
+  send_batch_size = 512
+  timeout         = "5s"
+  output {
+    logs = [otelcol.exporter.otlphttp.loki.input]
+  }
+}
+
+// Traces → Tempo (gRPC)
 otelcol.exporter.otlp "tempo" {
   client {
-    endpoint = "tempo-distributor.observability:4317"  // Distributor OTLP 接收
+    endpoint = "tempo-distributor.observability:4317"
     tls { insecure = true }
   }
 }
 
-otelcol.exporter.prometheus "default" {
-  forward_to = [prometheus.remote_write.default.receiver]
+// Metrics → Prometheus OTLP endpoint
+otelcol.exporter.otlphttp "prometheus" {
+  client {
+    endpoint = "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/otlp"
+    tls { insecure = true }
+  }
 }
 
-prometheus.remote_write "default" {
+// Logs → Loki OTLP endpoint（主路径：OTel SDK 发出的日志）
+otelcol.exporter.otlphttp "loki" {
+  client {
+    endpoint = "http://loki-gateway.monitoring.svc:80/otlp"
+    tls { insecure = true }
+  }
+}
+
+// 文件采集日志（兜底：非 OTel SDK 的容器日志）
+local.file_match "pod_logs" { ... }
+loki.source.file "pod_logs" { ... }
+loki.process "labels" { ... }
+loki.write "default" {
   endpoint {
-    url = "http://prometheus-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/write"
+    url = "http://loki-gateway.monitoring.svc:80/loki/api/v1/push"
   }
 }
 ```
 
 > 配置要点：
-> - Traces → **servicegraph / spanmetrics connectors** 生成 RED + 拓扑指标 → Prometheus
-> - Traces → **batch processor** 攒批 → **tempo-distributor** OTLP 接收
-> - Tempo 微服务模式下 `tempo-distributor` 是 Trace 写入入口，`tempo-query-frontend` 是查询入口
+> - Alloy 做纯转发，不再运行 servicegraph/spanmetrics connectors
+> - RED + 拓扑指标由 **Tempo metrics-generator** 生成（tempo-values.yaml 中 `metricsGenerator.enabled: true`）
+> - Metrics 走 OTLP HTTP → Prometheus `/api/v1/otlp`（需在 Prometheus CRD 中开启 `otlp-write-receiver`）
+> - Logs 双通道：OTel SDK 发 OTLP → Loki `/otlp`（主），非 OTel 容器走文件采集 → Loki Gateway（兜底）
 
 ### 4.3 部署 Alloy
 

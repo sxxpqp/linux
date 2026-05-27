@@ -18,7 +18,7 @@
 |------|---------|---------|------|------|
 | **MinIO** | Deployment | observability | 9000/9001 | S3 共享存储（Tempo 后端） |
 | **Tempo** | Helm (tempo-distributed) | observability | 4317(OTLP) / 3200(query) | Trace 存储与查询 |
-| **Alloy** | DaemonSet | observability | 4317/4318 | OTLP 接收 + 日志采集 + 指标生成 |
+| **Alloy** | DaemonSet | observability | 4317/4318 | OTLP 接收 + 日志采集（兜底） |
 | **Beyla** | DaemonSet | observability | — | eBPF 零侵入自动埋点 |
 | **Grafana** | Helm | observability | 30300(NodePort) | 统一可视化 |
 
@@ -28,12 +28,15 @@
 
 ```
 Traces:  App/Beyla ──OTLP──→ Alloy ──→ Tempo Distributor (:4317) ──→ MinIO
-                                 └──→ servicegraph/spanmetrics ──→ Prometheus (remote_write)
+                                  └──→ Tempo metrics-generator → RED + 拓扑指标 → Prometheus
 
-Logs:   容器 stdout ──→ /var/log/pods/ ──→ Alloy (loki.source.file) ──→ Loki Gateway
+Metrics: App/Beyla ──OTLP──→ Alloy ──→ Prometheus OTLP endpoint (:9090/api/v1/otlp)
 
-Metrics: Beyla ──OTLP──→ Alloy ──→ spanmetrics ──→ Prometheus remote_write
+Logs:    App (OTel SDK) ──OTLP──→ Alloy ──→ Loki OTLP endpoint (:80/otlp)     ← 主路径
+         App (非 OTel) ──stdout──→ /var/log/pods/ ──→ Alloy → Loki Gateway   ← 兜底
 ```
+
+> 指标生成（RED/拓扑）由 Tempo metrics-generator 处理，不再由 Alloy 的 servicegraph/spanmetrics connectors 生成。
 
 ## 结构化 JSON 日志格式
 
@@ -118,7 +121,7 @@ Explore Loki 日志时，每条带 `trace_id` 的日志行旁会出现 **Tempo**
 | [minio.yaml](minio.yaml) | MinIO Deployment + Service + PVC + 自动创建 bucket Job |
 | [tempo-values.yaml](tempo-values.yaml) | Tempo Helm values：3 副本 + MinIO S3 + metrics-generator |
 | [alloy.yaml](alloy.yaml) | Alloy DaemonSet + Service（ConfigMap 见 alloy-config.alloy） |
-| [alloy-config.alloy](alloy-config.alloy) | Alloy 配置：OTLP 接收 → servicegraph/spanmetrics → Tempo/Prometheus/Loki |
+| [alloy-config.alloy](alloy-config.alloy) | Alloy 配置：OTLP 接收 → 三路分发（Traces→Tempo / Metrics→Prometheus OTLP / Logs→Loki OTLP）+ 文件日志兜底 |
 | [beyla.yaml](beyla.yaml) | Beyla eBPF DaemonSet：ServiceAccount + RBAC + ConfigMap + DaemonSet |
 | [grafana-values.yaml](grafana-values.yaml) | Grafana Helm values：NodePort 30300 + Tempo/Loki/Prometheus 数据源 |
 
@@ -168,9 +171,9 @@ http://<任意节点IP>:30300
 
 | 服务 | DNS 地址 | 使用者 |
 |------|---------|--------|
-| Prometheus | `prometheus-kube-prometheus-prometheus.monitoring.svc:9090` | Alloy (remote_write) |
-| Loki Gateway | `loki-gateway.monitoring.svc:80` | Alloy (loki.write) |
-| Tempo Distributor | `tempo-distributor.observability:4317` | Alloy (OTLP export) |
+| Prometheus | `prometheus-kube-prometheus-prometheus.monitoring.svc:9090` | Alloy (OTLP `/api/v1/otlp`) |
+| Loki Gateway | `loki-gateway.monitoring.svc:80` | Alloy (OTLP `/otlp` + 文件日志 `/loki/api/v1/push`) |
+| Tempo Distributor | `tempo-distributor.observability:4317` | Alloy (OTLP gRPC) |
 
 ## 应用接入
 
