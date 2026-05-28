@@ -140,6 +140,7 @@ Explore Loki 日志时，每条带 `trace_id` 的日志行旁会出现 **Tempo**
 | [beyla.md](beyla.md) | Beyla eBPF 配置文档（内核要求、权限说明、与 OTel SDK 互补） |
 | [test-apps.yaml](test-apps.yaml) | 测试 Demo 应用：Go (otel-demo) + Java (Spring Boot) + Python (Flask) |
 | [deploy.sh](deploy.sh) | **一键部署**：MinIO → Tempo → Alloy → Beyla → Grafana（首次部署用这个） |
+| [uninstall.sh](uninstall.sh) | **一键卸载**：默认保留 PVC/数据；加 `--purge` 完整清理；加 `--dry-run` 预演 |
 | [alloy-config.sh](alloy-config.sh) | 只更新 Alloy（改了 `alloy-config.alloy` 后跑） |
 | [tempo-update.sh](tempo-update.sh) | 只更新 Tempo（改了 `tempo-values.yaml` 后跑） |
 | [grafana-deploy.sh](grafana-deploy.sh) | 只更新 Grafana（改了 `grafana-values.yaml`/datasource provisioning 后跑，会自动重启 pod 让 provisioning 生效） |
