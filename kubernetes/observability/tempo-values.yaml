@@ -90,7 +90,10 @@ tempo:
         wal:
           path: /var/tempo/wal
     querier: {}
-    query_frontend: {}
+    query_frontend:
+      metrics:
+        max_duration: 24h
+        query_backend_after: 30m
     overrides:
       defaults:
         metrics_generator:
