@@ -36,10 +36,9 @@ datasources:
             spanStartTimeShift: "-2m"
             spanEndTimeShift: "2m"
             # span 标签 → Loki 标签的映射（key 是 trace 端 OTel 语义约定名，value 是 Loki 上对应的标签名）
-            # Loki 端没有 service_name/service_namespace 标签，复用 K8s 原生标签
             tags:
-              - { key: "service.name",      value: "container" }
-              - { key: "service.namespace", value: "namespace" }
+              - { key: "service.name",      value: "service_name" }
+              - { key: "service.namespace", value: "service_namespace" }
             filterByTraceID: true
             filterBySpanID: false
             # 自定义 LogQL：按 service 过滤 + 同时匹配 trace_id（覆盖 JSON 与 structured_metadata 两种形态）
@@ -50,7 +49,6 @@ datasources:
             datasourceUid: prometheus
             spanStartTimeShift: "-2m"
             spanEndTimeShift: "2m"
-            # Prometheus 端用 OTel 提升出来的标签（参考 prometheus-prometheus.yaml 的 spec.otlp）
             tags:
               - { key: "service.name",      value: "service_name" }
               - { key: "service.namespace", value: "service_namespace" }
