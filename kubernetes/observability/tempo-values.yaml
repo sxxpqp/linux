@@ -116,19 +116,10 @@ tempo:
         wal:
           path: /var/tempo/wal
     querier: {}
-<<<<<<< HEAD
     query_frontend:
       metrics:
         max_duration: 24h
         query_backend_after: 30m
-    overrides:
-      defaults:
-        metrics_generator:
-          generate_on_adjust: true
-          processors: [span-metrics, service-graphs]
-=======
-    query_frontend: {}
->>>>>>> 3792ee6b0cd6b93a114872e77da73915c55c683a
 
 # MinIO 存储配置
 storage:
