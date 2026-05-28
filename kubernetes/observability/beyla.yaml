@@ -80,6 +80,10 @@ spec:
           value: /etc/beyla/beyla-config.yml
         - name: OTEL_EBPF_KUBE_CLUSTER_NAME
           value: "local-cluster"
+        # Dashboard 22784 模板变量 deployment_environment_name 由此注入
+        # service.namespace 由 Beyla 自动从 k8s namespace 派生（attributes.kubernetes.enable: true）
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "deployment.environment.name=production"
         volumeMounts:
         - name: beyla-config
           mountPath: /etc/beyla

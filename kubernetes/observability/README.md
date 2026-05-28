@@ -28,15 +28,22 @@
 
 ```
 Traces:  App/Beyla ──OTLP──→ Alloy ──→ Tempo Distributor (:4317) ──→ MinIO
-                                  └──→ Tempo metrics-generator → RED + 拓扑指标 → Prometheus
+                                  │
+Tempo metrics-generator (service-graphs + span-metrics + local-blocks)
+                                  │   ┌→ Prometheus pod-0 (:9090/api/v1/write)
+                                  └───┤
+                                      └→ Prometheus pod-1 (:9090/api/v1/write)   ← HA 双推
 
-Metrics: App/Beyla ──OTLP──→ Alloy ──→ Prometheus OTLP endpoint (:9090/api/v1/otlp)
+Metrics: App/Beyla ──OTLP──→ Alloy ──┬→ Prometheus pod-0 (:9090/api/v1/otlp)
+                                     └→ Prometheus pod-1 (:9090/api/v1/otlp)     ← HA 双推
 
-Logs:    App (OTel SDK) ──OTLP──→ Alloy ──→ Loki OTLP endpoint (:80/otlp)     ← 主路径
-         App (非 OTel) ──stdout──→ /var/log/pods/ ──→ Alloy → Loki Gateway   ← 兜底
+Logs:    App (OTel SDK) ──OTLP──→ Alloy ──→ Loki OTLP endpoint (:80/otlp)        ← 主路径
+         App (非 OTel) ──stdout──→ /var/log/pods/ ──→ Alloy → Loki Gateway       ← 兜底
 ```
 
-> 指标生成（RED/拓扑）由 Tempo metrics-generator 处理，不再由 Alloy 的 servicegraph/spanmetrics connectors 生成。
+> - **RED 指标 + 拓扑**：由 Tempo metrics-generator 处理（`service-graphs` / `span-metrics` processor），不再由 Alloy 的 servicegraph/spanmetrics connectors 生成。
+> - **TraceQL metrics**（`count_over_time()` / `rate()`）：由 metrics-generator 的 `local-blocks` processor 提供。
+> - **HA 双推**：Prometheus 2 副本无共享存储，必须双推；详见下方 "跨命名空间服务地址"。
 
 ## 结构化 JSON 日志格式
 
@@ -171,9 +178,38 @@ http://<任意节点IP>:30300
 
 | 服务 | DNS 地址 | 使用者 |
 |------|---------|--------|
-| Prometheus | `prometheus-kube-prometheus-prometheus.monitoring.svc:9090` | Alloy (OTLP `/api/v1/otlp`) |
+| Prometheus（统一 svc） | `prometheus-k8s.monitoring.svc:9090` | Grafana 查询 |
+| Prometheus pod-0 | `prometheus-k8s-0.prometheus-operated.monitoring.svc:9090` | Alloy / Tempo 写入（HA 双推第 1 份） |
+| Prometheus pod-1 | `prometheus-k8s-1.prometheus-operated.monitoring.svc:9090` | Alloy / Tempo 写入（HA 双推第 2 份） |
 | Loki Gateway | `loki-gateway.monitoring.svc:80` | Alloy (OTLP `/otlp` + 文件日志 `/loki/api/v1/push`) |
 | Tempo Distributor | `tempo-distributor.observability:4317` | Alloy (OTLP gRPC) |
+
+> **HA 双推**：Prometheus 是 2 副本但没有共享存储，每个 pod 各自维护 TSDB。如果只往 Service ClusterIP 写，会被 round-robin 命中其中一个 pod，另一个 pod 完全没数据 —— Grafana 查询轮到那个空 pod 时面板就空。所以 Alloy 和 Tempo metrics-generator **必须显式双推到 `prometheus-operated` headless service 的每个 pod**。
+
+## 前置依赖
+
+本栈假设 `monitoring` 命名空间已部署 **kube-prometheus + Loki**。Prometheus CR (`prometheus-k8s`) 需要开启以下能力（[manifests/prometheus-prometheus.yaml](../prometheus/manifests/prometheus-prometheus.yaml)）：
+
+```yaml
+spec:
+  enableFeatures:
+    - exemplar-storage           # exemplar 跳 trace 必须
+  enableRemoteWriteReceiver: true # 接 Tempo metrics-generator 推的服务图指标
+  otlp:                          # 接 Alloy 推的 OTel 指标
+    keepIdentifyingResourceAttributes: true
+    translationStrategy: UnderscoreEscapingWithSuffixes
+    promoteResourceAttributes:    # 把 OTel resource attribute 提升为 metric label
+      - service.instance.id       # dashboard 22784 必需
+      - service.name
+      - service.namespace
+      - deployment.environment.name
+      - service.version
+      - k8s.namespace.name
+      - k8s.pod.name
+      # ... 完整列表见 manifests/prometheus-prometheus.yaml
+```
+
+> **重要**：不要在 `additionalArgs` 里手动加 `web.enable-otlp-receiver` / `web.enable-remote-write-receiver`，prometheus-operator v0.78+ 会**自动管理**这两个 flag，重复声明会触发 `can't set arguments which are already managed by the operator` 错误，整个 reconcile 卡住、StatefulSet 不更新。
 
 ## 应用接入
 
@@ -187,8 +223,68 @@ Beyla 自动发现 `k8s_namespace: ""`（所有 namespace）下的 Service，无
 
 ```yaml
 env:
+- name: NODE_IP
+  valueFrom:
+    fieldRef: { fieldPath: status.hostIP }
 - name: OTEL_EXPORTER_OTLP_ENDPOINT
-  value: "http://alloy.observability:4318"
+  value: "http://$(NODE_IP):4318"   # 走 hostPort 直连本节点的 Alloy（避免跨节点跳）
+- name: OTEL_SERVICE_NAME
+  value: "my-app"
+- name: OTEL_RESOURCE_ATTRIBUTES
+  # 注意是 deployment.environment.name（新版语义约定），不是旧的 deployment.environment
+  value: "deployment.environment.name=production,service.namespace=default,service.version=1.0.0"
+- name: OTEL_SEMCONV_STABILITY_OPT_IN
+  value: "http"   # 用稳定版 HTTP 语义（http_server_request_duration_seconds 而非旧名）
 ```
 
 Beyla + OTel SDK 互补：Beyla 覆盖 HTTP/gRPC 协议层，SDK 覆盖 SQL/Redis/Kafka 等库调用。
+
+## 关键设计决策与会话纪要
+
+为什么这套栈长这样：
+
+### Prometheus（不是 Mimir）
+- 单集群、小规模、HA 写入分裂可用双推解决 → Mimir 多出 11 个 pod 不划算
+- 上 Mimir 的触发线：多集群联邦 / 百万级 active series / 多租户 / 月级 retention
+
+### Tempo metrics-generator 启用三个 processor
+| Processor | 提供能力 | Dashboard 22784 哪些面板依赖 |
+|---|---|---|
+| `service-graphs` | `traces_service_graph_*` | 服务拓扑图、节点延迟 |
+| `span-metrics` | `traces_spanmetrics_*` | RED 派生指标 |
+| `local-blocks` | TraceQL metrics（`rate()` / `count_over_time()` / `quantile_over_time()`） | 时间序列面板（Throughput / Latency Trend） |
+
+缺 `local-blocks` 会导致 TraceQL metrics 查询失败，Grafana 表格组件抛 `TypeError __index`。
+
+### Grafana 数据源 3 向关联
+| 起点 → 终点 | 配置项 |
+|---|---|
+| Trace → Logs | Tempo `tracesToLogsV2`（V1 已废弃）+ 自定义 LogQL 按 trace_id 过滤 |
+| Trace → Metrics | Tempo `tracesToMetrics`，4 条预置查询用 OTel 原生指标 |
+| Logs → Traces | Loki `derivedFields`，3 个 regex 覆盖 JSON / logfmt / OTel SDK 注入三种格式 |
+| Metrics → Traces | Prometheus `exemplarTraceIdDestinations`，label 名 `trace_id`（**不是** `traceID`） |
+
+`tempo-distributed` chart **1.61.x 的 overrides key 是顶层 `overrides:`**，不是更老版本的 `global_overrides`，写错会渲染出 `overrides: null` 导致 metrics-generator 不启用任何 processor。
+
+### Alloy 双推到每个 Prometheus 副本
+```
+otelcol.processor.batch "metrics" {
+  output {
+    metrics = [
+      otelcol.exporter.otlphttp.prometheus_0.input,  # → pod-0
+      otelcol.exporter.otlphttp.prometheus_1.input,  # → pod-1
+    ]
+  }
+}
+```
+对应 Tempo metrics-generator 的 `remote_write` 也要列两条 URL，分别指向 `prometheus-k8s-0` 和 `prometheus-k8s-1`。
+
+### OTel 指标命名翻译
+Prometheus OTLP receiver 默认 `translationStrategy: UnderscoreEscapingWithSuffixes`：
+- OTel Sum / Counter → 加 `_total` 后缀（`my_counter` → `my_counter_total`）
+- OTel Histogram → 拆 `_bucket` / `_count` / `_sum`
+- 测试 OTel payload 时如果查不到要带后缀查
+
+### Grafana datasource `timeInterval: 60s`
+OTLP 推送间隔是 60s（Beyla/OTel SDK 默认）。Grafana 的 `$__rate_interval` 若小于推送间隔，`rate()` 会返回空 —— dashboard 末尾出现"空洞"全因为此。
+

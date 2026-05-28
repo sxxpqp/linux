@@ -8,6 +8,9 @@ datasources:
   datasources.yaml:
     apiVersion: 1
     datasources:
+      # =========================================================
+       # Tempo：traces 入口，承担 Trace → Logs / Trace → Metrics 关联
+       # =========================================================
       - name: Tempo
         type: tempo
         uid: tempo
@@ -15,29 +18,53 @@ datasources:
         access: proxy
         isDefault: true
         jsonData:
-          nodeGraph:
-            enabled: true
-          tracesToLogs:
-            datasourceUid: loki
-            filterByTraceID: true
-            filterBySpanID: true
-            lokiSearch: true
-            tags:
-              - key: service.name
-                value: service_name
-              - key: service.namespace
-                value: service_namespace
-              - key: deployment.environment
-                value: deployment_environment_name
-          tracesToMetrics:
-            datasourceUid: prometheus
-            queries:
-              - name: "Request Rate"
-                query: 'rate(traces_spanmetrics_calls_total{service_name="${__tags{service.name}}"}[5m])'
+          # 服务拓扑图（依赖 Tempo metrics-generator 写到 Prometheus 的 traces_service_graph_*）
           serviceMap:
             datasourceUid: prometheus
-          lokiSearch:
+          nodeGraph:
+            enabled: true
+          # Tempo 内置的 TraceQL 搜索
+          search:
+            hide: false
+          # Span bar 显示请求时长
+          spanBar:
+            type: "Duration"
+          # ---------- Trace → Logs（V2，新版必须用这个，tracesToLogs 已弃用）----------
+          tracesToLogsV2:
             datasourceUid: loki
+            # 在 span 时间窗口前后各扩 2 分钟搜日志，避免边界丢
+            spanStartTimeShift: "-2m"
+            spanEndTimeShift: "2m"
+            # span 标签 → Loki 标签的映射（key 是 trace 端 OTel 语义约定名，value 是 Loki 上对应的标签名）
+            tags:
+              - { key: "service.name",      value: "service_name" }
+              - { key: "service.namespace", value: "service_namespace" }
+            filterByTraceID: true
+            filterBySpanID: false
+            # 自定义 LogQL：按 service 过滤 + 同时匹配 trace_id（覆盖 JSON 与 structured_metadata 两种形态）
+            customQuery: true
+            query: '{$${__tags}} |~ "$${__span.traceId}"'
+          # ---------- Trace → Metrics（用 OTel 原生指标，与 dashboard 22784 对齐）----------
+          tracesToMetrics:
+            datasourceUid: prometheus
+            spanStartTimeShift: "-2m"
+            spanEndTimeShift: "2m"
+            tags:
+              - { key: "service.name",      value: "service_name" }
+              - { key: "service.namespace", value: "service_namespace" }
+            queries:
+              - name: "Request rate (OTel HTTP server)"
+                query: 'sum(rate(http_server_request_duration_seconds_count{$$__tags}[$$__rate_interval]))'
+              - name: "P99 latency (OTel HTTP server)"
+                query: 'histogram_quantile(0.99, sum by(le) (rate(http_server_request_duration_seconds_bucket{$$__tags}[$$__rate_interval])))'
+              - name: "Error rate (HTTP 5xx)"
+                query: 'sum(rate(http_server_request_duration_seconds_count{$$__tags, http_response_status_code=~"5.."}[$$__rate_interval]))'
+              - name: "Span metrics calls (Tempo generator)"
+                query: 'sum(rate(traces_spanmetrics_calls_total{$$__tags}[$$__rate_interval]))'
+
+      # =========================================================
+       # Loki：日志入口，承担 Logs → Traces 关联（derivedFields）
+       # =========================================================
       - name: Loki
         type: loki
         uid: loki
@@ -45,17 +72,41 @@ datasources:
         access: proxy
         jsonData:
           derivedFields:
-            - name: trace_id
+            # 1) JSON 日志：{"trace_id":"<32hex>"}
+            - name: TraceID
               matcherRegex: '"trace_id":"([a-f0-9]{32})"'
-              url: "${__value.raw}"
+              url: "$${__value.raw}"
               datasourceUid: tempo
-              urlDisplayLabel: "View in Tempo"
+              urlDisplayLabel: "View Trace"
+            # 2) logfmt 日志：trace_id=<32hex>（无引号）
+            - name: TraceID
+              matcherRegex: 'trace_id=([a-f0-9]{32})'
+              url: "$${__value.raw}"
+              datasourceUid: tempo
+              urlDisplayLabel: "View Trace"
+            # 3) OTel SDK 自动注入的格式：traceID=<32hex> 或 trace_id="<32hex>"
+            - name: TraceID
+              matcherRegex: 'traceID=([a-f0-9]{32})'
+              url: "$${__value.raw}"
+              datasourceUid: tempo
+              urlDisplayLabel: "View Trace"
+
+      # =========================================================
+       # Prometheus：指标入口，exemplar → Trace 关联
+       # =========================================================
       - name: Prometheus
         type: prometheus
         uid: prometheus
         url: http://prometheus-k8s.monitoring.svc:9090
         access: proxy
         jsonData:
+          # OTel 指标走 OTLP 推送（非 scrape），Beyla/SDK 默认 60s 一次
+          # 必须把 timeInterval 设为 60s，否则 dashboard 22784 的 $__rate_interval
+          # 会小于推送间隔，rate() 返回空
+          timeInterval: "60s"
+          # 指标点击 exemplar 跳 Tempo 看完整 trace
+          # OTel 指标的 exemplar label 名是 trace_id（Prometheus OTLP 接收器约定）
           exemplarTraceIdDestinations:
-            - name: traceID
+            - name: trace_id
               datasourceUid: tempo
+              urlDisplayLabel: "View Trace"
