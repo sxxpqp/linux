@@ -134,13 +134,16 @@ Explore Loki 日志时，每条带 `trace_id` 的日志行旁会出现 **Tempo**
 
 ### 文档与工具
 
-| 文件 | 说明 |
+| 文件 | 用途 |
 |------|------|
 | [production-deploy.md](production-deploy.md) | 完整生产环境部署指南（含架构图、验证步骤、故障排查） |
 | [beyla.md](beyla.md) | Beyla eBPF 配置文档（内核要求、权限说明、与 OTel SDK 互补） |
-| [deploy.sh](deploy.sh) | 一键部署脚本：MinIO → Tempo → Alloy → Beyla → Grafana |
 | [test-apps.yaml](test-apps.yaml) | 测试 Demo 应用：Go (otel-demo) + Java (Spring Boot) + Python (Flask) |
-| [alloy-config.sh](alloy-config.sh) | Alloy ConfigMap 创建 + 重启脚本（含 JSON 日志解析） |
+| [deploy.sh](deploy.sh) | **一键部署**：MinIO → Tempo → Alloy → Beyla → Grafana（首次部署用这个） |
+| [alloy-config.sh](alloy-config.sh) | 只更新 Alloy（改了 `alloy-config.alloy` 后跑） |
+| [tempo-update.sh](tempo-update.sh) | 只更新 Tempo（改了 `tempo-values.yaml` 后跑） |
+| [grafana-deploy.sh](grafana-deploy.sh) | 只更新 Grafana（改了 `grafana-values.yaml`/datasource provisioning 后跑，会自动重启 pod 让 provisioning 生效） |
+| [beyla-restart.sh](beyla-restart.sh) | 只重启 Beyla（升级 eBPF 程序或临时排障用） |
 
 ## 一键部署
 
@@ -217,6 +220,8 @@ spec:
 
 Beyla 自动发现 `k8s_namespace: ""`（所有 namespace）下的 Service，无需修改应用代码或镜像。覆盖 HTTP/gRPC 调用链。
 
+> ⚠️ **Beyla 只生成 trace 和 metric，不会把 `trace_id` 注入到日志里**。要实现 Log → Trace 跳转，必须用方式二（OTel SDK）或方式三（手动注入 trace_id）。
+
 ### 方式二：OTel SDK 手动埋点
 
 保留代码中的 OTel SDK，发送到 Alloy：
@@ -238,6 +243,162 @@ env:
 ```
 
 Beyla + OTel SDK 互补：Beyla 覆盖 HTTP/gRPC 协议层，SDK 覆盖 SQL/Redis/Kafka 等库调用。
+
+### 方式三：日志里手动写入 trace_id（实现 Log ↔ Trace 双向跳转必须）
+
+**仅靠 Beyla 不够**——Beyla 给 metric 挂 exemplar、给 RPC 生成 trace，但**它不能修改你应用的日志输出**。如果应用日志里没有 `trace_id` 字段，那么：
+
+- ❌ Loki 的 `derivedFields` regex 抓不到 `trace_id` → 日志旁不会出现 "View Trace" 按钮
+- ❌ Tempo 的 `tracesToLogsV2` 跳过去后用 `|~ "<trace_id>"` 过滤日志也是空（日志里压根没这串字符）
+
+要打通这条路，必须在**应用侧**把当前 span 的 `trace_id` 写进每条日志。三种典型做法：
+
+#### 1) OTel SDK 自动注入（推荐，Java/Go/Python 等都有内置 logback/logrus/structlog 集成）
+
+**Java + Logback** 示例：
+
+```xml
+<!-- logback-spring.xml -->
+<configuration>
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <!-- %X{trace_id} %X{span_id} 由 OTel Java agent 自动注入 MDC -->
+      <pattern>{"ts":"%d","level":"%p","logger":"%logger","msg":"%m","trace_id":"%X{trace_id}","span_id":"%X{span_id}"}%n</pattern>
+    </encoder>
+  </appender>
+  <root level="INFO"><appender-ref ref="STDOUT"/></root>
+</configuration>
+```
+
+启动命令带上 `-javaagent:/opentelemetry-javaagent.jar`，trace_id 会自动填到每条日志。
+
+**Go + slog** 示例：
+
+```go
+import "go.opentelemetry.io/contrib/bridges/otelslog"
+logger := otelslog.NewLogger("my-app")
+// logger.InfoContext(ctx, "request handled") 会自动带 trace_id / span_id
+```
+
+#### 2) 框架级 middleware 手动注入
+
+如果不用 OTel SDK，在 HTTP/RPC 中间件里手动从请求 header（`traceparent`）解出 trace_id，塞进 logger context。
+
+#### 3) 应用日志直接打印 trace_id
+
+不管什么方式，**最终日志里必须有这种字段**：
+
+```json
+{"ts":"...","level":"INFO","msg":"...","trace_id":"6a2d0abfb93ad433dbf78fec0ec2eff3","span_id":"8f3c2b1a0d9e4f7b"}
+```
+
+或 logfmt：
+
+```
+ts=2026-01-01T00:00:00Z level=INFO msg="..." trace_id=6a2d0abfb93ad433dbf78fec0ec2eff3 span_id=8f3c2b1a0d9e4f7b
+```
+
+Grafana 数据源的 Loki `derivedFields` 已配置三种格式的 regex（JSON / logfmt / camelCase `traceID=`），全都能识别。
+
+## 验证与查询示例
+
+部署完后用以下查询确认各跳转链路是否真的打通。**Grafana → Explore → 选对应数据源**。
+
+### 1. Metric → Trace（exemplars 跳转）
+
+**查询**（P99 延迟，Y 轴单位与 exemplar 同量纲，钻石点最容易看到）：
+
+```promql
+histogram_quantile(0.99,
+  sum by(le) (
+    rate(http_server_request_duration_seconds_bucket{service_name="<your-app>", service_namespace="<your-ns>"}[5m])
+  )
+)
+```
+
+操作步骤：
+
+1. 时间范围选 **Last 1 hour**（5 分钟太短，exemplar 稀疏）
+2. 可视化选 **Lines**（不要 Stacked bars，会遮住 exemplar）
+3. 展开查询输入框下的 **Options** 面板，把 **Exemplars** toggle 打开
+4. 重新 Run query
+5. 曲线上会出现散落的彩色小圆点 → 鼠标悬停显示 `trace_id` → 点击跳 Tempo
+
+> 为什么不用 `rate(_count[5m])`？rate 的 Y 轴是 req/s（值很小，0.01 量级），exemplar 的 Y 值是请求耗时（0.02~0.1 秒量级），两者错位，钻石点画在图表上沿外看不到。**用 histogram_quantile，Y 轴和 exemplar 都是秒，对齐**。
+
+### 2. 命令行直接验证 exemplar 是否存在
+
+不进 UI，直接问 Prometheus：
+
+```bash
+kubectl -n monitoring run -i --rm --restart=Never prom-test --image=curlimages/curl -- \
+  sh -c 'NOW=$(date +%s); START=$((NOW - 3600)); curl -sG \
+    "http://prometheus-k8s:9090/api/v1/query_exemplars" \
+    --data-urlencode "query=http_server_request_duration_seconds_bucket{service_name=\"<your-app>\"}" \
+    --data-urlencode "start=${START}" --data-urlencode "end=${NOW}"' | head -c 500
+```
+
+返回里有 `"exemplars":[{"labels":{"trace_id":"..."},...}]` 即 OK。如果是空 `[]`：Beyla / OTel SDK 没在发 exemplar，或 Prometheus 没开 `exemplar-storage` feature。
+
+### 3. Trace → Logs 验证
+
+Grafana Explore 选 **Tempo** → 用 TraceQL 搜你的 service：
+
+```traceql
+{ resource.service.name="<your-app>" }
+```
+
+随便点开一个 trace → 选一个 span → 右上角 **"Logs for this span"** 按钮。
+
+预期生成的 Loki 查询：
+
+```logql
+{service_name="<your-app>", service_namespace="<your-ns>"} |~ "<trace_id>"
+```
+
+应该能查到这次请求的日志。如果**查询能跑但结果为空** → 应用没把 `trace_id` 写进日志，参考上面 **方式三**。
+
+### 4. Log → Trace 验证
+
+Explore 选 **Loki** → 查：
+
+```logql
+{service_name="<your-app>", service_namespace="<your-ns>"}
+```
+
+随便点开一条日志，右侧 detail 面板看 **Fields** 区域。如果日志内容里有 `trace_id` → 会出现一个名为 **TraceID (JSON/logfmt/OTel SDK)** 的字段 + 紫色 **"View Trace"** 按钮 → 点击跳 Tempo。
+
+按钮**没出现** → 日志里没 trace_id（同上，需要应用侧加）。
+
+### 5. Loki 标签兜底验证（不依赖应用日志格式）
+
+不管应用日志是不是 JSON，Alloy 都会从 K8s 文件路径派生兜底标签：
+
+```bash
+kubectl -n monitoring run -i --rm --restart=Never loki-test --image=curlimages/curl -- \
+  curl -sG "http://loki-gateway.monitoring/loki/api/v1/label/service_namespace/values"
+```
+
+返回 `{"status":"success","data":["test","uat","..."]}` 表示 Alloy 的 `stage.template` fallback 生效。如果返回 `[]` → Alloy 没跑或 ConfigMap 没更新到集群。
+
+## 常用 Dashboard
+
+直接通过 ID 在 Grafana 里导入：**Dashboards → New → Import → 输入 ID → Load → Datasource 选对应的数据源 → Import**。
+
+| ID | 名称 | 数据源 | 用途 |
+|---|---|---|---|
+| **22784** | Lightweight APM for OpenTelemetry | Prometheus + Tempo | OTel/Beyla **核心 APM 面板**：RED 指标、服务拓扑、自带 exemplar 跳转。本栈主推 |
+| **22748** | OpenTelemetry APM | Prometheus + Tempo | OTel 应用性能监控的另一个流行模板，可作为 22784 的备选/对比视角 |
+| **8919** | 1 Node Exporter for Prometheus（中文 v3） | Prometheus | **节点资源监控**：CPU / 内存 / 磁盘 / 网络 / 负载，依赖 node-exporter |
+| **13639** | Logs / App | Loki | **应用日志总览**：按 namespace/app/level 分布的日志量、错误率、热点 |
+| **14969** | Kubernetes / Views / Namespaces | Prometheus | **K8s namespace 维度的资源视图**：pod、CPU、内存、网络，依赖 kube-state-metrics |
+
+### 导入后要检查的事
+
+1. **数据源 UID 对得上**：本栈固定 UID 是 `prometheus` / `loki` / `tempo`（见 [grafana-values.yaml](grafana-values.yaml)）。Dashboard 模板里用变量 `${DS_PROMETHEUS}` 这种就 OK，直接写死 UID 的要手动改。
+2. **变量过滤器初值**：很多 dashboard 顶部有 `namespace` / `job` / `service` 下拉，新导入时可能选了空值面板空白。手动选一个有数据的。
+3. **timeInterval 不匹配**：22784 / 22748 这种 OTel dashboard 用 `$__rate_interval`，本栈 datasource 配的 `timeInterval: 60s` 已经把它撑到 ≥4m，没问题。
+4. **exemplar 没开**：导入后部分老模板的 panel 没默认开 exemplar，编辑面板 → Query Options → Exemplars 打开。22784 默认开了。
 
 ## 关键设计决策与会话纪要
 
@@ -287,4 +448,26 @@ Prometheus OTLP receiver 默认 `translationStrategy: UnderscoreEscapingWithSuff
 
 ### Grafana datasource `timeInterval: 60s`
 OTLP 推送间隔是 60s（Beyla/OTel SDK 默认）。Grafana 的 `$__rate_interval` 若小于推送间隔，`rate()` 会返回空 —— dashboard 末尾出现"空洞"全因为此。
+
+## 日常运维 cheat sheet
+
+| 改了什么 | 跑什么 | 注意 |
+|---|---|---|
+| `alloy-config.alloy` | `bash alloy-config.sh` | DaemonSet 滚动重启，老日志已写入的标签**不会回填**，等几分钟看新日志 |
+| `tempo-values.yaml` | `bash tempo-update.sh` | metrics-generator processor 改了要等 30s 才生效 |
+| `grafana-values.yaml` | `bash grafana-deploy.sh` | **datasource provisioning 不会热加载**，脚本里已自动 `rollout restart` |
+| `prometheus-prometheus.yaml`（外部仓库） | `kubectl apply -f ../prometheus/manifests/prometheus-prometheus.yaml` | 改 `spec.otlp` 等字段需要 operator ≥ v0.78 + CRD 同步升级 |
+| `beyla.yaml`（ConfigMap 部分） | `bash beyla-restart.sh` | eBPF 重新挂载，业务流量短暂可能漏采几秒 |
+
+### 配置改了不生效，先排查这三步
+
+1. **ConfigMap/Secret 真的更新到集群了吗**
+   ```bash
+   kubectl -n observability get cm alloy-config -o jsonpath='{.data.config\.alloy}' | grep -A 2 "你的改动关键字"
+   ```
+2. **Pod 真的重启读取新配置了吗**（很多组件不监听 ConfigMap 变化）
+   ```bash
+   kubectl -n observability get pod -l app=alloy -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.startTime}{"\n"}{end}'
+   ```
+3. **新数据真的进来了吗**（老数据不会回填新标签/字段）—— 用上方"验证与查询示例"里的 curl 命令直接问数据源。
 

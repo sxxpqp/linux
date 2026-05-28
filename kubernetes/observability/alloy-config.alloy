@@ -128,19 +128,7 @@ loki.process "logs" {
     }
   }
 
-  // ===== Fallback：从 K8s 元数据派生 OTel 标签 =====
-  // 这样所有 pod 的日志都至少有 service_name / service_namespace 标签，
-  // trace → logs 跳转可以工作，不依赖应用日志格式。
-  stage.template {
-    source   = "service_name"
-    template = "{{ .container }}"
-  }
-  stage.template {
-    source   = "service_namespace"
-    template = "{{ .namespace }}"
-  }
-
-  // ===== 如果应用日志是 OTel JSON 格式，用更精确的值覆盖上面的 fallback =====
+  // ===== 先尝试从 OTel JSON 日志提取（可能找不到字段 → 设为空字符串） =====
   stage.json {
     expressions = {
       level                       = "level",
@@ -150,6 +138,18 @@ loki.process "logs" {
       trace_id                    = "trace_id",
       span_id                     = "span_id",
     }
+  }
+
+  // ===== Fallback：JSON 没填上的字段用 K8s 元数据兜底 =====
+  // 用条件模板，避免覆盖 stage.json 已经取到的真值。
+  // 所有 pod 的日志都至少有 service_name / service_namespace 标签。
+  stage.template {
+    source   = "service_name"
+    template = "{{ if .service_name }}{{ .service_name }}{{ else }}{{ .container }}{{ end }}"
+  }
+  stage.template {
+    source   = "service_namespace"
+    template = "{{ if .service_namespace }}{{ .service_namespace }}{{ else }}{{ .namespace }}{{ end }}"
   }
 
   stage.labels {
