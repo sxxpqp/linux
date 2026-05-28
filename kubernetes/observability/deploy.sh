@@ -74,7 +74,7 @@ echo ""
 
 # ---------- Tempo ----------
 echo "[4/7] 部署 Tempo (3副本 + S3 后端 + metrics-generator 双推 Prometheus)..."
-helm repo add grafana https://grafana.github.io/helm-charts --force-update 2>/dev/null || true
+helm repo add grafana https://nexus.ihome.sxxpqp.top:8443/repository/grafana/ --force-update 2>/dev/null || true
 helm upgrade --install tempo grafana/tempo-distributed \
   -n ${NAMESPACE} -f tempo-values.yaml --timeout 10m
 # 不加 --wait：ingester memberlist 慢启动 ~60s 容易触发超时；让 K8s 自己滚
