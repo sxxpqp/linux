@@ -74,15 +74,15 @@ helm upgrade --install loki grafana/loki \
 
 ### 方案二：外部 S3 存储（生产推荐）
 
-使用 [valus-s3.yaml](valus-s3.yaml)，配置外部 S3 端点：
+使用 [values-s3.yaml](values-s3.yaml)，配置外部 S3 端点：
 
 ```bash
 helm upgrade --install loki grafana/loki \
   --namespace monitoring \
-  --values valus-s3.yaml
+  --values values-s3.yaml
 ```
 
-> 部署前修改 `valus-s3.yaml` 中的 S3 连接信息（endpoint、accessKeyId、secretAccessKey、bucketNames）。
+> 部署前修改 `values-s3.yaml` 中的 S3 连接信息（endpoint、accessKeyId、secretAccessKey、bucketNames）。
 
 ---
 
@@ -311,7 +311,7 @@ count_over_time({namespace="production"} |= "ERROR" [5m])
 | 文件 | 用途 |
 |---|---|
 | [values.yaml](values.yaml) | MinIO 存储方案配置（SimpleScalable，3x write / 2x read / 2x backend） |
-| [valus-s3.yaml](valus-s3.yaml) | 外部 S3 存储方案配置（生产环境推荐） |
+| [values-s3.yaml](values-s3.yaml) | 外部 S3 存储方案配置（生产环境推荐） |
 
 ---
 
@@ -337,7 +337,7 @@ kubectl -n monitoring delete pvc -l app.kubernetes.io/name=loki
 # 重新安装
 helm upgrade --install loki grafana/loki \
   --namespace monitoring \
-  --values valus-s3.yaml
+  --values values-s3.yaml
 ```
 
 ### 9.2 PVC 长时间 Pending

@@ -67,7 +67,7 @@ Kubernetes 集群部署、组件配置、存储、监控、CI/CD 等生产运维
 
 | 目录/文件 | 说明 | 状态 |
 |---|---|---|
-| [prometheus/](prometheus/) | Prometheus 生态（[安装指南](prometheus/deploy-guide.md)、Alertmanager、ServiceMonitor、Probe、Grafana Webhook） | ✅ 生产验证 |
+| [prometheus/](prometheus/) | Prometheus 生态（[安装指南](prometheus/install-steps.md)、Alertmanager、ServiceMonitor、Probe、Grafana Webhook） | ✅ 生产验证 |
 | [loki/](loki/) | Loki 日志收集（Grafana 集成、S3 存储） | 验证过 |
 | [opentelemetry/](opentelemetry/) | OpenTelemetry Operator + Demo 部署 | 学习笔记 |
 | [srs/](srs/) | SRS 流媒体部署 | 验证过 |

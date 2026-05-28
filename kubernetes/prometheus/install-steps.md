@@ -1,5 +1,10 @@
 # Prometheus 监控栈安装步骤
 
+> ⚠️ **安装方式已变更**：现在用 `kube-prometheus` 原始 manifests（不是 helm chart）。
+>
+> 标准安装方式直接跑 [`install.sh`](install.sh)，本文档下面的 **§1 helm 章节已废弃**。
+> 还有效的内容在后面的 Alertmanager / kube-controller-manager / etcd / blackbox 配置章节，参考即可。
+
 两套 Prometheus 分工：
 
 | 部署 | 命名空间 | 用途 |

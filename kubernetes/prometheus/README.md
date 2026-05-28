@@ -1,6 +1,24 @@
 # Prometheus 监控
 
-基于 kube-prometheus-stack 的 K8s 监控配置，包含 Prometheus Operator CRD、Alertmanager、PrometheusAlert 告警中心、Grafana 企业微信 Webhook。
+基于 **kube-prometheus**（原始 manifests，非 helm chart）的 K8s 监控栈，包含 Prometheus Operator CRD、Alertmanager、PrometheusAlert 告警中心、Grafana 企业微信 Webhook。
+
+## 一键脚本
+
+| 脚本 | 用途 |
+|---|---|
+| [install.sh](install.sh) | 一键安装（`--skip-crd` 跳过 CRD，`--dry-run` 预演） |
+| [uninstall.sh](uninstall.sh) | 一键卸载（`--crd` 同时删 CRD，`--purge` 完整清理） |
+
+```bash
+bash install.sh             # 标准安装
+bash install.sh --skip-crd  # CRD 已存在时复跑
+
+bash uninstall.sh           # 保留 CRD + PVC（不影响业务 ServiceMonitor）
+bash uninstall.sh --crd     # 同时删 CRD（业务 monitor 都会消失）
+bash uninstall.sh --purge   # 完全清理（CRD + PVC + 可选删 namespace）
+```
+
+> **install 关键点**：CRD 用 `kubectl apply --server-side` 避免 last-applied annotation 256KB 上限。如果遇到 "unknown field spec.otlp" 这类错误，说明集群 CRD 老于 v0.78，必须先跑 install.sh 或单独 apply `manifests/setup/` 升级 CRD。
 
 ## 文件说明
 
@@ -8,7 +26,7 @@
 
 | 文件 | 说明 |
 |---|---|
-| [deploy-guide.md](deploy-guide.md) | 完整部署指南：kube-prometheus-stack 安装、Alertmanager 配置、kube-system 组件指标采集、etcd 监控、Blackbox 外部探测、PrometheusAlert 聚合通知、Grafana 微信 Webhook、Nacos 应用监控示例 |
+| [install-steps.md](install-steps.md) | 完整部署文档（顶部已注明 §1 helm 章节废弃，使用 install.sh；后面 Alertmanager / kube-system 组件 / etcd / Blackbox 配置仍有效） |
 
 ### 核心 CRD 配置
 
@@ -60,7 +78,7 @@
 |---|---|
 | [extenalservice.yaml](extenalservice.yaml) | 外部服务 Service 定义 |
 
-> 详细部署步骤请参考 [deploy-guide.md](deploy-guide.md)。
+> 详细部署步骤参考 [install-steps.md](install-steps.md)；一键安装用 [install.sh](install.sh)。
 
 ---
 
