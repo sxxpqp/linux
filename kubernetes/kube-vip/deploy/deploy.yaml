@@ -1,8 +1,15 @@
+# 组件分工 (两个都要装):
+#   1. kube-vip-cloud-provider (Deployment)  → 读下面 ConfigMap 的 range-global,
+#      给 LoadBalancer Service 分配 IP, 写 status.loadBalancer.ingress
+#   2. kube-vip (DaemonSet)                  → 拿到 IP 后做 ARP 广播 / leader 选举
+# 缺任何一个, LB Service 都会卡在 <pending> 或拿不到流量.
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: kube-vip
+  # ConfigMap 名字必须叫 "kubevip" (kube-vip-cloud-provider 默认读这个名字),
+  # 别改成 kube-vip; 老版本 deploy.yaml 写成 kube-vip 是错的, 池子不会被读到.
+  name: kubevip
   namespace: kube-system
 data:
   # 跟节点网段 172.16.150.0/24 同段，分配池 200-210
@@ -85,10 +92,53 @@ spec:
         # 禁用控制平面 VIP
         - name: cp_enable
           value: "false"
-        volumeMounts:
-        - name: config
-          mountPath: /etc/kube-vip
-      volumes:
-      - name: config
-        configMap:
-          name: kube-vip
+        # 配置全部走 env, 不挂 ConfigMap (ConfigMap 是给 cloud-provider 读的)
+---
+# kube-vip-cloud-provider: 读上面 ConfigMap/kubevip, 给 LoadBalancer Service 分配 IP.
+# 缺这个 Deployment, LB Service 会一直 <pending>.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-vip-cloud-controller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-vip-cloud-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: kube-vip-cloud-controller
+  namespace: kube-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-vip-cloud-provider
+  namespace: kube-system
+  labels:
+    app: kube-vip-cloud-provider
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-vip-cloud-provider
+  template:
+    metadata:
+      labels:
+        app: kube-vip-cloud-provider
+    spec:
+      serviceAccountName: kube-vip-cloud-controller
+      # 国内拉不到 ghcr.io 时, 把镜像换成自己的镜像源, 比如:
+      #   registry.cn-hangzhou.aliyuncs.com/<your-ns>/kube-vip-cloud-provider:v0.0.10
+      containers:
+      - name: kube-vip-cloud-provider
+        image: ghcr.io/kube-vip/kube-vip-cloud-provider:v0.0.10
+        imagePullPolicy: IfNotPresent
+        command: ["/kube-vip-cloud-provider"]
+        args:
+        - "--leader-elect-resource-name=kube-vip-cloud-controller"
