@@ -1,0 +1,36 @@
+# BGP 模式配置 (替代 pool.yaml 的 L2Advertisement).
+#
+# 用法:
+#   1. 先确认交换机/路由器已开 BGP, 拿到 peer IP 和 AS 号
+#   2. 改下面 BGPPeer 的 myASN / peerASN / peerAddress
+#   3. kubectl apply -f pool.yaml      # IPAddressPool 复用
+#      kubectl delete l2advertisement default-l2 -n metallb-system  # 关掉 L2
+#      kubectl apply -f bgp.yaml
+#
+# BGP 模式优势 (vs L2):
+#   - 流量真负载均衡到所有节点 (ECMP), 不是只在 leader 节点
+#   - 故障切换由 BGP keepalive 控制, 秒级
+#   - 没有 ARP 广播抖动
+---
+apiVersion: metallb.io/v1beta1
+kind: BGPPeer
+metadata:
+  name: gateway
+  namespace: metallb-system
+spec:
+  myASN: 64500            # 集群侧 AS 号 (私有 AS 64512-65534)
+  peerASN: 64501          # 交换机/路由器侧 AS 号
+  peerAddress: 172.16.150.1   # 交换机/路由器 IP, 改成实际网关
+  # holdTime: 90s          # 默认 90s, 一般不用改
+  # keepaliveTime: 30s
+---
+apiVersion: metallb.io/v1beta1
+kind: BGPAdvertisement
+metadata:
+  name: default-bgp
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - default-pool
+  # aggregationLength: 32     # 每个 LB IP 单独宣告 (默认就是 32)
+  # communities: ["64500:100"] # 给路由打 community 标签, 看你网络团队要不要

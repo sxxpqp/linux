@@ -1,0 +1,30 @@
+# MetalLB IP 池 + L2 通告
+#
+# IPAddressPool   : 给 LoadBalancer Service 分配的 IP 区段
+# L2Advertisement : 怎么把这些 IP 宣告出去 (L2/ARP, 不需要交换机配合)
+#
+# 跟节点同段 172.16.150.0/24, 池子保持 200-210 (沿用之前 kube-vip 用的段).
+# 节点接入交换机要允许这段 IP 出现在某个节点的 MAC 上 (一般默认就行).
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: default-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 172.16.150.200-172.16.150.210
+  # autoAssign=true: 没指定 loadBalancerIP 的 LB Service 自动从这个池分配
+  autoAssign: true
+  # avoidBuggyIPs=true: 跳过 .0 / .255 这种容易被某些设备过滤的 IP
+  avoidBuggyIPs: true
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: default-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - default-pool
+  # 不限定 nodeSelector / interfaces, MetalLB 自动选 leader 节点 ARP 广播
