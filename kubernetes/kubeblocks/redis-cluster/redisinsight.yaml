@@ -1,0 +1,64 @@
+# RedisInsight - Redis 官方 GUI, 原生支持 Cluster 模式 (不需要 Predixy).
+#
+# 部署在集群内, 它作为 Redis Cluster client 自己处理 MOVED 重定向,
+# 完美支持你混合 announce (master NodePort + slave Pod IP) 的情况.
+#
+# 用法:
+#   kubectl apply -f redisinsight.yaml
+#
+# 访问: http://<任一 node IP>:31501
+# 添加 database:
+#   Connection type: Redis OSS Cluster
+#   Host:            redis-cluster-shard-jqf-headless.test.svc
+#   Port:            6379
+#   Password:        从 Secret/redis-cluster-password 取
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redisinsight
+  namespace: test
+  labels:
+    app: redisinsight
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redisinsight
+  template:
+    metadata:
+      labels:
+        app: redisinsight
+    spec:
+      containers:
+        - name: redisinsight
+          image: redis/redisinsight:latest   # 官方镜像
+          ports:
+            - { name: http, containerPort: 5540, protocol: TCP }
+          env:
+            - name: RI_APP_PORT
+              value: "5540"
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 500m, memory: 1Gi }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          readinessProbe:
+            httpGet: { path: /, port: 5540 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: data
+          emptyDir: {}     # 配置只是本地缓存, emptyDir 够用; 想持久化改 PVC
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redisinsight
+  namespace: test
+spec:
+  selector:
+    app: redisinsight
+  ports:
+    - { name: http, port: 80, targetPort: 5540, nodePort: 31501, protocol: TCP }
+  type: NodePort

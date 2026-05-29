@@ -23,13 +23,13 @@ kubeblocks/
 ├── uninstall.sh             卸载 operator
 ├── install-snapshotter.sh   装 VolumeSnapshot CRD + controller (备份依赖)
 └── redis-cluster/
-    ├── cluster.yaml             Cluster CR (Redis 7.2.4, sharding 3×2, 默认无 NodePort)
-    ├── install.sh               apply CR + 同步密码到固定 Secret + 显示连接信息
-    ├── scale.sh                 扩缩 shards (OpsRequest, operator 自动 reshard 槽位)
-    ├── uninstall.sh             删 Cluster (--keep-data / --purge / --force)
-    ├── predixy.yaml             Predixy 代理 manifest (ConfigMap + Deploy + 2 Svc)
-    ├── predixy-install.sh       装 Predixy (Navicat 等 GUI 工具的外部入口)
-    └── predixy-uninstall.sh     卸 Predixy (不影响 Cluster)
+    ├── cluster.yaml                 Cluster CR (Redis 7.2.4, sharding 3×2, 默认无 NodePort)
+    ├── install.sh                   apply CR + 同步密码到固定 Secret + 显示连接信息
+    ├── scale.sh                     扩缩 shards (OpsRequest, operator 自动 reshard 槽位)
+    ├── uninstall.sh                 删 Cluster (--keep-data / --purge / --force)
+    ├── redisinsight.yaml            RedisInsight (Redis 官方 GUI) Deployment + Service
+    ├── redisinsight-install.sh      装 RedisInsight (浏览器 Web UI, 原生支持 Cluster)
+    └── redisinsight-uninstall.sh    卸 RedisInsight (不影响 Cluster)
 ```
 
 ## 完整操作矩阵
@@ -39,7 +39,7 @@ kubeblocks/
 | **装 operator** | `bash install.sh` |
 | **装 snapshot CRD** | `bash install-snapshotter.sh` |
 | **建 Redis Cluster** | `cd redis-cluster && bash install.sh --wait` |
-| **装 Predixy 代理** | `cd redis-cluster && bash predixy-install.sh --wait` |
+| **装 RedisInsight (Web GUI)** | `cd redis-cluster && bash redisinsight-install.sh --wait` |
 | **扩容 3→4 shard (6→8 pod)** | `cd redis-cluster && bash scale.sh 4 --wait` |
 | **缩容 4→3 shard** | `cd redis-cluster && bash scale.sh 3 --wait` |
 | **取密码** | `kubectl get secret redis-cluster-password -n test -o jsonpath='{.data.password}' \| base64 -d; echo` |
@@ -90,32 +90,40 @@ services:
 
 每个 pod 一个 NodePort, 客户端用 cluster mode 连任一即可. **缺点**: KubeBlocks v1.0.2 给 slave 没配 announce-ip, redis-cli `-c` 跟 MOVED 时报 `?:31573` 错, Navicat 直接连不上. 适合用 RedisInsight / Lettuce / go-redis 等智能客户端.
 
-**模式 B: Predixy 代理 (Navicat 等 GUI 工具可用) ✅ 推荐用于运维/开发**
+**模式 B: RedisInsight Web GUI (运维/开发用)** ✅ 推荐
 
 ```bash
 cd redis-cluster
-bash predixy-install.sh --wait
+bash redisinsight-install.sh --wait
 ```
 
-**定位**: 给运维/开发用 GUI 工具看数据 + 清数据, **不是**业务应用的连接入口.
-业务代码直接用 cluster client 连 headless service 性能更好, 不要走 Predixy.
+Redis 官方出品的 Web 版 GUI, 直接跑在集群内, 自己作为 cluster client 处理拓扑发现 + MOVED 重定向. 浏览器打开 `http://<node-ip>:31501` 即可:
 
 ```
-运维/开发 GUI (Navicat/RedisInsight, 集群外)
-   ↓ NodeIP:31379 (standalone 模式)
-Predixy 代理 (1 副本, 集群内)
-   ↓ 内部仍走 cluster 模式发现拓扑
+运维/开发浏览器 (集群外)
+   ↓ HTTP :31501
+RedisInsight Web UI (集群内 1 pod)
+   ↓ 自己是 cluster client, 直连 headless service
 Redis Cluster (3 shard × 2)
    ↑
 业务应用 (cluster client, 集群内)
-   ↑ headless service 直连, 不走代理
+   ↑ 同样直连 headless service
 ```
 
 | 用途 | 走哪条路 |
 |---|---|
-| **业务代码** (Java/Go/Python 应用) | Cluster client → headless service (无代理) |
-| **运维 GUI** (Navicat/RedisInsight) | Standalone → Predixy NodePort → Cluster |
-| **临时排查** (redis-cli) | 进 pod 用 `redis-cli -h headless -p 6379 -a "$PASS"` |
+| **业务代码** (Java/Go/Python 应用) | Cluster client → headless service |
+| **运维 GUI** (浏览器) | RedisInsight Web → NodePort 31501 |
+| **临时排查** (redis-cli) | `kubectl exec -it ... -- redis-cli -a "$PASS" -c` |
+
+### 为什么不是 Predixy
+
+试过 Predixy 但翻车了:
+- 老版 predixy 镜像不支持 LogFile / acl 等新 config key
+- `cluster nodes parse error` (KubeBlocks 输出格式新, 老 predixy 解析不了)
+- 真要用 Predixy 得自己编译新版
+
+RedisInsight 是 Redis 官方维护, 完美支持新格式, 0 配置麻烦, 选它.
 
 ## 卸载
 
