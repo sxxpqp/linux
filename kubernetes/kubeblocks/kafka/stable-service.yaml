@@ -1,0 +1,36 @@
+# 稳定的内部 ClusterIP Service - 名字固定, 业务代码引用这个
+#
+# 为什么需要:
+#   KubeBlocks 默认创建的 service 名字带 component 后缀
+#   (kafka-cluster-kafka-combine, kafka-cluster-kafka-combine-headless),
+#   业务侧写 bootstrap 不直观且容易写错. 这里给一个简洁的 kafka-cluster.test.svc:9092.
+#
+# 选择 ClusterIP 而不是 Headless:
+#   两种对 Kafka 实际等价 (bootstrap 后客户端直连 broker advertised 地址),
+#   ClusterIP 给一个稳定 VIP 更易理解和排查 (kubectl get svc 看到 IP 而非 None).
+#
+# selector 用 KubeBlocks 在 broker pod 上稳定加的 label:
+#   app.kubernetes.io/instance=kafka-cluster        ← cluster 名
+#   apps.kubeblocks.io/component-name=kafka-combine ← componentSpecs 里写死的 name
+# 扩容 (replicas 5) 新 broker 自动带上同样 label, Service 自动选进来, 不用动这个文件.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-cluster                       # ← 业务代码引用这个固定名字
+  namespace: test
+  labels:
+    app.kubernetes.io/managed-by: kubeblocks-stable-svc
+spec:
+  type: ClusterIP
+  # clusterIP 留空 = K8s 自动分配一个稳定 VIP, 生命周期跟 Service 一致
+  selector:
+    app.kubernetes.io/instance: kafka-cluster
+    apps.kubeblocks.io/component-name: kafka-combine
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+      protocol: TCP
+  # 启动期间未 Ready 的 pod 也加入 endpoints, 避免业务首次启动时拿不到地址
+  publishNotReadyAddresses: true
