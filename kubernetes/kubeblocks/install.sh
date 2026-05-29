@@ -76,38 +76,40 @@ echo ""
 echo "[2/5] 安装 KubeBlocks CRD..."
 CRD_URL_GITHUB="https://github.com/apecloud/kubeblocks/releases/download/${VERSION_WITH_V}/kubeblocks_crds.yaml"
 
+# 用一个 sentinel CRD 来判断是否真的注册成功 (kubeblocks 装齐后必有它)
+crd_ready() {
+  kubectl get crd clusters.apps.kubeblocks.io &>/dev/null \
+    && kubectl get crd addons.extensions.kubeblocks.io &>/dev/null
+}
+
+try_apply_crd() {
+  local url="$1"
+  echo "  尝试: ${url}"
+  kubectl apply --server-side -f "${url}" 2>&1 | grep -vE "^$" | tail -n +1
+  crd_ready
+}
+
 CRD_OK=false
-echo "  尝试内网镜像: ${CRD_URL_INTERNAL}"
-if kubectl apply --server-side -f "${CRD_URL_INTERNAL}" 2>&1 | tee /tmp/.kb-crd.log | head -20; then
-  if ! grep -qiE "error|unable" /tmp/.kb-crd.log; then
-    CRD_OK=true
-  fi
-fi
-
-if [ "$CRD_OK" = false ]; then
-  echo ""
-  echo "  内网镜像失败, 尝试 GitHub: ${CRD_URL_GITHUB}"
-  if kubectl apply --server-side -f "${CRD_URL_GITHUB}" 2>&1 | head -20; then
-    CRD_OK=true
-  fi
-fi
-
-if [ "$CRD_OK" = false ]; then
-  echo ""
-  echo "  最后尝试从 helm chart 提取 CRD..."
+if try_apply_crd "${CRD_URL_INTERNAL}"; then
+  CRD_OK=true
+elif try_apply_crd "${CRD_URL_GITHUB}"; then
+  CRD_OK=true
+else
+  echo "  尝试从 helm chart 提取..."
   helm template kubeblocks kubeblocks/kubeblocks --version "${VERSION_NO_V}" \
     --include-crds 2>/dev/null \
-    | kubectl apply --server-side -f - && CRD_OK=true
+    | kubectl apply --server-side -f - >/dev/null 2>&1
+  crd_ready && CRD_OK=true
 fi
 
 if [ "$CRD_OK" = false ]; then
   echo ""
   echo "  ERROR: CRD 安装全部失败. 离线环境请手动:"
-  echo "    wget ${CRD_URL_INTERNAL}"
+  echo "    curl -kL -o kubeblocks_crds.yaml ${CRD_URL_INTERNAL}"
   echo "    kubectl apply --server-side -f kubeblocks_crds.yaml"
   exit 1
 fi
-echo "  ✓ CRD 已就绪"
+echo "  ✓ CRD 已就绪 ($(kubectl get crd -o name | grep -c kubeblocks.io) 个)"
 echo ""
 
 # ---------- 3. Namespace ----------
