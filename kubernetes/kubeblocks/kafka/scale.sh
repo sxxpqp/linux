@@ -81,6 +81,15 @@ fi
 echo ""
 
 OPS_NAME="${CLUSTER}-scale-$(date +%s)"
+
+# OpsRequest 用增量值 (scaleOut / scaleIn), 不是绝对值
+if [ "$DELTA" -gt 0 ]; then
+  SCALE_FIELD="scaleOut"
+else
+  SCALE_FIELD="scaleIn"
+  DELTA=$((-DELTA))
+fi
+
 kubectl apply -f - <<EOF
 apiVersion: operations.kubeblocks.io/v1alpha1
 kind: OpsRequest
@@ -92,7 +101,8 @@ spec:
   type: HorizontalScaling
   horizontalScaling:
     - componentName: ${COMPONENT}
-      replicas: ${TARGET}
+      ${SCALE_FIELD}:
+        replicaChanges: ${DELTA}
 EOF
 
 echo ""
