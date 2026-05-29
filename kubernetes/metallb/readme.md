@@ -10,6 +10,7 @@
 | `uninstall.sh` | 卸载 |
 | `pool.yaml` | IP 池 + L2 通告 (默认 L2/ARP 模式) |
 | `bgp.yaml` | BGP 模式配置 (二选一替代 L2) |
+| `metallb-native.yaml` | (可选) 离线 / 国内场景预下载的上游清单, 同目录有就优先用 |
 
 ## 安装
 
@@ -17,6 +18,19 @@
 bash install.sh                # 默认 v0.14.8 + L2 模式
 bash install.sh --version v0.14.5
 ```
+
+**离线 / 国内拉不到 raw.githubusercontent.com**:
+
+```bash
+# 本机有梯子的环境先下载 (跟 install.sh 的版本对齐)
+curl -kLo metallb-native.yaml \
+  https://raw.githubusercontent.com/metallb/metallb/v0.14.8/config/manifests/metallb-native.yaml
+
+# 再传到集群节点, 跟 install.sh 同目录, install.sh 会自动用本地的
+bash install.sh
+```
+
+镜像如果也拉不到 (`quay.io/metallb/controller`, `quay.io/metallb/speaker`),用 sed 把 `metallb-native.yaml` 里的 image 替换成内网 mirror 后再 apply。
 
 装完后任意 namespace 建一个 `type: LoadBalancer` Service 就能拿到 `172.16.150.200-210` 段的 IP。
 

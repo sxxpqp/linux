@@ -31,14 +31,26 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# 上游清单 (官方 release 直发的 single-file 清单)
+# native 清单优先级:
+#   1. 同目录下的 metallb-native.yaml (离线 / 国内拉不到 raw.githubusercontent.com 时用)
+#   2. --manifest <path|url> 显式指定
+#   3. 上游 raw.githubusercontent.com (在线兜底)
+NATIVE_LOCAL="${DIR}/metallb-native.yaml"
 NATIVE_URL="https://raw.githubusercontent.com/metallb/metallb/${VERSION}/config/manifests/metallb-native.yaml"
+
+if [ -f "${NATIVE_LOCAL}" ]; then
+  NATIVE_SRC="${NATIVE_LOCAL}"
+  NATIVE_DESC="local (${NATIVE_LOCAL})"
+else
+  NATIVE_SRC="${NATIVE_URL}"
+  NATIVE_DESC="upstream (${NATIVE_URL})"
+fi
 
 echo "========================================="
 echo " MetalLB 安装"
 echo "  version:    ${VERSION}"
 echo "  namespace:  ${NS}"
-echo "  manifest:   ${NATIVE_URL}"
+echo "  manifest:   ${NATIVE_DESC}"
 echo "========================================="
 echo ""
 
@@ -71,12 +83,18 @@ fi
 
 # ---------- 2. apply native 清单 ----------
 echo "[2/3] 安装 MetalLB 主体 (controller + speaker + CRD) ..."
-if ! kubectl apply -f "${NATIVE_URL}"; then
+if ! kubectl apply -f "${NATIVE_SRC}"; then
   echo ""
-  echo "  ERROR: 从 GitHub 拉清单失败. 离线 / 国内拉不到可以:"
-  echo "    1. 本机 curl -kLo metallb-native.yaml ${NATIVE_URL}"
-  echo "    2. (可选) 把 image 改成内网镜像源 (quay.io/metallb → 你的 mirror)"
-  echo "    3. kubectl apply -f metallb-native.yaml"
+  if [ "${NATIVE_SRC}" = "${NATIVE_URL}" ]; then
+    echo "  ERROR: 从 GitHub 拉清单失败. 离线 / 国内拉不到可以:"
+    echo "    1. 本机下载: curl -kLo ${NATIVE_LOCAL} ${NATIVE_URL}"
+    echo "    2. (可选) 改 image 为内网 mirror (quay.io/metallb → 你的源)"
+    echo "    3. 重跑 bash install.sh (会自动用本地 metallb-native.yaml)"
+  else
+    echo "  ERROR: 本地清单 apply 失败, 检查:"
+    echo "    1. ${NATIVE_LOCAL} 是否完整"
+    echo "    2. kubectl 是否能连到 apiserver"
+  fi
   exit 1
 fi
 echo ""

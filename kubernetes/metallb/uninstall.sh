@@ -10,14 +10,21 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 VERSION="${VERSION:-v0.14.8}"
 NS="metallb-system"
 
+# 清单源: 优先本地 metallb-native.yaml, 否则用上游 URL
+NATIVE_LOCAL="${DIR}/metallb-native.yaml"
 NATIVE_URL="https://raw.githubusercontent.com/metallb/metallb/${VERSION}/config/manifests/metallb-native.yaml"
+if [ -f "${NATIVE_LOCAL}" ]; then
+  NATIVE_SRC="${NATIVE_LOCAL}"
+else
+  NATIVE_SRC="${NATIVE_URL}"
+fi
 
 echo "删除 pool.yaml (IPAddressPool / L2Advertisement) ..."
 kubectl delete -f "${DIR}/pool.yaml" --ignore-not-found=true
 echo ""
 
-echo "删除 MetalLB 主体 ..."
-kubectl delete -f "${NATIVE_URL}" --ignore-not-found=true
+echo "删除 MetalLB 主体 (源: ${NATIVE_SRC}) ..."
+kubectl delete -f "${NATIVE_SRC}" --ignore-not-found=true
 echo ""
 
 echo "确认残留:"
