@@ -44,7 +44,7 @@ fi
 
 # ---------- 1. Helm 仓库 ----------
 echo "[1/4] 添加 KubeBlocks helm 仓库..."
-helm repo add kubeblocks https://nexus.ihome.sxxpqp.top:8443/repository/hwlm-longhorn/ --force-update 2>/dev/null || true
+helm repo add kubeblocks https://nexus.ihome.sxxpqp.top:8443/repository/helm-apecloud/ --force-update 2>/dev/null || true
 helm repo update >/dev/null
 
 # ---------- 2. 命名空间 ----------
@@ -53,26 +53,51 @@ kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply
 
 # ---------- 3. 安装 CRD + Operator ----------
 echo "[3/4] 安装 KubeBlocks core (CRD + operator)..."
-helm upgrade --install kubeblocks kubeblocks/kubeblocks \
+if ! helm upgrade --install kubeblocks kubeblocks/kubeblocks \
   --namespace "${NAMESPACE}" \
   --version "${VERSION}" \
   --set image.registry=apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com \
-  --wait --timeout 5m
+  --wait --timeout 5m; then
+  echo ""
+  echo "ERROR: KubeBlocks chart 安装失败。常见原因:"
+  echo "  1. helm 仓库地址错: helm repo list 看下 'kubeblocks' 指向的 URL 对不对"
+  echo "     正确地址: https://apecloud.github.io/helm-charts"
+  echo "  2. Nexus 内网代理没拉到该 chart: 换成公网地址或在 Nexus 加正确的 proxy repo"
+  echo "  3. version (${VERSION}) 不存在: helm search repo kubeblocks/kubeblocks --versions"
+  echo ""
+  exit 1
+fi
 
 # ---------- 4. 内置 Addon ----------
 if [ "$SKIP_ADDONS" = false ]; then
   echo "[4/4] 启用内置 addons (Redis 等)..."
+
+  # 等 Addon CRD 注册完成 (operator 启动后才会创建)
+  echo "  等待 Addon CRD 注册..."
+  for i in $(seq 1 30); do
+    if kubectl get crd addons.extensions.kubeblocks.io &>/dev/null; then
+      break
+    fi
+    sleep 2
+  done
+
+  if ! kubectl get crd addons.extensions.kubeblocks.io &>/dev/null; then
+    echo "  ERROR: Addon CRD 一直没注册，operator 可能没正常起来"
+    echo "  调试: kubectl get pod -n ${NAMESPACE}"
+    exit 1
+  fi
+
   for addon in redis mysql postgresql mongodb kafka; do
     echo "  启用 addon: ${addon}"
     kubectl patch addon "${addon}" --type=merge \
       -p '{"spec":{"install":{"enabled":true}}}' 2>/dev/null \
-      || echo "  (${addon} 不存在或已启用)"
+      || echo "  (${addon} 不存在，跳过)"
   done
 
   echo ""
   echo "等待 addon 就绪..."
   sleep 10
-  kubectl get addon -A | grep -E "redis|mysql|postgresql|mongodb|kafka" || true
+  kubectl get addon | grep -E "redis|mysql|postgresql|mongodb|kafka" || true
 else
   echo "[4/4] 跳过 addon (--skip-addons)"
 fi
