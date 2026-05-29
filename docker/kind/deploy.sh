@@ -53,6 +53,13 @@ server = "https://registry.k8s.io"
 [host."https://k8s.ihome.sxxpqp.top:8443"]
   capabilities = ["pull", "resolve"]
 TOML
+mkdir -p /etc/containerd/certs.d/quay.io
+  cat > /etc/containerd/certs.d/registry.k8s.io/hosts.toml << 'TOML'
+server = "quay.io"
+
+[host."https://quay.ihome.sxxpqp.top:8443"]
+  capabilities = ["pull", "resolve"]
+TOML
   # 重启 containerd 使配置生效
   systemctl restart containerd
 SCRIPT
