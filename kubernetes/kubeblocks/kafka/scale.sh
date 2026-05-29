@@ -82,7 +82,7 @@ echo ""
 
 OPS_NAME="${CLUSTER}-scale-$(date +%s)"
 kubectl apply -f - <<EOF
-apiVersion: apps.kubeblocks.io/v1
+apiVersion: operations.kubeblocks.io/v1alpha1
 kind: OpsRequest
 metadata:
   name: ${OPS_NAME}
