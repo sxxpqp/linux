@@ -39,16 +39,11 @@ spec:
         replicas: 2                  # 每分片 2 副本 (1 master + 1 replica)
 
         # ===== 固定密码 (引用外部 Secret) =====
-        # 不写这一段则 KubeBlocks 自动生成随机密码, secret 名带 shard 后缀难记.
-        # 写了就所有 shard 共用同一个 Secret 里的 password.
-        # 先建 Secret (参考 install.sh 自动创建):
-        #   kubectl create secret generic redis-cluster-password -n test \
-        #     --from-literal=password='YourStrongPass123'
-        # systemAccounts:
-        #   - name: default            # Redis 的 requirepass 账号
-        #     secretRef:
-        #       name: redis-cluster-password
-        #       namespace: test
+        systemAccounts:
+          - name: default               # Redis requirepass, 对应 ComponentDef 里的 default 账号
+            secretRef:
+              name: redis-cluster-password
+              namespace: test
 
         resources:
           limits:
