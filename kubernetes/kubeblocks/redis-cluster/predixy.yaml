@@ -1,0 +1,161 @@
+# Predixy - Redis Cluster 代理 (https://github.com/joyieldInc/predixy)
+# 作用: 把 Redis Cluster 包装成单实例外观, 让 Navicat 等不支持 cluster 模式的工具可用
+# 兼容性: 支持事务 / pub-sub / scripting, 比 twemproxy 强很多
+#
+# 部署后从外部连:
+#   Host: <任一 node IP>
+#   Port: 31379 (NodePort, 见下面 Service)
+#   Password: <跟 Redis Cluster 一样, 见 Secret/redis-cluster-password>
+#   连接类型: Standalone (不要选 Cluster!)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: predixy-config
+  namespace: test
+data:
+  predixy.conf: |
+    # 监听
+    Bind 0.0.0.0:7617
+    WorkerThreads 4
+    ClientTimeout 0
+    MaxMemory 1g
+    LogFile ""                          # stdout
+    LogVerbSample 0
+    LogDebugSample 0
+    LogInfoSample 10000
+    LogNoticeSample 1
+    LogWarnSample 1
+    LogErrorSample 1
+    Include cluster.conf
+    Include auth.conf
+
+  cluster.conf: |
+    # 后端 Redis Cluster 节点 (用集群内 service DNS, K8s 自动解析)
+    ClusterServerPool {
+      Password PLACEHOLDER_WILL_BE_REPLACED
+      MasterReadPriority 60
+      StaticSlaveReadPriority 50
+      DynamicSlaveReadPriority 50
+      RefreshInterval 10
+      ServerTimeout 1
+      ServerFailureLimit 10
+      ServerRetryTimeout 1
+      KeepAlive 120
+      Servers {
+        + redis-cluster-shard-jqf-headless.test.svc:6379
+        + redis-cluster-shard-zgd-headless.test.svc:6379
+        + redis-cluster-shard-zk9-headless.test.svc:6379
+      }
+    }
+
+  auth.conf: |
+    # Predixy 自己的认证 (客户端连 Predixy 用的密码, 这里跟 Redis 一致就行)
+    Authority {
+      Auth "PLACEHOLDER_WILL_BE_REPLACED" {
+        Mode admin
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: predixy
+  namespace: test
+  labels:
+    app: predixy
+spec:
+  replicas: 2                              # 2 副本 HA
+  selector:
+    matchLabels:
+      app: predixy
+  template:
+    metadata:
+      labels:
+        app: predixy
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: predixy
+      initContainers:
+        # 启动前把 Secret 里的密码替换到 config 文件
+        - name: render-config
+          image: alpine:3.19
+          command:
+            - sh
+            - -c
+            - |
+              cp /config/predixy.conf /etc/predixy/predixy.conf
+              sed "s|PLACEHOLDER_WILL_BE_REPLACED|${REDIS_PASSWORD}|g" \
+                /config/cluster.conf > /etc/predixy/cluster.conf
+              sed "s|PLACEHOLDER_WILL_BE_REPLACED|${REDIS_PASSWORD}|g" \
+                /config/auth.conf > /etc/predixy/auth.conf
+              echo "--- predixy.conf ---"; cat /etc/predixy/predixy.conf
+              echo "--- cluster.conf ---"; cat /etc/predixy/cluster.conf
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-cluster-password
+                  key: password
+          volumeMounts:
+            - { name: src,       mountPath: /config }
+            - { name: rendered,  mountPath: /etc/predixy }
+      containers:
+        - name: predixy
+          image: haandol/predixy:latest    # 公网镜像, 内网换成你 nexus 代理
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: redis, containerPort: 7617, protocol: TCP }
+          command: [ "predixy", "/etc/predixy/predixy.conf" ]
+          volumeMounts:
+            - { name: rendered, mountPath: /etc/predixy }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: "1",  memory: 512Mi }
+          readinessProbe:
+            tcpSocket: { port: 7617 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 7617 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: src
+          configMap:
+            name: predixy-config
+        - name: rendered
+          emptyDir: {}
+---
+# ClusterIP - 集群内访问
+apiVersion: v1
+kind: Service
+metadata:
+  name: predixy
+  namespace: test
+spec:
+  selector:
+    app: predixy
+  ports:
+    - { name: redis, port: 6379, targetPort: 7617, protocol: TCP }
+  type: ClusterIP
+---
+# NodePort - 外部访问 (Navicat 用这个)
+apiVersion: v1
+kind: Service
+metadata:
+  name: predixy-nodeport
+  namespace: test
+spec:
+  selector:
+    app: predixy
+  ports:
+    - { name: redis, port: 6379, targetPort: 7617, nodePort: 31379, protocol: TCP }
+  type: NodePort

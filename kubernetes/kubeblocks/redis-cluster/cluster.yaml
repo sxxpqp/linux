@@ -69,15 +69,19 @@ spec:
                 requests:
                   storage: 10Gi
 
-        # ===== 外部访问 =====
-        # podService: true 给每个 pod 各创建一个独立 NodePort Service
-        # KubeBlocks 自动配置 redis cluster-announce-ip/port, 让外部客户端收到
-        # MOVED 重定向时拿到的是 NodePort 而不是 Pod IP, 这样跨网段才能用.
-        # 共会创建 shards * replicas (= 6) 个 NodePort, 每个对应一个 pod.
-        services:
-          - name: redis-advertised
-            podService: true              # 每个 pod 一个独立 Service
-            serviceType: NodePort         # 也可换 LoadBalancer (云环境)
+        # ===== 外部访问 (默认关闭) =====
+        # KubeBlocks v1.0.2 的 NodePort + announce-ip 在 master/slave 配置不一致
+        # (master 用 NodeIP+NodePort, slave 用 Pod IP), 导致 redis-cli -c 跟 MOVED
+        # 跳转时报 "?:31573 Name does not resolve". 业务用 Lettuce/go-redis 等
+        # cluster client 没这问题, 但要从集群外用 GUI 工具会卡.
+        #
+        # 如果只要集群内连接 (推荐), 留空注释着, 所有 pod 一致用 Pod IP, 内部直通.
+        # 如果确实需要 NodePort 外部访问, 取消下面注释, 但要换 RedisInsight 这种
+        # 兼容性好的客户端 (Navicat 不行).
+        # services:
+        #   - name: redis-advertised
+        #     podService: true
+        #     serviceType: NodePort
 
   # 反亲和: 各副本尽量打散到不同节点
   schedulingPolicy:
