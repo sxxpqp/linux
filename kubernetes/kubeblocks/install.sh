@@ -44,7 +44,7 @@ fi
 
 # ---------- 1. Helm 仓库 ----------
 echo "[1/4] 添加 KubeBlocks helm 仓库..."
-helm repo add kubeblocks https://nexus.ihome.sxxpqp.top:8443/repository/helm-apecloud/ --force-update 2>/dev/null || true
+helm repo add kubeblocks https://nexus.ihome.sxxpqp.top:8443/repository/helm-apecloud --force-update 2>/dev/null || true
 helm repo update >/dev/null
 
 # ---------- 2. 命名空间 ----------
