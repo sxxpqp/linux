@@ -19,14 +19,7 @@ data:
     Bind 0.0.0.0:7617
     WorkerThreads 4
     ClientTimeout 0
-    MaxMemory 1g
-    LogFile ""                          # stdout
-    LogVerbSample 0
-    LogDebugSample 0
-    LogInfoSample 10000
-    LogNoticeSample 1
-    LogWarnSample 1
-    LogErrorSample 1
+    # 日志相关 key 在不同 predixy 版本支持度不一致, 全删让镜像用默认 (stdout).
     Include cluster.conf
     Include auth.conf
 
