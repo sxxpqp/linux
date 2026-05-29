@@ -1,16 +1,17 @@
 # KubeBlocks Redis Cluster 实例 (v1.0.2 API)
 #
-# 解决的核心问题:
-# - Bitnami chart 用裸 StatefulSet, Pod 重启换 IP 后老 nodes.conf 节点 ID 找不到
-#   对应 IP, 集群路由表失效
-# - KubeBlocks 用 InstanceSet, 维持稳定 DNS 名 + 自动更新 cluster-announce-ip,
-#   IP 变化通过 reload 钩子让 Redis 自己更新拓扑
+# v1.0 API 选型说明:
+#   两条互斥的路径:
+#   - 路 A: clusterDefinitionRef + topology -> 由 ClusterDefinition 自动派生 component
+#           (不能手动写 componentDef)
+#   - 路 B: 直接 componentSpecs[].componentDef -> 跳过 ClusterDefinition 抽象, 更灵活
+#   本文件用路 B (实测 v1.0.2 操作员路 A 的 component 派生有 bug, PreCheckFailed).
 #
-# 参考 ComponentDefinition (kubectl get cd | grep redis):
-#   redis-cluster-8-1.0.2  → Redis 8.2.2 cluster 模式 (最新, 当前选用)
-#   redis-cluster-7-1.0.2  → Redis 7.2.11
-#   redis-cluster-6-1.0.2  → Redis 6.2.17
-#   redis-cluster-5-1.0.2  → Redis 5.0.12
+# 可用 ComponentDefinition (kubectl get cd | grep redis):
+#   redis-cluster-8-1.0.2  -> Redis 8.2.2 cluster 模式 (最新, 当前选用)
+#   redis-cluster-7-1.0.2  -> Redis 7.2.11
+#   redis-cluster-6-1.0.2  -> Redis 6.2.17
+#   redis-cluster-5-1.0.2  -> Redis 5.0.12
 #
 # 用法:
 #   bash install.sh           # 应用本 CR
@@ -23,10 +24,6 @@ metadata:
   name: redis-cluster
   namespace: test
 spec:
-  # 用 ClusterDefinition + topology 决定组件组合
-  clusterDefinitionRef: redis
-  topology: cluster              # 真正的 Redis Cluster (3主3从最小)
-
   # 删除策略
   # - DoNotTerminate: 拒绝删除 (生产推荐)
   # - Halt:           删 K8s 资源但保留 PVC
@@ -35,12 +32,11 @@ spec:
   terminationPolicy: Delete
 
   componentSpecs:
-    # ---------- Redis Cluster 数据节点 ----------
     - name: redis-cluster
-      componentDef: redis-cluster-8-1.0.2   # 跟 ClusterDefinition 里的 component 对齐
-      serviceVersion: 8.2.2                 # Redis 实际版本
-      replicas: 6                           # 3 主 + 3 从, 最小可用 cluster
-      disableExporter: false                # 启用 redis_exporter 边车 :9121
+      componentDef: redis-cluster-8-1.0.2    # Redis 8.2.2 cluster 模式
+      serviceVersion: 8.2.2
+      replicas: 6                             # 3 主 + 3 从, 最小可用 cluster
+      disableExporter: false                  # 启用 redis_exporter 边车 :9121
 
       # 资源限制
       resources:
@@ -55,13 +51,13 @@ spec:
       volumeClaimTemplates:
         - name: data
           spec:
-            storageClassName: longhorn      # 跟现有栈一致
+            storageClassName: longhorn        # 跟现有栈一致
             accessModes: [ ReadWriteOnce ]
             resources:
               requests:
                 storage: 10Gi
 
-  # ---------- 集群级反亲和: 各副本尽量打散到不同节点 ----------
+  # ---------- 反亲和: 各副本尽量打散到不同节点 ----------
   # v1.0 用 schedulingPolicy 替代废弃的 affinity
   schedulingPolicy:
     affinity:
