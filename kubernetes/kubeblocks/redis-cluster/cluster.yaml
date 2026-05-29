@@ -51,7 +51,6 @@ spec:
       volumeClaimTemplates:
         - name: data
           spec:
-            storageClassName: longhorn        # 跟现有栈一致
             accessModes: [ ReadWriteOnce ]
             resources:
               requests:
