@@ -1,13 +1,13 @@
 #!/bin/bash
 # 部署 KubeBlocks Redis Sharding Cluster (3 shard × 2 副本 = 6 pod).
 #
-# 密码通过 systemAccounts.secretRef 引用外部 Secret, KubeBlocks 创建 pod 时
-# 直接用 Secret 里的 password 设置 requirepass, 无需 post-deploy 轮换.
+# systemAccounts.secretRef 在 sharding 模式下不生效, KubeBlocks 自动生成随机密码.
+# 脚本在 cluster Ready 后把密码轮换成固定值, 并同步到固定名 Secret.
 #
 # 用法:
-#   bash install.sh                 # 默认 ns=test
+#   bash install.sh                 # 默认 ns=test, 不等待
+#   bash install.sh --wait          # 等到 Running + 密码轮换完成
 #   bash install.sh --ns prod
-#   bash install.sh --wait          # 等到 Running
 set -uo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -22,7 +22,7 @@ while [ $# -gt 0 ]; do
     --wait) WAIT=true; shift ;;
     --pass) FIXED_PASS="$2"; shift 2 ;;
     -h|--help)
-      sed -n '2,10p' "$0" | sed 's/^# //'
+      sed -n '2,9p' "$0" | sed 's/^# //'
       exit 0 ;;
     *)
       echo "未知参数: $1"; exit 1 ;;
@@ -38,34 +38,19 @@ fi
 # ---------- 1. namespace ----------
 kubectl create namespace "${NS}" --dry-run=client -o yaml | kubectl apply -f -
 
-# ---------- 2. 创建密码 Secret ----------
-echo "创建 Secret/${SECRET_NAME} (username=default)..."
-PASS_B64=$(printf '%s' "$FIXED_PASS" | base64 | tr -d '\n')
-USER_B64=$(printf '%s' 'default' | base64 | tr -d '\n')
-kubectl apply -f - <<EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ${SECRET_NAME}
-  namespace: ${NS}
-data:
-  password: ${PASS_B64}
-  username: ${USER_B64}
-immutable: true
-EOF
-echo ""
-
-# ---------- 3. 部署 Cluster ----------
+# ---------- 2. 部署 Cluster ----------
 echo "部署 Redis Cluster 到 namespace=${NS}..."
 sed "s|namespace: test|namespace: ${NS}|" "${DIR}/cluster.yaml" | kubectl apply -f -
 echo ""
 
-# ---------- 4. 部署稳定 Service (跨 shard, 名字固定) ----------
-echo "部署稳定 Service redis-cluster (业务代码引用这个, 不受 shard 后缀变化影响)..."
+# ---------- 3. 部署稳定 Service ----------
+echo "部署稳定 Service redis-cluster (名字固定, 不受 shard 后缀变化影响)..."
 sed "s|namespace: test|namespace: ${NS}|" "${DIR}/stable-service.yaml" | kubectl apply -f -
 echo ""
 
-# ---------- 5. 等就绪 ----------
+# ---------- 4. 等就绪 + 密码轮换 ----------
+ACTUAL_PASS=""
+
 if [ "$WAIT" = true ]; then
   echo "等 cluster.status.phase=Running (3-5 分钟)..."
   for i in $(seq 1 60); do
@@ -77,6 +62,77 @@ if [ "$WAIT" = true ]; then
     sleep 10
   done
   echo ""
+
+  # 取 KubeBlocks 自动生成的密码
+  SRC_SEC=$(kubectl get secret -n "${NS}" -l app.kubernetes.io/instance=redis-cluster -o name 2>/dev/null \
+    | grep -i 'account-default' | head -1)
+  if [ -n "$SRC_SEC" ]; then
+    OLD_PASS=$(kubectl get -n "${NS}" "$SRC_SEC" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+  fi
+
+  if [ -z "${OLD_PASS:-}" ]; then
+    echo "WARN: 取不到自动生成的密码, 跳过轮换"
+  elif [ "$OLD_PASS" = "$FIXED_PASS" ]; then
+    echo "密码已经是目标值, 跳过轮换"
+    ACTUAL_PASS="$FIXED_PASS"
+  else
+    echo "把所有 redis pod 的密码轮换成固定值: ${FIXED_PASS}"
+    NEW_B64=$(printf '%s' "$FIXED_PASS" | base64 | tr -d '\n')
+    ROTATE_OK=true
+
+    for pod in $(kubectl get pod -n "${NS}" -l app.kubernetes.io/instance=redis-cluster -o name 2>/dev/null); do
+      POD_NAME=${pod#pod/}
+      echo "  [$POD_NAME] CONFIG SET requirepass + masterauth + REWRITE"
+      if ! kubectl exec -n "${NS}" "$POD_NAME" -c redis-cluster -- \
+            redis-cli -a "$OLD_PASS" --no-auth-warning CONFIG SET requirepass "$FIXED_PASS" >/dev/null 2>&1; then
+        echo "    ✗ requirepass 改失败"
+        ROTATE_OK=false
+        continue
+      fi
+      kubectl exec -n "${NS}" "$POD_NAME" -c redis-cluster -- \
+        redis-cli -a "$FIXED_PASS" --no-auth-warning CONFIG SET masterauth "$FIXED_PASS" >/dev/null 2>&1 || true
+      kubectl exec -n "${NS}" "$POD_NAME" -c redis-cluster -- \
+        redis-cli -a "$FIXED_PASS" --no-auth-warning CONFIG REWRITE >/dev/null 2>&1 || true
+    done
+
+    if [ "$ROTATE_OK" = true ]; then
+      for sec in $(kubectl get secret -n "${NS}" -l app.kubernetes.io/instance=redis-cluster -o name 2>/dev/null \
+                   | grep -i 'account-default'); do
+        kubectl patch -n "${NS}" "$sec" --type='merge' \
+          -p "{\"data\":{\"password\":\"${NEW_B64}\"}}" >/dev/null
+      done
+      ACTUAL_PASS="$FIXED_PASS"
+      echo "  ✓ 密码已固定"
+    else
+      echo "  ⚠ 部分 pod 改失败, 保持自动生成的密码"
+      ACTUAL_PASS="$OLD_PASS"
+    fi
+  fi
+  echo ""
+fi
+
+# 同步到固定名 Secret
+if [ -n "$ACTUAL_PASS" ]; then
+  echo "同步密码到 Secret/${SECRET_NAME}..."
+  PASS_B64=$(printf '%s' "$ACTUAL_PASS" | base64 | tr -d '\n')
+  USER_B64=$(printf '%s' 'default' | base64 | tr -d '\n')
+  kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${SECRET_NAME}
+  namespace: ${NS}
+data:
+  password: ${PASS_B64}
+  username: ${USER_B64}
+immutable: false
+EOF
+  echo ""
+else
+  echo "当前未轮换密码, 手动获取 KubeBlocks 自动生成的密码:"
+  echo "  SRC=\$(kubectl get secret -n ${NS} -l app.kubernetes.io/instance=redis-cluster -o name | grep account-default | head -1)"
+  echo "  PASS=\$(kubectl get -n ${NS} \$SRC -o jsonpath='{.data.password}' | base64 -d)"
+  echo "  kubectl create secret generic ${SECRET_NAME} -n ${NS} --from-literal=password=\"\$PASS\""
 fi
 
 # ---------- 5. 连接信息汇总 ----------
@@ -85,38 +141,34 @@ echo "==============================================================="
 echo " ✓ 连接信息"
 echo "==============================================================="
 
-# ===== 密码 =====
 echo ""
 echo "------- 密码 -------"
-echo "  密码:       ${FIXED_PASS}"
-echo "  明文获取:   kubectl get secret ${SECRET_NAME} -n ${NS} -o jsonpath='{.data.password}' | base64 -d; echo"
-echo "  base64:     PASS=\$(kubectl get secret ${SECRET_NAME} -n ${NS} -o jsonpath='{.data.password}')"
+if [ -n "$ACTUAL_PASS" ]; then
+  echo "  密码:       ${ACTUAL_PASS}"
+else
+  echo "  (密码还没轮换, 用上面的命令从自动生成的 Secret 取)"
+fi
+echo "  随时取用:   kubectl get secret ${SECRET_NAME} -n ${NS} -o jsonpath='{.data.password}' | base64 -d; echo"
 
-# ===== 集群内访问 =====
 echo ""
 echo "------- 集群内访问 (从 K8s pod 内连) -------"
 echo ""
-echo "  ⭐ 业务代码用这个稳定地址 (跨所有 shard, 名字固定):"
+echo "  ⭐ 业务代码用这个稳定地址:"
 echo "      redis-cluster.${NS}.svc:6379"
 echo ""
 
-# 验证 stable service 真的指向 pod
 STABLE_EP=$(kubectl get endpoints redis-cluster -n "${NS}" -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null | wc -w)
-echo "  当前 redis-cluster Service endpoints 数: ${STABLE_EP} (期望 6)"
+echo "  redis-cluster Service endpoints: ${STABLE_EP} (期望 6)"
 
 if [ "${STABLE_EP}" -lt 6 ]; then
   echo ""
-  echo "  ⚠ Service 没选到 6 个 pod, 可能 label 不匹配. 检查:"
+  echo "  ⚠ endpoints < 6, 检查 label 匹配:"
   echo "    kubectl get pod -n ${NS} -l app.kubernetes.io/instance=redis-cluster,apps.kubeblocks.io/sharding-name=shard -o name | wc -l"
-  echo "    如果上面也 ≠ 6, 看 pod label 改 stable-service.yaml:"
-  echo "    kubectl get pod -n ${NS} redis-cluster-shard-*-0 -o jsonpath='{.metadata.labels}' | python3 -m json.tool"
 fi
 
-# ===== 验证命令 =====
 echo ""
 echo "------- 一键验证 -------"
 echo ""
-echo "  集群内:"
-echo "    POD=\$(kubectl get pod -n ${NS} -l app.kubernetes.io/instance=redis-cluster -o name | head -1)"
-echo "    PASS=\$(kubectl get secret ${SECRET_NAME} -n ${NS} -o jsonpath='{.data.password}' | base64 -d)"
-echo "    kubectl exec -n ${NS} \${POD#pod/} -c redis -- redis-cli -a \"\$PASS\" --no-auth-warning cluster info | head"
+echo "  POD=\$(kubectl get pod -n ${NS} -l app.kubernetes.io/instance=redis-cluster -o name | head -1)"
+echo "  PASS=\$(kubectl get secret ${SECRET_NAME} -n ${NS} -o jsonpath='{.data.password}' | base64 -d)"
+echo "  kubectl exec -n ${NS} \${POD#pod/} -c redis-cluster -- redis-cli -a \"\$PASS\" --no-auth-warning cluster info | head"
