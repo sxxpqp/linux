@@ -107,15 +107,33 @@ echo ""
 
 # ---------- 4. 配置池子 ----------
 echo "应用 IP 池配置 (pool.yaml) ..."
-# CRD 刚 apply, webhook 可能要几秒才就绪, 失败重试几次
+# CRD 刚 apply, webhook 可能要几秒才就绪, 失败重试几次.
+# 前 N-1 次失败吞错误避免刷屏, 最后一次把 stderr 暴露出来 (避免静默失败)
+POOL_APPLIED=false
 for i in $(seq 1 12); do
-  if kubectl apply -f "${DIR}/pool.yaml" 2>/dev/null; then
-    echo "  ✓ pool.yaml 已应用"
-    break
+  if [ "$i" -lt 12 ]; then
+    if kubectl apply -f "${DIR}/pool.yaml" 2>/dev/null; then
+      POOL_APPLIED=true; break
+    fi
+    echo "  [$i/12] webhook 还没就绪, 5s 后重试 ..."
+    sleep 5
+  else
+    # 最后一次: 让 kubectl 把真实错误打出来, 不再吞
+    echo "  [$i/12] 最后一次尝试 (显示真实错误):"
+    if kubectl apply -f "${DIR}/pool.yaml"; then
+      POOL_APPLIED=true
+    fi
   fi
-  echo "  [$i/12] webhook 还没就绪, 5s 后重试 ..."
-  sleep 5
 done
+
+if [ "$POOL_APPLIED" = true ]; then
+  echo "  ✓ pool.yaml 已应用"
+else
+  echo ""
+  echo "  ⚠ pool.yaml 始终没应用上. 集群里没有 IPAddressPool, LB Service 会一直 <pending>."
+  echo "    手动补:  kubectl apply -f ${DIR}/pool.yaml"
+  echo "    排查:    kubectl -n ${NS} get pod; kubectl -n ${NS} logs deploy/controller"
+fi
 echo ""
 
 echo "==============================================================="
