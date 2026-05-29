@@ -1,12 +1,15 @@
-# Predixy - Redis Cluster 代理 (https://github.com/joyieldInc/predixy)
-# 作用: 把 Redis Cluster 包装成单实例外观, 让 Navicat 等不支持 cluster 模式的工具可用
-# 兼容性: 支持事务 / pub-sub / scripting, 比 twemproxy 强很多
+# Predixy - Redis Cluster GUI 入口代理 (https://github.com/joyieldInc/predixy)
 #
-# 部署后从外部连:
-#   Host: <任一 node IP>
-#   Port: 31379 (NodePort, 见下面 Service)
-#   Password: <跟 Redis Cluster 一样, 见 Secret/redis-cluster-password>
-#   连接类型: Standalone (不要选 Cluster!)
+# 定位: 仅给运维 / 开发用 Navicat / RedisInsight 等 GUI 工具看数据 + 清数据
+# 不是: 业务应用的连接入口 (业务直接用 cluster client 连 headless service 更快)
+#
+# 所以这里只跑 1 副本, 资源很小, 挂了也不影响业务 (重启个 pod 就回来).
+#
+# 部署后外部连:
+#   Host:            <任一 node IP>
+#   Port:            31379 (NodePort)
+#   Password:        见 Secret/redis-cluster-password
+#   Connection type: Standalone (不要选 Cluster!)
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -58,7 +61,7 @@ metadata:
   labels:
     app: predixy
 spec:
-  replicas: 2                              # 2 副本 HA
+  replicas: 1                              # GUI 工具用, 不需要 HA
   selector:
     matchLabels:
       app: predixy
@@ -67,15 +70,6 @@ spec:
       labels:
         app: predixy
     spec:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                topologyKey: kubernetes.io/hostname
-                labelSelector:
-                  matchLabels:
-                    app: predixy
       initContainers:
         # 启动前把 Secret 里的密码替换到 config 文件
         - name: render-config
@@ -110,8 +104,8 @@ spec:
           volumeMounts:
             - { name: rendered, mountPath: /etc/predixy }
           resources:
-            requests: { cpu: 100m, memory: 128Mi }
-            limits:   { cpu: "1",  memory: 512Mi }
+            requests: { cpu: 50m,  memory: 64Mi }
+            limits:   { cpu: 500m, memory: 256Mi }
           readinessProbe:
             tcpSocket: { port: 7617 }
             initialDelaySeconds: 5

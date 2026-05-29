@@ -90,31 +90,32 @@ services:
 
 每个 pod 一个 NodePort, 客户端用 cluster mode 连任一即可. **缺点**: KubeBlocks v1.0.2 给 slave 没配 announce-ip, redis-cli `-c` 跟 MOVED 时报 `?:31573` 错, Navicat 直接连不上. 适合用 RedisInsight / Lettuce / go-redis 等智能客户端.
 
-**模式 B: Predixy 代理 (Navicat 等 GUI 工具可用) ✅ 推荐**
+**模式 B: Predixy 代理 (Navicat 等 GUI 工具可用) ✅ 推荐用于运维/开发**
 
 ```bash
 cd redis-cluster
 bash predixy-install.sh --wait
 ```
 
-Predixy 装 2 副本 HA, 内部仍走 cluster 模式发现拓扑, 对外伪装成单实例 Redis:
+**定位**: 给运维/开发用 GUI 工具看数据 + 清数据, **不是**业务应用的连接入口.
+业务代码直接用 cluster client 连 headless service 性能更好, 不要走 Predixy.
 
 ```
-Navicat (单实例模式)
-   ↓ NodeIP:31379
-Predixy (proxy)
-   ↓ 内部 cluster client, 自动发现 + 路由
+运维/开发 GUI (Navicat/RedisInsight, 集群外)
+   ↓ NodeIP:31379 (standalone 模式)
+Predixy 代理 (1 副本, 集群内)
+   ↓ 内部仍走 cluster 模式发现拓扑
 Redis Cluster (3 shard × 2)
+   ↑
+业务应用 (cluster client, 集群内)
+   ↑ headless service 直连, 不走代理
 ```
 
-| 项 | 直接 NodePort | Predixy |
-|---|---|---|
-| 客户端模式 | Cluster | Standalone |
-| Navicat 可用 | ❌ | ✅ |
-| 命令兼容 | 100% | 99% (支持事务/lua/pub-sub) |
-| 额外延迟 | 0 | ~1ms |
-| 额外 pod | 0 | 2 (HA) |
-| Pod IP 变化 | 客户端处理 | Predixy 自动重新发现 |
+| 用途 | 走哪条路 |
+|---|---|
+| **业务代码** (Java/Go/Python 应用) | Cluster client → headless service (无代理) |
+| **运维 GUI** (Navicat/RedisInsight) | Standalone → Predixy NodePort → Cluster |
+| **临时排查** (redis-cli) | 进 pod 用 `redis-cli -h headless -p 6379 -a "$PASS"` |
 
 ## 卸载
 
