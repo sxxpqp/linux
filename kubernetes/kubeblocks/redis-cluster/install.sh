@@ -43,6 +43,11 @@ echo "部署 Redis Cluster 到 namespace=${NS}..."
 sed "s|namespace: test|namespace: ${NS}|" "${DIR}/cluster.yaml" | kubectl apply -f -
 echo ""
 
+# ---------- 2b. 部署稳定 Service (跨 shard, 名字固定) ----------
+echo "部署稳定 Service redis-cluster (业务代码引用这个, 不受 shard 后缀变化影响)..."
+sed "s|namespace: test|namespace: ${NS}|" "${DIR}/stable-service.yaml" | kubectl apply -f -
+echo ""
+
 # ---------- 3. 等就绪 ----------
 if [ "$WAIT" = true ]; then
   echo "等 cluster.status.phase=Running (3-5 分钟)..."
@@ -108,9 +113,24 @@ echo "  随时取用:  kubectl get secret ${ALIAS_SECRET} -n ${NS} -o jsonpath='
 echo ""
 echo "------- 集群内访问 (从 K8s pod 内连) -------"
 echo ""
-echo "  Headless Services (每 shard 一个):"
-kubectl get svc -n "${NS}" -l app.kubernetes.io/instance=redis-cluster --no-headers 2>/dev/null \
-  | grep headless | awk '{printf "    %s:6379\n", $1}'
+echo "  ⭐ 业务代码用这个稳定地址 (跨所有 shard, 名字固定):"
+echo "      redis-cluster.${NS}.svc:6379"
+echo ""
+echo "  (底层是 cluster 级别 Headless Service, 解析到全部 redis pod IP."
+echo "   cluster client 拿任一作 seed 自动发现拓扑, shard 后缀变化无感.)"
+echo ""
+
+# 验证 stable service 真的指向 pod
+STABLE_EP=$(kubectl get endpoints redis-cluster -n "${NS}" -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null | wc -w)
+echo "  当前 redis-cluster Service endpoints 数: ${STABLE_EP} (期望 6)"
+
+if [ "${STABLE_EP}" -lt 6 ]; then
+  echo ""
+  echo "  ⚠ Service 没选到 6 个 pod, 可能 label 不匹配. 检查:"
+  echo "    kubectl get pod -n ${NS} -l app.kubernetes.io/instance=redis-cluster,apps.kubeblocks.io/sharding-name=shard -o name | wc -l"
+  echo "    如果上面也 ≠ 6, 看 pod label 改 stable-service.yaml:"
+  echo "    kubectl get pod -n ${NS} redis-cluster-shard-*-0 -o jsonpath='{.metadata.labels}' | python3 -m json.tool"
+fi
 
 # ===== 外部访问 =====
 echo ""

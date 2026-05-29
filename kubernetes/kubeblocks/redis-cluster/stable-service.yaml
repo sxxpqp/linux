@@ -1,0 +1,46 @@
+# 稳定的 cluster 级别 Headless Service - 跨所有 shard, 名字固定
+#
+# 为什么需要这个:
+#   KubeBlocks sharding 模式每个 shard 是独立 component, headless service 名带
+#   随机后缀 (redis-cluster-shard-XXX-headless), shard 重建后后缀会变.
+#   业务代码不能写死 `shard-jqf-headless` 这种, 否则重启就连不上.
+#
+# 这个 Service 用 cluster 级别的稳定 label 选所有 redis pod, 不管它在哪个 shard.
+# DNS `redis-cluster.test.svc` 会解析到全部 6 个 pod IP, 业务的 cluster client
+# 拿任一 IP 作 seed 自动发现拓扑.
+#
+# 业务侧用法:
+#   spring.data.redis.cluster.nodes:
+#     - redis-cluster.test.svc:6379       # 固定地址, shard 变化无感
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cluster                      # ← 固定名字, 业务代码引用这个
+  namespace: test
+  labels:
+    app.kubernetes.io/managed-by: kubeblocks-stable-svc
+spec:
+  # Headless: DNS 直接返回 pod IP, 不经过 kube-proxy 一层转发
+  # (Redis Cluster 必须直连 pod, 不能走 ClusterIP 否则 MOVED 跳转失败)
+  clusterIP: None
+  # 选所有 redis-cluster 这个 KubeBlocks Cluster 下的所有 shard 的 redis pod
+  # 实测 KubeBlocks v1.0.2 在 pod 上加的 label (kubectl get pod --show-labels):
+  #   app.kubernetes.io/instance=redis-cluster        ← cluster 名 (稳定)
+  #   apps.kubeblocks.io/sharding-name=shard          ← sharding 名 (稳定, 跨 shard)
+  #   apps.kubeblocks.io/component-name=shard-2gz     ← shard 名 (随机, 会变)
+  # 用前两个组合 = 只选 redis-cluster 这个 cluster 下 sharding=shard 的所有 pod
+  selector:
+    app.kubernetes.io/instance: redis-cluster
+    apps.kubeblocks.io/sharding-name: shard
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+      protocol: TCP
+    - name: cluster-bus
+      port: 16379
+      targetPort: 16379
+      protocol: TCP
+  # 即使 pod 还没 Ready 也加入 DNS, 集群启动期间也能解析到
+  publishNotReadyAddresses: true

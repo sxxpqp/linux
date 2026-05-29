@@ -128,9 +128,10 @@ else
     echo ""
   fi
 
-  echo "Step 2: 删除 Cluster CR (后台异步, ${STUCK_TIMEOUT}s 没结果转 --force)"
+  echo "Step 2: 删除 Cluster CR + 稳定 Service (后台异步, ${STUCK_TIMEOUT}s 没结果转 --force)"
   if [ "$DRY_RUN" = false ]; then
     kubectl delete cluster.apps.kubeblocks.io "${CLUSTER}" -n "${NS}" --wait=false 2>/dev/null || true
+    kubectl delete svc "${CLUSTER}" -n "${NS}" --ignore-not-found 2>/dev/null || true
   fi
   echo ""
 

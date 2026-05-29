@@ -24,7 +24,8 @@ kubeblocks/
 ├── install-snapshotter.sh   装 VolumeSnapshot CRD + controller (备份依赖)
 └── redis-cluster/
     ├── cluster.yaml                 Cluster CR (Redis 7.2.4, sharding 3×2, 默认无 NodePort)
-    ├── install.sh                   apply CR + 同步密码到固定 Secret + 显示连接信息
+    ├── stable-service.yaml          ⭐ 跨 shard 稳定 Service (业务代码连这个, 不受 shard 后缀变化影响)
+    ├── install.sh                   apply CR + stable Service + 同步密码 + 显示连接信息
     ├── scale.sh                     扩缩 shards (OpsRequest, operator 自动 reshard 槽位)
     ├── uninstall.sh                 删 Cluster (--keep-data / --purge / --force)
     ├── redisinsight.yaml            RedisInsight (Redis 官方 GUI) Deployment + Service
