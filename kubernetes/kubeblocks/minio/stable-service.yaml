@@ -1,0 +1,22 @@
+# 稳定的内部 ClusterIP Service - 提供简洁名字 minio-cluster.test.svc:9000
+# 业务侧 S3 endpoint 直接写这个, 不用关心 KubeBlocks 自动生成的长服务名.
+#
+# selector 用 KubeBlocks 默认 label, 扩容/重启都自动维护.
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-cluster
+  namespace: test
+  labels:
+    app.kubernetes.io/managed-by: kubeblocks-stable-svc
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: minio-cluster
+    apps.kubeblocks.io/component-name: minio
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: 9000
+      protocol: TCP
+  publishNotReadyAddresses: true
