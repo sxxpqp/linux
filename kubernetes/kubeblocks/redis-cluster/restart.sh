@@ -54,7 +54,6 @@ metadata:
 spec:
   clusterName: ${CLUSTER}
   type: Restart
-  ttlSecondsBeforeAbort: 600
   restart:
     - componentName: ${SHARDING}
 EOF

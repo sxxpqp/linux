@@ -42,5 +42,4 @@ spec:
       port: 16379
       targetPort: 16379
       protocol: TCP
-  # 即使 pod 还没 Ready 也加入 DNS, 集群启动期间也能解析到
-  publishNotReadyAddresses: true
+  publishNotReadyAddresses: false

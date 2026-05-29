@@ -51,6 +51,7 @@ metadata:
 spec:
   selector:
     app: kafka-ui
+  publishNotReadyAddresses: false
   ports:
     - port: 8080
       targetPort: 8080
