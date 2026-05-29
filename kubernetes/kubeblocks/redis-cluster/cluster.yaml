@@ -38,6 +38,18 @@ spec:
         disableExporter: false       # 启用 redis_exporter 边车 :9121
         replicas: 2                  # 每分片 2 副本 (1 master + 1 replica)
 
+        # ===== 固定密码 (引用外部 Secret) =====
+        # 不写这一段则 KubeBlocks 自动生成随机密码, secret 名带 shard 后缀难记.
+        # 写了就所有 shard 共用同一个 Secret 里的 password.
+        # 先建 Secret (参考 install.sh 自动创建):
+        #   kubectl create secret generic redis-cluster-password -n test \
+        #     --from-literal=password='YourStrongPass123'
+        # systemAccounts:
+        #   - name: default            # Redis 的 requirepass 账号
+        #     secretRef:
+        #       name: redis-cluster-password
+        #       namespace: test
+
         resources:
           limits:
             cpu: "1"
@@ -57,13 +69,15 @@ spec:
                 requests:
                   storage: 10Gi
 
-        # ===== 外部访问 (可选) =====
-        # 启用后每个 pod 获得一个独立的 NodePort, 客户端可以直接拨 NodePort
-        # 不开就只能集群内访问 (通过 redis-cluster service DNS)
-        # services:
-        #   - name: redis-advertised
-        #     podService: true
-        #     serviceType: NodePort
+        # ===== 外部访问 =====
+        # podService: true 给每个 pod 各创建一个独立 NodePort Service
+        # KubeBlocks 自动配置 redis cluster-announce-ip/port, 让外部客户端收到
+        # MOVED 重定向时拿到的是 NodePort 而不是 Pod IP, 这样跨网段才能用.
+        # 共会创建 shards * replicas (= 6) 个 NodePort, 每个对应一个 pod.
+        services:
+          - name: redis-advertised
+            podService: true              # 每个 pod 一个独立 Service
+            serviceType: NodePort         # 也可换 LoadBalancer (云环境)
 
   # 反亲和: 各副本尽量打散到不同节点
   schedulingPolicy:
