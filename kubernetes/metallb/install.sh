@@ -103,6 +103,19 @@ echo ""
 echo "[3/3] 等 controller / speaker Ready ..."
 kubectl -n "${NS}" rollout status deploy/controller --timeout=3m || true
 kubectl -n "${NS}" rollout status ds/speaker --timeout=3m || true
+
+# 额外等 webhook 真正就绪 (rollout status 返回早, webhook 后注册).
+# 标志: webhook-service 的 Endpoints 有 IP 了, 才算 apply CR 不会被打回.
+echo "  等 webhook 注册 endpoint ..."
+for i in $(seq 1 24); do
+  EP=$(kubectl -n "${NS}" get endpoints webhook-service -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null)
+  if [ -n "$EP" ]; then
+    echo "  ✓ webhook endpoint 就绪: ${EP}"
+    break
+  fi
+  echo "  [$i/24] webhook 还未注册, 5s 后重试 ..."
+  sleep 5
+done
 echo ""
 
 # ---------- 4. 配置池子 ----------
