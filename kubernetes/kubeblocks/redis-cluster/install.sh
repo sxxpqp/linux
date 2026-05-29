@@ -168,7 +168,7 @@ if [ -n "$ADV_SVCS" ]; then
 fi
 
 echo "  集群内 (任一 redis pod):"
-echo "    POD=\$(kubectl get pod -n ${NS} -l apps.kubeblocks.io/cluster-name=redis-cluster -o name | head -1)"
+echo "    POD=\$(kubectl get pod -n ${NS} -l app.kubernetes.io/instance=redis-cluster -o name | head -1)"
 echo "    PASS=\$(kubectl get secret ${ALIAS_SECRET} -n ${NS} -o jsonpath='{.data.password}' | base64 -d)"
 echo "    kubectl exec -n ${NS} \${POD#pod/} -- redis-cli -a \"\$PASS\" cluster info | head"
 echo ""

@@ -130,4 +130,4 @@ echo "当前 cluster:"
 kubectl get cluster.apps.kubeblocks.io "${CLUSTER}" -n "${NS}" -o wide
 echo ""
 echo "当前 component (每个 shard 对应一个):"
-kubectl get component -n "${NS}" -l apps.kubeblocks.io/cluster-name="${CLUSTER}" 2>/dev/null
+kubectl get component -n "${NS}" -l app.kubernetes.io/instance="${CLUSTER}" 2>/dev/null
