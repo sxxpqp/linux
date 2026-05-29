@@ -1,24 +1,37 @@
 #!/bin/bash
-# 安装 KubeBlocks operator (含 CRD)。
-# KubeBlocks 是 ApeCloud 的 K8s 数据库 operator，支持 Redis/MySQL/PostgreSQL/Mongo/Kafka 等。
-# 选它而不是 Bitnami chart 主要解决 Redis Cluster 的 IP 切换问题（用 InstanceSet 替代 StatefulSet）。
+# 安装 KubeBlocks operator (按官方三步: CRD → operator → addons)。
+# 参考: https://kubeblocks.io/docs/preview/user_docs/overview/install-kubeblocks
 #
 # 用法:
-#   bash install.sh                           # 默认 v0.9.3
-#   bash install.sh --version v1.0.0          # 指定版本
-#   bash install.sh --skip-addons             # 只装 core，不装内置 addon (Redis/MySQL 等)
+#   bash install.sh                            # 默认 v0.9.3
+#   bash install.sh --version v1.0.0           # 指定版本
+#   bash install.sh --addons redis,mysql       # 只装这两个 addon (逗号分隔)
+#   bash install.sh --skip-addons              # 只装 core, 不装 addon
+#   bash install.sh --public                   # 用 apecloud 公网 helm 仓库 (默认走内网 nexus)
 set -uo pipefail
 
 NAMESPACE="kb-system"
-VERSION="v0.9.3"
+VERSION="v1.0.2"
+ADDONS="redis,mysql,postgresql,mongodb,kafka"
 SKIP_ADDONS=false
+USE_PUBLIC=false
+
+# 仓库地址 - 内网 nexus 代理 / 公网 ApeCloud
+NEXUS_REPO="https://nexus.ihome.sxxpqp.top:8443/repository/helm-apecloud"
+PUBLIC_REPO="https://apecloud.github.io/helm-charts"
+
+# CRD 文件下载地址 (内网共享镜像优先, GitHub 兜底)
+# 内网地址按版本拼接, 比如 v1.0.2 → kubeblocks_crds.yaml
+CRD_URL_INTERNAL="https://chfs.sxxpqp.top:8443/chfs/shared/k8s/kubeblocks/kubeblocks_crds.yaml"
 
 for ((i=1; i<=$#; i++)); do
   case "${!i}" in
     --version)     i=$((i+1)); VERSION="${!i}" ;;
+    --addons)      i=$((i+1)); ADDONS="${!i}" ;;
     --skip-addons) SKIP_ADDONS=true ;;
+    --public)      USE_PUBLIC=true ;;
     -h|--help)
-      sed -n '2,9p' "$0" | sed 's/^# //'
+      sed -n '2,11p' "$0" | sed 's/^# //'
       exit 0 ;;
     *)
       echo "未知参数: ${!i} (使用 --help 查看用法)"
@@ -26,11 +39,18 @@ for ((i=1; i<=$#; i++)); do
   esac
 done
 
+# 版本号统一带 v 前缀 (helm chart 版本不带 v, CRD release tag 带 v)
+VERSION_NO_V="${VERSION#v}"
+VERSION_WITH_V="v${VERSION_NO_V}"
+
+REPO_URL=$([ "$USE_PUBLIC" = true ] && echo "$PUBLIC_REPO" || echo "$NEXUS_REPO")
+
 echo "========================================="
 echo " KubeBlocks 安装"
-echo "  namespace:  ${NAMESPACE}"
-echo "  version:    ${VERSION}"
-echo "  addons:     $([ "$SKIP_ADDONS" = true ] && echo "skip" || echo "install (Redis/MySQL/PG/Mongo/Kafka)")"
+echo "  namespace:   ${NAMESPACE}"
+echo "  version:     ${VERSION_WITH_V}"
+echo "  helm repo:   ${REPO_URL}"
+echo "  addons:      $([ "$SKIP_ADDONS" = true ] && echo "(skip)" || echo "${ADDONS}")"
 echo "========================================="
 echo ""
 
@@ -43,36 +63,79 @@ if ! command -v kubectl &>/dev/null; then
 fi
 
 # ---------- 1. Helm 仓库 ----------
-echo "[1/4] 添加 KubeBlocks helm 仓库..."
-helm repo add kubeblocks https://nexus.ihome.sxxpqp.top:8443/repository/helm-apecloud --force-update 2>/dev/null || true
-helm repo update >/dev/null
+echo "[1/5] 配置 KubeBlocks helm 仓库..."
+helm repo remove kubeblocks 2>/dev/null || true
+helm repo add kubeblocks "${REPO_URL}"
+helm repo update kubeblocks >/dev/null
+echo "  ✓ kubeblocks repo: ${REPO_URL}"
+echo ""
 
-# ---------- 2. 命名空间 ----------
-echo "[2/4] 创建命名空间 ${NAMESPACE}..."
-kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+# ---------- 2. CRD (官方要求必须先装) ----------
+# 用 server-side apply, 避免 last-applied annotation 256KB 上限
+# (KubeBlocks CRD 加起来 > 1MB)
+echo "[2/5] 安装 KubeBlocks CRD..."
+CRD_URL_GITHUB="https://github.com/apecloud/kubeblocks/releases/download/${VERSION_WITH_V}/kubeblocks_crds.yaml"
 
-# ---------- 3. 安装 CRD + Operator ----------
-echo "[3/4] 安装 KubeBlocks core (CRD + operator)..."
-if ! helm upgrade --install kubeblocks kubeblocks/kubeblocks \
-  --namespace "${NAMESPACE}" \
-  --version "${VERSION}" \
-  --set image.registry=apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com \
-  --wait --timeout 5m; then
-  echo ""
-  echo "ERROR: KubeBlocks chart 安装失败。常见原因:"
-  echo "  1. helm 仓库地址错: helm repo list 看下 'kubeblocks' 指向的 URL 对不对"
-  echo "     正确地址: https://apecloud.github.io/helm-charts"
-  echo "  2. Nexus 内网代理没拉到该 chart: 换成公网地址或在 Nexus 加正确的 proxy repo"
-  echo "  3. version (${VERSION}) 不存在: helm search repo kubeblocks/kubeblocks --versions"
-  echo ""
-  exit 1
+CRD_OK=false
+echo "  尝试内网镜像: ${CRD_URL_INTERNAL}"
+if kubectl apply --server-side -f "${CRD_URL_INTERNAL}" 2>&1 | tee /tmp/.kb-crd.log | head -20; then
+  if ! grep -qiE "error|unable" /tmp/.kb-crd.log; then
+    CRD_OK=true
+  fi
 fi
 
-# ---------- 4. 内置 Addon ----------
-if [ "$SKIP_ADDONS" = false ]; then
-  echo "[4/4] 启用内置 addons (Redis 等)..."
+if [ "$CRD_OK" = false ]; then
+  echo ""
+  echo "  内网镜像失败, 尝试 GitHub: ${CRD_URL_GITHUB}"
+  if kubectl apply --server-side -f "${CRD_URL_GITHUB}" 2>&1 | head -20; then
+    CRD_OK=true
+  fi
+fi
 
-  # 等 Addon CRD 注册完成 (operator 启动后才会创建)
+if [ "$CRD_OK" = false ]; then
+  echo ""
+  echo "  最后尝试从 helm chart 提取 CRD..."
+  helm template kubeblocks kubeblocks/kubeblocks --version "${VERSION_NO_V}" \
+    --include-crds 2>/dev/null \
+    | kubectl apply --server-side -f - && CRD_OK=true
+fi
+
+if [ "$CRD_OK" = false ]; then
+  echo ""
+  echo "  ERROR: CRD 安装全部失败. 离线环境请手动:"
+  echo "    wget ${CRD_URL_INTERNAL}"
+  echo "    kubectl apply --server-side -f kubeblocks_crds.yaml"
+  exit 1
+fi
+echo "  ✓ CRD 已就绪"
+echo ""
+
+# ---------- 3. Namespace ----------
+echo "[3/5] 创建命名空间 ${NAMESPACE}..."
+kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
+echo ""
+
+# ---------- 4. KubeBlocks Operator ----------
+echo "[4/5] 安装 KubeBlocks operator..."
+if ! helm upgrade --install kubeblocks kubeblocks/kubeblocks \
+  --namespace "${NAMESPACE}" \
+  --version "${VERSION_NO_V}" \
+  --set crd.enabled=false \
+  --wait --timeout 5m; then
+  echo ""
+  echo "ERROR: KubeBlocks chart 安装失败. 常见原因:"
+  echo "  1. helm 仓库地址错: helm search repo kubeblocks/kubeblocks --versions"
+  echo "  2. version (${VERSION_NO_V}) 不存在于该仓库: 改 --version 或换 --public 公网"
+  echo "  3. CRD 未就绪: kubectl get crd | grep kubeblocks"
+  exit 1
+fi
+echo ""
+
+# ---------- 5. Addons ----------
+if [ "$SKIP_ADDONS" = false ]; then
+  echo "[5/5] 安装 addons: ${ADDONS}..."
+
+  # 等 Addon CRD 注册完成
   echo "  等待 Addon CRD 注册..."
   for i in $(seq 1 30); do
     if kubectl get crd addons.extensions.kubeblocks.io &>/dev/null; then
@@ -82,32 +145,36 @@ if [ "$SKIP_ADDONS" = false ]; then
   done
 
   if ! kubectl get crd addons.extensions.kubeblocks.io &>/dev/null; then
-    echo "  ERROR: Addon CRD 一直没注册，operator 可能没正常起来"
-    echo "  调试: kubectl get pod -n ${NAMESPACE}"
+    echo "  ERROR: Addon CRD 没注册成功"
     exit 1
   fi
 
-  for addon in redis mysql postgresql mongodb kafka; do
-    echo "  启用 addon: ${addon}"
-    kubectl patch addon "${addon}" --type=merge \
-      -p '{"spec":{"install":{"enabled":true}}}' 2>/dev/null \
-      || echo "  (${addon} 不存在，跳过)"
+  # v0.9+ 每个 addon 是独立 helm chart
+  IFS=',' read -ra ADDON_ARR <<< "${ADDONS}"
+  for addon in "${ADDON_ARR[@]}"; do
+    addon=$(echo "$addon" | xargs)  # trim
+    echo "  安装 addon: ${addon}"
+    helm upgrade --install "${addon}" "kubeblocks/${addon}" \
+      --namespace "${NAMESPACE}" \
+      --version "${VERSION_NO_V}" \
+      --wait --timeout 3m 2>&1 \
+      | sed 's/^/    /' || echo "    (${addon} 安装失败, 可能仓库里没这个 chart)"
   done
-
-  echo ""
-  echo "等待 addon 就绪..."
-  sleep 10
-  kubectl get addon | grep -E "redis|mysql|postgresql|mongodb|kafka" || true
 else
-  echo "[4/4] 跳过 addon (--skip-addons)"
+  echo "[5/5] 跳过 addon (--skip-addons)"
 fi
 
 echo ""
 echo "========================================="
 echo " 安装完成"
 echo "========================================="
+echo ""
+echo "operator pod:"
 kubectl get pod -n "${NAMESPACE}"
 echo ""
-echo "下一步："
+echo "已启用的 addon:"
+kubectl get addon 2>/dev/null | head -20 || echo "  (Addon CRD 还未注册, 等几秒)"
+echo ""
+echo "下一步:"
 echo "  cd redis-cluster/"
 echo "  bash deploy.sh         # 创建一个 Redis Cluster 实例"
