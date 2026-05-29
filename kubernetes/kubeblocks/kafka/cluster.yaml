@@ -16,7 +16,7 @@ spec:
       # 每个 broker 独立 NodePort (客户端连任一自动发现全部)
       services:
         - name: advertised-listener
-          serviceType: NodePort
+          serviceType: LoadBalancer
           podService: true
       env:
         - name: KB_KAFKA_BROKER_HEAP
