@@ -3,25 +3,31 @@
 #
 # 前置:
 #   - KubeBlocks operator 已装 (bash ../install.sh)
-#   - minio addon 已 Enabled (kubectl get addon minio)
+#   - minio addon 已 Enabled (脚本会自动检测 + 缺则 helm 装 + 启用)
 #   - 集群外要访问 Console UI → metallb 已就绪 (../metallb/install.sh)
 #
 # 用法:
-#   bash install.sh                 # 默认 ns=test
+#   bash install.sh                       # 默认 ns=test
 #   bash install.sh --ns prod
-#   bash install.sh --wait          # 等 Running + 写凭证到 ConfigMap (推荐)
+#   bash install.sh --wait                # 等 Running + 写凭证到 ConfigMap (推荐)
+#   bash install.sh --addon-version 1.0.2 # 指定 minio addon chart 版本 (默认 1.0.2)
+#   bash install.sh --addon-repo apecloud # helm 仓库 (默认 kubeblocks, 本地没就改 apecloud)
 set -uo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 NS="test"
 WAIT=false
+ADDON_VERSION="1.0.2"
+ADDON_REPO="kubeblocks"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --ns)   NS="$2"; shift 2 ;;
-    --wait) WAIT=true; shift ;;
+    --ns)             NS="$2"; shift 2 ;;
+    --wait)           WAIT=true; shift ;;
+    --addon-version)  ADDON_VERSION="$2"; shift 2 ;;
+    --addon-repo)     ADDON_REPO="$2"; shift 2 ;;
     -h|--help)
-      sed -n '2,12p' "$0" | sed 's/^# //'
+      sed -n '2,14p' "$0" | sed 's/^# //'
       exit 0 ;;
     *) echo "未知参数: $1"; exit 1 ;;
   esac
@@ -31,31 +37,107 @@ done
 if ! kubectl get crd clusters.apps.kubeblocks.io &>/dev/null; then
   echo "ERROR: KubeBlocks operator 未安装, 先跑 bash ../install.sh"; exit 1
 fi
-if ! kubectl get addon minio &>/dev/null; then
-  echo "ERROR: minio addon 未注册. 启用方法:"
-  echo "  kubectl patch addon minio --type=merge -p '{\"spec\":{\"install\":{\"enabled\":true}}}'"
+
+# ---------- 0. minio addon 检测 + 自动安装 + 启用 ----------
+echo "[0/5] 检查 minio addon..."
+ADDON_STATUS=$(kubectl get addon minio -o jsonpath='{.status.phase}' 2>/dev/null || true)
+
+if [ -z "$ADDON_STATUS" ]; then
+  # addon CR 不存在 → helm 装 chart 让 KB operator 自动注册
+  echo "  minio addon 未注册, 用 helm 安装 chart..."
+  command -v helm >/dev/null || { echo "  ERROR: helm 未安装, 装 helm 或手动 kubectl apply addon"; exit 1; }
+
+  # 仓库可用性兜底: 没有就加 apecloud 公网
+  if ! helm repo list 2>/dev/null | awk 'NR>1{print $1}' | grep -qx "${ADDON_REPO}"; then
+    echo "  helm 仓库 '${ADDON_REPO}' 没加, 加 apecloud 公网..."
+    helm repo add apecloud https://apecloud.github.io/helm-charts 2>/dev/null || true
+    ADDON_REPO=apecloud
+  fi
+  helm repo update "${ADDON_REPO}" >/dev/null
+
+  helm upgrade --install kb-addon-minio "${ADDON_REPO}/minio" \
+    -n kb-system --version "${ADDON_VERSION}" \
+    || { echo "  ERROR: helm 装 minio chart 失败, 检查版本/仓库"; exit 1; }
+
+  # 等 addon CR 注册进来 (KB operator 扫 helm release)
+  echo "  等 KubeBlocks operator 注册 addon CR..."
+  for i in $(seq 1 24); do
+    ADDON_STATUS=$(kubectl get addon minio -o jsonpath='{.status.phase}' 2>/dev/null || true)
+    if [ -n "$ADDON_STATUS" ]; then
+      echo "  ✓ addon 已注册, 当前 phase=${ADDON_STATUS}"
+      break
+    fi
+    echo "  [$i/24] addon 还没出现, 5s 后重试 ..."
+    sleep 5
+  done
+
+  if [ -z "$ADDON_STATUS" ]; then
+    echo "  addon 仍未注册, 试重启 KubeBlocks operator..."
+    kubectl -n kb-system rollout restart deploy kubeblocks >/dev/null
+    kubectl -n kb-system rollout status deploy kubeblocks --timeout=2m || true
+    for i in $(seq 1 12); do
+      ADDON_STATUS=$(kubectl get addon minio -o jsonpath='{.status.phase}' 2>/dev/null || true)
+      [ -n "$ADDON_STATUS" ] && break
+      sleep 5
+    done
+  fi
+fi
+
+if [ -z "$ADDON_STATUS" ]; then
+  echo "  ERROR: addon 装了 chart 但 CR 始终没注册, 手动看:"
+  echo "    helm -n kb-system list | grep minio"
+  echo "    kubectl -n kb-system logs deploy/kubeblocks | grep -i addon"
   exit 1
 fi
 
+# 还没 Enabled 就启用
+if [ "$ADDON_STATUS" != "Enabled" ]; then
+  echo "  addon phase=${ADDON_STATUS}, 启用中..."
+  kubectl patch addon minio --type=merge \
+    -p '{"spec":{"install":{"enabled":true}}}' >/dev/null
+
+  for i in $(seq 1 24); do
+    ADDON_STATUS=$(kubectl get addon minio -o jsonpath='{.status.phase}' 2>/dev/null)
+    [ "$ADDON_STATUS" = "Enabled" ] && break
+    echo "  [$i/24] phase=${ADDON_STATUS}, 5s 后重试 ..."
+    sleep 5
+  done
+
+  [ "$ADDON_STATUS" = "Enabled" ] || { echo "  ERROR: addon 启用超时"; exit 1; }
+fi
+echo "  ✓ minio addon Enabled"
+
+# 等 clusterdefinition 也注册进来 (cluster.yaml apply 需要)
+echo "  等 clusterdefinition 'minio' 就绪..."
+for i in $(seq 1 24); do
+  if kubectl get clusterdefinition minio &>/dev/null; then
+    echo "  ✓ clusterdefinition minio 已就绪"
+    break
+  fi
+  echo "  [$i/24] 还没出现, 5s 后重试 ..."
+  sleep 5
+done
+echo ""
+
 # ---------- 1. namespace ----------
+echo "[1/5] 创建 namespace ${NS} ..."
 kubectl create namespace "${NS}" --dry-run=client -o yaml | kubectl apply -f -
+echo ""
 
 # ---------- 2. Cluster ----------
-echo "部署 MinIO Cluster 到 namespace=${NS} (8 节点, 每节点 1Ti)..."
+echo "[2/5] 部署 MinIO Cluster 到 namespace=${NS} (8 节点, 每节点 1Ti)..."
 sed "s|namespace: test|namespace: ${NS}|" "${DIR}/cluster.yaml" | kubectl apply -f -
 echo ""
 
 # ---------- 3. 稳定 Service ----------
-echo "部署稳定 ClusterIP Service minio-cluster (集群内 S3 endpoint)..."
+echo "[3/5] 部署稳定 ClusterIP + Console LoadBalancer Service..."
 sed "s|namespace: test|namespace: ${NS}|" "${DIR}/stable-service.yaml" | kubectl apply -f -
-
-echo "部署 Console LoadBalancer Service (走 metallb)..."
 sed "s|namespace: test|namespace: ${NS}|" "${DIR}/console-service.yaml" | kubectl apply -f -
 echo ""
 
 # ---------- 4. 等就绪 ----------
 if [ "$WAIT" = true ]; then
-  echo "等 cluster.status.phase=Running (5-10 分钟, MinIO 8 节点 + PVC bind 比较慢)..."
+  echo "[4/5] 等 cluster.status.phase=Running (5-10 分钟, MinIO 8 节点 + PVC bind 比较慢)..."
   for i in $(seq 1 120); do
     STATUS=$(kubectl get cluster.apps.kubeblocks.io minio-cluster -n "${NS}" \
       -o jsonpath='{.status.phase}' 2>/dev/null || true)
@@ -75,9 +157,13 @@ if [ "$WAIT" = true ]; then
     sleep 5
   done
   echo ""
+else
+  echo "[4/5] 跳过等待 (不带 --wait)"
+  echo ""
 fi
 
 # ---------- 5. 拉凭证 + 写 ConfigMap ----------
+echo "[5/5] 拉凭证 + 固化连接信息..."
 # KubeBlocks 给系统账号生成的 Secret 名一般是: minio-cluster-minio-account-root
 SECRET_NAME=$(kubectl get secret -n "${NS}" -l app.kubernetes.io/instance=minio-cluster \
   -o name 2>/dev/null | grep -E 'account|conn-credential' | head -1 | sed 's|secret/||')
