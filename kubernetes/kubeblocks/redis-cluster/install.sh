@@ -43,14 +43,14 @@ fi
 kubectl create namespace "${NS}" --dry-run=client -o yaml | kubectl apply -f -
 
 # ---------- 2. 预创建 Secret (必须先于 Cluster!) ----------
-# cluster.yaml 里 systemAccounts.secretRef 指向 ${ALIAS_SECRET}, 必须先存在,
+# cluster.yaml 里 systemAccounts.secretRef 指向 ${SECRET_NAME}, 必须先存在,
 # 否则 ComponentParameter reconciler 找不到 default credential, 报
 #   "has no Credential object default found when resolving vars"
 # 死循环, cluster 永远卡在 Creating.
 #
 # KubeBlocks v1 的 Credential 要求 Secret 同时有 username + password 两个 key.
-echo "预创建 Secret/${ALIAS_SECRET} (username=default, password=${FIXED_PASS})..."
-kubectl create secret generic "${ALIAS_SECRET}" -n "${NS}" \
+echo "预创建 Secret/${SECRET_NAME} (username=default, password=${FIXED_PASS})..."
+kubectl create secret generic "${SECRET_NAME}" -n "${NS}" \
   --from-literal=username=default \
   --from-literal=password="${FIXED_PASS}" \
   --dry-run=client -o yaml | kubectl apply -f -
