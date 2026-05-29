@@ -12,9 +12,11 @@ metadata:
   name: kubevip
   namespace: kube-system
 data:
-  # 跟节点网段 172.16.150.0/24 同段，分配池 200-210
+  # 跟节点网段 172.16.150.0/24 同段，分配池 200-210.
+  # 只用 range-global; 不能再加 cidr-global: "24" —— cidr-global 要的是
+  # 完整 CIDR (例如 172.16.150.0/24), 而且 cidr-global 优先级高于 range-global,
+  # 写错 cidr-global 会让 cloud-provider 报 "unable to parse IP range [24]".
   range-global: 172.16.150.200-172.16.150.210
-  cidr-global: "24"
 ---
 apiVersion: v1
 kind: ServiceAccount
