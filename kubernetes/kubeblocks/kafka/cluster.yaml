@@ -1,0 +1,73 @@
+apiVersion: apps.kubeblocks.io/v1
+kind: Cluster
+metadata:
+  name: kafka-cluster
+  namespace: test
+spec:
+  terminationPolicy: Delete
+
+  clusterDef: kafka
+  topology: combined_monitor   # combined / combined_monitor / separated / separated_monitor
+
+  componentSpecs:
+    - name: kafka-combine
+      replicas: 3
+
+      # 每个 broker 独立 NodePort (客户端连任一自动发现全部)
+      services:
+        - name: advertised-listener
+          serviceType: NodePort
+          podService: true
+      env:
+        - name: KB_KAFKA_BROKER_HEAP
+          value: "-XshowSettings:vm -XX:MaxRAMPercentage=100 -Ddepth=64"
+        - name: KB_KAFKA_CONTROLLER_HEAP
+          value: "-XshowSettings:vm -XX:MaxRAMPercentage=100 -Ddepth=64"
+        - name: KB_BROKER_DIRECT_POD_ACCESS
+          value: "false"
+
+      resources:
+        limits:
+          cpu: "2"
+          memory: 4Gi
+        requests:
+          cpu: 100m
+          memory: 512Mi
+
+      volumeClaimTemplates:
+        - name: data
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 20Gi
+        - name: metadata
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 1Gi
+
+    - name: kafka-exporter
+      replicas: 1
+      resources:
+        limits:
+          cpu: 200m
+          memory: 256Mi
+        requests:
+          cpu: 100m
+          memory: 128Mi
+
+  # 反亲和: 各 broker 尽量打散到不同节点
+  schedulingPolicy:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: kafka-cluster

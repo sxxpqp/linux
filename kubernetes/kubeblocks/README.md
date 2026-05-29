@@ -31,6 +31,11 @@ kubeblocks/
     ├── redisinsight.yaml            RedisInsight (Redis 官方 GUI) Deployment + Service
     ├── redisinsight-install.sh      装 RedisInsight (浏览器 Web UI, 原生支持 Cluster)
     └── redisinsight-uninstall.sh    卸 RedisInsight (不影响 Cluster)
+    └── kafka/
+        ├── cluster.yaml                 Cluster CR (Kafka 3.3.2, combined_monitor, KRaft 3 副本)
+        ├── install.sh                   apply CR + 等 Running + 显示连接信息
+        ├── scale.sh                     扩缩 replicas (OpsRequest HorizontalScaling)
+        └── uninstall.sh                 删 Cluster (--keep-data / --force)
 ```
 
 ## 完整操作矩阵
@@ -48,6 +53,10 @@ kubeblocks/
 | **删 Redis Cluster** | `cd redis-cluster && bash uninstall.sh` |
 | **保留数据删 Cluster** | `cd redis-cluster && bash uninstall.sh --keep-data` |
 | **卡死强清** | `cd redis-cluster && bash uninstall.sh --force` |
+| **建 Kafka Cluster** | `cd kafka && bash install.sh --wait` |
+| **Kafka 扩容 3→5 broker** | `cd kafka && bash scale.sh 5 --wait` |
+| **删 Kafka Cluster** | `cd kafka && bash uninstall.sh` |
+| **保留数据删 Kafka** | `cd kafka && bash uninstall.sh --keep-data` |
 | **卸 operator** | `bash uninstall.sh` |
 | **完全清理 operator+CRD** | `bash uninstall.sh --purge` |
 
@@ -66,6 +75,13 @@ bash install.sh --wait                # apply + 等 Running + 显示所有连接
 # 3. 扩缩容 (按 shards 数, 1 shard = 2 pod)
 bash scale.sh 4 --wait                # 3 → 4 shard (6 → 8 pod)
 bash scale.sh 3 --wait                # 缩回
+
+# 4. 部署 Kafka Cluster (KRaft 模式, 3 broker)
+cd ../kafka
+bash install.sh --wait                # apply + 等 Running + 显示连接信息
+
+# 5. Kafka 扩缩容
+bash scale.sh 5 --wait                # 3 → 5 broker
 ```
 
 ### 密码 (自动生成, 同步到固定 Secret)
