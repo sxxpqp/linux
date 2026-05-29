@@ -1,4 +1,4 @@
-# KubeBlocks Redis Cluster 实例 (替代 Bitnami helm chart)
+# KubeBlocks Redis Cluster 实例 (v1.0.2 API)
 #
 # 解决的核心问题:
 # - Bitnami chart 用裸 StatefulSet, Pod 重启换 IP 后老 nodes.conf 节点 ID 找不到
@@ -6,43 +6,43 @@
 # - KubeBlocks 用 InstanceSet, 维持稳定 DNS 名 + 自动更新 cluster-announce-ip,
 #   IP 变化通过 reload 钩子让 Redis 自己更新拓扑
 #
-# 部署: bash deploy.sh  (或 kubectl apply -f cluster.yaml)
-# 销毁: kubectl delete -f cluster.yaml
+# 参考 ComponentDefinition (kubectl get cd | grep redis):
+#   redis-cluster-8-1.0.2  → Redis 8.2.2 cluster 模式 (最新, 当前选用)
+#   redis-cluster-7-1.0.2  → Redis 7.2.11
+#   redis-cluster-6-1.0.2  → Redis 6.2.17
+#   redis-cluster-5-1.0.2  → Redis 5.0.12
 #
-# 注意: deletionPolicy 默认 Delete, 删 Cluster CR 会一并删 PVC.
-# 想保留数据改成 DoNotTerminate 或 Halt.
+# 用法:
+#   bash install.sh           # 应用本 CR
+#   bash scale.sh 9           # 扩容到 9 副本
+#   bash uninstall.sh         # 删除
 
 apiVersion: apps.kubeblocks.io/v1alpha1
 kind: Cluster
 metadata:
   name: redis-cluster
   namespace: test
-  labels:
-    helm.sh/chart: redis-cluster-via-kubeblocks
 spec:
-  # cluster 整体的拓扑定义 (KubeBlocks redis addon 提供)
-  # 可选 topology:
-  #   - replication        : 1主N从 (StatefulSet 风格)
-  #   - replication-twemproxy: 1主N从 + twemproxy 代理
-  #   - cluster            : 真正的 Redis Cluster (3主3从最小)
-  clusterDef: redis
-  topology: cluster
+  # 用 ClusterDefinition + topology 决定组件组合
+  clusterDefinitionRef: redis
+  topology: cluster              # 真正的 Redis Cluster (3主3从最小)
 
   # 删除策略
-  # - DoNotTerminate: 禁止删除 (生产推荐)
+  # - DoNotTerminate: 拒绝删除 (生产推荐)
   # - Halt:           删 K8s 资源但保留 PVC
   # - Delete:         删 K8s 资源 + PVC (数据丢失)
-  # - WipeOut:        删全部 + 远程备份 (彻底清理)
+  # - WipeOut:        Delete + 删远程备份
   terminationPolicy: Delete
 
   componentSpecs:
     # ---------- Redis Cluster 数据节点 ----------
     - name: redis-cluster
-      serviceVersion: 7.2.4        # Redis 版本, 跟 KubeBlocks addon 支持的版本对齐
-      replicas: 6                  # 3 主 + 3 从, 最小可用 cluster
-      disableExporter: false       # 启用 redis_exporter 边车, 暴露 :9121 metrics
+      componentDef: redis-cluster-8-1.0.2   # 跟 ClusterDefinition 里的 component 对齐
+      serviceVersion: 8.2.2                 # Redis 实际版本
+      replicas: 6                           # 3 主 + 3 从, 最小可用 cluster
+      disableExporter: false                # 启用 redis_exporter 边车 :9121
 
-      # 资源
+      # 资源限制
       resources:
         limits:
           cpu: "1"
@@ -55,25 +55,22 @@ spec:
       volumeClaimTemplates:
         - name: data
           spec:
-            storageClassName: longhorn   # 跟现有栈一致, 也可改 local-path
+            storageClassName: longhorn      # 跟现有栈一致
             accessModes: [ ReadWriteOnce ]
             resources:
               requests:
                 storage: 10Gi
 
-      # 反亲和性: 同一个 component 的副本尽量打散到不同节点
-      # (KubeBlocks 默认就有, 这里显式声明便于排查)
-      affinity:
-        podAntiAffinity: Preferred
-        topologyKeys:
-          - kubernetes.io/hostname
-
-  # ---------- 集群级反亲和: redis-cluster 整体优先调度到不同节点 ----------
-  affinity:
-    podAntiAffinity: Preferred
-    topologyKeys:
-      - kubernetes.io/hostname
-    tenancy: SharedNode
-
-  # ---------- 删除保护开关 (生产记得打开) ----------
-  # 注意: terminationPolicy 已经从 spec.terminationPolicy 走
+  # ---------- 集群级反亲和: 各副本尽量打散到不同节点 ----------
+  # v1.0 用 schedulingPolicy 替代废弃的 affinity
+  schedulingPolicy:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: redis-cluster
+                  apps.kubeblocks.io/component-name: redis-cluster

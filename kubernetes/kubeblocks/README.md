@@ -19,28 +19,49 @@
 ```
 kubeblocks/
 ├── README.md
-├── install.sh         一键装 operator (kb-system 命名空间)
-├── uninstall.sh       卸载 operator
+├── install.sh             装 KubeBlocks operator (v1.0.2, 5 个 bundled addon 自动 Enabled)
+├── uninstall.sh           卸载 operator
 └── redis-cluster/
-    ├── cluster.yaml   Cluster CR (3主3从, longhorn 存储)
-    └── deploy.sh      一键应用 CR
+    ├── cluster.yaml       Cluster CR (Redis 8.2.2, 3主3从, longhorn 10Gi)
+    ├── install.sh         应用 CR (创建 Redis Cluster 实例)
+    ├── scale.sh           扩缩容 (OpsRequest HorizontalScaling, operator 自动 reshard)
+    └── uninstall.sh       删 Cluster CR (支持 --keep-data / --purge)
 ```
+
+## 完整操作矩阵
+
+| 操作 | 命令 |
+|---|---|
+| **装 operator** | `bash install.sh` |
+| **建 Redis Cluster** | `cd redis-cluster && bash install.sh --wait` |
+| **扩容到 9 节点** | `cd redis-cluster && bash scale.sh 9 --wait` |
+| **缩容到 6 节点** | `cd redis-cluster && bash scale.sh 6 --wait` |
+| **删 Redis Cluster** | `cd redis-cluster && bash uninstall.sh` |
+| **保留数据删 Cluster** | `cd redis-cluster && bash uninstall.sh --keep-data` |
+| **卸 operator** | `bash uninstall.sh` |
+| **完全清理 operator+CRD** | `bash uninstall.sh --purge` |
 
 ## 一键脚本
 
 ```bash
-# 1. 装 KubeBlocks operator
+# 1. 装 KubeBlocks operator (默认 v1.0.2)
 cd kubernetes/kubeblocks
-bash install.sh                       # 默认 v0.9.3 + 启用 Redis/MySQL/PG/Mongo/Kafka addon
+bash install.sh                       # 内置 redis/mysql/postgresql/mongodb/kafka addon 自动 Enabled
 
-# 2. 部署 Redis Cluster 实例
+# 2. 部署 Redis Cluster 实例 (Redis 8.2.2)
 cd redis-cluster
-bash deploy.sh --wait                 # 部署后等 Running
+bash install.sh --wait                # 应用 CR 并等 Running
 
 # 3. 验证 cluster_state
 PASS=$(kubectl get secret redis-cluster-conn-credential -n test -o jsonpath='{.data.password}' | base64 -d)
 kubectl exec -n test -it redis-cluster-redis-cluster-0 -- redis-cli -a "$PASS" cluster info | grep cluster_state
 # 期望: cluster_state:ok
+
+# 4. 扩容到 9 节点 (operator 自动加节点 + reshard 槽位)
+bash scale.sh 9 --wait
+
+# 5. 缩回 6 节点 (operator 先迁槽位再删 pod)
+bash scale.sh 6 --wait
 ```
 
 ## 卸载

@@ -134,8 +134,11 @@ fi
 echo ""
 
 # ---------- 5. Addons ----------
+# v1.0 起 operator 自带 bundled addons (kb-addon-*) 自动注册,
+# 大多数 (redis/mysql/postgresql/mongodb/kafka) 默认 Enabled,
+# 少数 (qdrant/rabbitmq 等) 默认 Disabled, 需要手动开启.
 if [ "$SKIP_ADDONS" = false ]; then
-  echo "[5/5] 安装 addons: ${ADDONS}..."
+  echo "[5/5] 检查 addons 状态: ${ADDONS}..."
 
   # 等 Addon CRD 注册完成
   echo "  等待 Addon CRD 注册..."
@@ -145,22 +148,44 @@ if [ "$SKIP_ADDONS" = false ]; then
     fi
     sleep 2
   done
-
   if ! kubectl get crd addons.extensions.kubeblocks.io &>/dev/null; then
     echo "  ERROR: Addon CRD 没注册成功"
     exit 1
   fi
 
-  # v0.9+ 每个 addon 是独立 helm chart
+  # 等 operator 把 bundled addons 注册进 K8s
+  echo "  等待 operator 注册 bundled addons..."
+  for i in $(seq 1 30); do
+    if [ "$(kubectl get addon 2>/dev/null | wc -l)" -gt 1 ]; then
+      break
+    fi
+    sleep 2
+  done
+
   IFS=',' read -ra ADDON_ARR <<< "${ADDONS}"
   for addon in "${ADDON_ARR[@]}"; do
     addon=$(echo "$addon" | xargs)  # trim
-    echo "  安装 addon: ${addon}"
-    helm upgrade --install "${addon}" "kubeblocks/${addon}" \
-      --namespace "${NAMESPACE}" \
-      --version "${VERSION_NO_V}" \
-      --wait --timeout 3m 2>&1 \
-      | sed 's/^/    /' || echo "    (${addon} 安装失败, 可能仓库里没这个 chart)"
+    STATUS=$(kubectl get addon "${addon}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+
+    case "${STATUS}" in
+      Enabled)
+        echo "  ✓ ${addon}: Enabled (跳过)"
+        ;;
+      Disabled|"")
+        if [ -z "${STATUS}" ]; then
+          echo "  ⚠ ${addon}: 不存在 (operator 未提供该 addon, 跳过)"
+          continue
+        fi
+        echo "  → ${addon}: Disabled, 启用中..."
+        kubectl patch addon "${addon}" --type=merge \
+          -p '{"spec":{"install":{"enabled":true}}}' >/dev/null \
+          && echo "    ✓ patched" \
+          || echo "    ✗ patch 失败"
+        ;;
+      *)
+        echo "  ${addon}: 当前状态 ${STATUS}"
+        ;;
+    esac
   done
 else
   echo "[5/5] 跳过 addon (--skip-addons)"

@@ -1,9 +1,9 @@
 #!/bin/bash
 # 部署 KubeBlocks Redis Cluster 实例 (3主3从)。
 # 用法:
-#   bash deploy.sh                # 部署到 test namespace (cluster.yaml 默认值)
-#   bash deploy.sh --ns prod      # 改 namespace
-#   bash deploy.sh --wait         # 部署后等待 cluster 完全 Running
+#   bash install.sh                # 部署到 test namespace (cluster.yaml 默认值)
+#   bash install.sh --ns prod      # 改 namespace
+#   bash install.sh --wait         # 部署后等待 cluster 完全 Running
 set -uo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
