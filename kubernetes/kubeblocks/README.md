@@ -19,13 +19,14 @@
 ```
 kubeblocks/
 ├── README.md
-├── install.sh             装 KubeBlocks operator (v1.0.2, 5 个 bundled addon 自动 Enabled)
-├── uninstall.sh           卸载 operator
+├── install.sh               装 KubeBlocks operator (v1.0.2, bundled addon 自动启用)
+├── uninstall.sh             卸载 operator
+├── install-snapshotter.sh   装 VolumeSnapshot CRD + controller (备份依赖)
 └── redis-cluster/
-    ├── cluster.yaml       Cluster CR (Redis 8.2.2, 3主3从, longhorn 10Gi)
-    ├── install.sh         应用 CR (创建 Redis Cluster 实例)
-    ├── scale.sh           扩缩容 (OpsRequest HorizontalScaling, operator 自动 reshard)
-    └── uninstall.sh       删 Cluster CR (支持 --keep-data / --purge)
+    ├── cluster.yaml         Cluster CR (Redis 7.2.4, sharding 3×2, NodePort 启用)
+    ├── install.sh           apply CR + 同步密码到固定 Secret + 显示连接信息
+    ├── scale.sh             扩缩 shards (OpsRequest, operator 自动 reshard 槽位)
+    └── uninstall.sh         删 Cluster (--keep-data / --purge / --force)
 ```
 
 ## 完整操作矩阵
@@ -33,35 +34,55 @@ kubeblocks/
 | 操作 | 命令 |
 |---|---|
 | **装 operator** | `bash install.sh` |
+| **装 snapshot CRD** | `bash install-snapshotter.sh` |
 | **建 Redis Cluster** | `cd redis-cluster && bash install.sh --wait` |
-| **扩容到 9 节点** | `cd redis-cluster && bash scale.sh 9 --wait` |
-| **缩容到 6 节点** | `cd redis-cluster && bash scale.sh 6 --wait` |
+| **扩容 3→4 shard (6→8 pod)** | `cd redis-cluster && bash scale.sh 4 --wait` |
+| **缩容 4→3 shard** | `cd redis-cluster && bash scale.sh 3 --wait` |
+| **取密码** | `kubectl get secret redis-cluster-password -n test -o jsonpath='{.data.password}' \| base64 -d; echo` |
+| **看 NodePort 表** | `kubectl get svc -n test \| grep advertised` |
 | **删 Redis Cluster** | `cd redis-cluster && bash uninstall.sh` |
 | **保留数据删 Cluster** | `cd redis-cluster && bash uninstall.sh --keep-data` |
+| **卡死强清** | `cd redis-cluster && bash uninstall.sh --force` |
 | **卸 operator** | `bash uninstall.sh` |
 | **完全清理 operator+CRD** | `bash uninstall.sh --purge` |
 
 ## 一键脚本
 
 ```bash
-# 1. 装 KubeBlocks operator (默认 v1.0.2)
+# 1. 装 KubeBlocks operator + snapshot-controller (备份依赖)
 cd kubernetes/kubeblocks
-bash install.sh                       # 内置 redis/mysql/postgresql/mongodb/kafka addon 自动 Enabled
+bash install.sh                       # operator + bundled addons
+bash install-snapshotter.sh           # VolumeSnapshot CRD + controller (一次性)
 
-# 2. 部署 Redis Cluster 实例 (Redis 8.2.2)
+# 2. 部署 Redis Sharding Cluster (Redis 7.2.4, 3 shard × 2 副本 = 6 pod)
 cd redis-cluster
-bash install.sh --wait                # 应用 CR 并等 Running
+bash install.sh --wait                # apply + 等 Running + 显示所有连接信息
 
-# 3. 验证 cluster_state
-PASS=$(kubectl get secret redis-cluster-conn-credential -n test -o jsonpath='{.data.password}' | base64 -d)
-kubectl exec -n test -it redis-cluster-redis-cluster-0 -- redis-cli -a "$PASS" cluster info | grep cluster_state
-# 期望: cluster_state:ok
+# 3. 扩缩容 (按 shards 数, 1 shard = 2 pod)
+bash scale.sh 4 --wait                # 3 → 4 shard (6 → 8 pod)
+bash scale.sh 3 --wait                # 缩回
+```
 
-# 4. 扩容到 9 节点 (operator 自动加节点 + reshard 槽位)
-bash scale.sh 9 --wait
+### 密码 (自动生成, 同步到固定 Secret)
 
-# 5. 缩回 6 节点 (operator 先迁槽位再删 pod)
-bash scale.sh 6 --wait
+KubeBlocks 自动给每个 shard 生成密码 (值相同), `install.sh` 跑完会同步到统一名字 `redis-cluster-password`:
+
+```bash
+# 业务侧统一用这条
+kubectl get secret redis-cluster-password -n test -o jsonpath='{.data.password}' | base64 -d; echo
+```
+
+### 外部访问 (NodePort)
+
+`cluster.yaml` 里启用了 `services[].podService: true`, 每个 pod 自动分配独立 NodePort. Redis Cluster 客户端用任一 NodePort 连接, 自动跟随 MOVED 重定向:
+
+```bash
+# install.sh 末尾会列出所有 NodePort 表, 也可以随时查:
+kubectl get svc -n test -l app.kubernetes.io/instance=redis-cluster | grep advertised
+
+# 外部连接 (任一 node IP + 任一 NodePort 都行)
+PASS=$(kubectl get secret redis-cluster-password -n test -o jsonpath='{.data.password}' | base64 -d)
+redis-cli -h <node-ip> -p <nodeport> -a "$PASS" -c cluster info
 ```
 
 ## 卸载
