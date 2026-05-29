@@ -1,13 +1,15 @@
 #!/bin/bash
-# 部署 KubeBlocks Kafka Cluster (KRaft 模式, 3 副本) + 每 broker 独立 NodePort.
+# 部署 KubeBlocks Kafka Cluster (KRaft 模式, 3 副本) + 每 broker 独立 advertised-listener Service.
 #
-# NodePort 端口由 K8s 首次分配, 之后稳定 (重启/扩容不变, 仅删 cluster 重装会变).
+# advertised-listener Service 类型由 cluster.yaml 里的 serviceType 决定:
+#   - NodePort     → NodeIP + NodePort 暴露 (端口稳定, 删 cluster 才会重分配)
+#   - LoadBalancer → 云厂商 / MetalLB 分配 LB IP, 端口固定 9092
 # 当前端口映射会固化到 ConfigMap/kafka-cluster-endpoints, 业务侧直接读取即可.
 #
 # 用法:
 #   bash install.sh                 # 默认 ns=test
 #   bash install.sh --ns prod
-#   bash install.sh --wait          # 等到 Running + NodePort 就绪 + 写 ConfigMap (推荐)
+#   bash install.sh --wait          # 等到 Running + Service 就绪 + 写 ConfigMap (推荐)
 set -uo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -58,7 +60,7 @@ if [ "$WAIT" = true ]; then
   done
   echo ""
 
-  echo "等 NodePort Service 就绪 (每 broker 一个)..."
+  echo "等 advertised-listener Service 就绪 (每 broker 一个)..."
   for i in $(seq 1 30); do
     NP_CNT=$(kubectl get svc -n "${NS}" -l app.kubernetes.io/instance=kafka-cluster -o name 2>/dev/null \
       | grep -c advertised-listener || true)
@@ -68,49 +70,65 @@ if [ "$WAIT" = true ]; then
   done
   echo ""
 
-  # 修 label: 让 kafka-cluster Service selector 匹配 pod
-  echo "修复 stable service label 匹配..."
-  kubectl label pod -n "${NS}" \
-    -l app.kubernetes.io/instance=kafka-cluster,apps.kubeblocks.io/component-name=kafka-combine \
-    app.kubernetes.io/name=kafka --overwrite 2>/dev/null || true
-  sleep 3
-  echo ""
 fi
 
-# ---------- 4. 抓 NodePort 端口映射, 存到 ConfigMap ----------
+# ---------- 4. 抓 advertised-listener 端口映射, 存到 ConfigMap ----------
+# 自动判断 NodePort 还是 LoadBalancer 模式
 ADV_SVCS=$(kubectl get svc -n "${NS}" -l app.kubernetes.io/instance=kafka-cluster -o name 2>/dev/null \
   | grep advertised-listener | sort || true)
 NODE_IPS=$(kubectl get node -o jsonpath='{range .items[*]}{.status.addresses[?(@.type=="InternalIP")].address}{" "}{end}')
 EXTERNAL_BOOTSTRAP=""
 INTERNAL_BOOTSTRAP="kafka-cluster-kafka-combine-headless.${NS}.svc:9094"
+SVC_MODE=""   # NodePort / LoadBalancer
 
-if [ -n "$ADV_SVCS" ] && [ -n "$NODE_IPS" ]; then
+if [ -n "$ADV_SVCS" ]; then
+  FIRST_SVC=$(echo "$ADV_SVCS" | head -1)
+  SVC_MODE=$(kubectl get -n "${NS}" "$FIRST_SVC" -o jsonpath='{.spec.type}' 2>/dev/null)
+fi
+
+if [ -n "$ADV_SVCS" ]; then
   for svc in $ADV_SVCS; do
     NAME=${svc#service/}
-    NP=$(kubectl get -n "${NS}" "$svc" -o jsonpath='{.spec.ports[?(@.port==9092)].nodePort}' 2>/dev/null)
-    [ -z "$NP" ] && NP=$(kubectl get -n "${NS}" "$svc" -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null)
 
-    # 找到该 svc 后端 pod 所在的节点 IP
-    POD_IP=$(kubectl get endpoints -n "${NS}" "${NAME}" -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null | awk '{print $1}')
-    if [ -n "$POD_IP" ]; then
-      POD_NODE=$(kubectl get pod -n "${NS}" -o wide --field-selector status.podIP="${POD_IP}" \
-        -o jsonpath='{.items[*].status.hostIP}' 2>/dev/null)
-      [ -z "$POD_NODE" ] && POD_NODE=$(echo "$NODE_IPS" | awk '{print $1}')
+    if [ "$SVC_MODE" = "LoadBalancer" ]; then
+      # LB 模式: 优先读 status.loadBalancer.ingress[*].ip, 再 .hostname
+      LB_IP=$(kubectl get -n "${NS}" "$svc" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+      [ -z "$LB_IP" ] && LB_IP=$(kubectl get -n "${NS}" "$svc" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+      PORT=$(kubectl get -n "${NS}" "$svc" -o jsonpath='{.spec.ports[?(@.port==9092)].port}' 2>/dev/null)
+      [ -z "$PORT" ] && PORT=9092
+
+      if [ -n "$LB_IP" ]; then
+        [ -n "$EXTERNAL_BOOTSTRAP" ] && EXTERNAL_BOOTSTRAP="${EXTERNAL_BOOTSTRAP},"
+        EXTERNAL_BOOTSTRAP="${EXTERNAL_BOOTSTRAP}${LB_IP}:${PORT}"
+      fi
     else
-      POD_NODE=$(echo "$NODE_IPS" | awk '{print $1}')
-    fi
+      # NodePort 模式: NodeIP + NodePort
+      NP=$(kubectl get -n "${NS}" "$svc" -o jsonpath='{.spec.ports[?(@.port==9092)].nodePort}' 2>/dev/null)
+      [ -z "$NP" ] && NP=$(kubectl get -n "${NS}" "$svc" -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null)
 
-    if [ -n "$NP" ] && [ -n "$POD_NODE" ]; then
-      [ -n "$EXTERNAL_BOOTSTRAP" ] && EXTERNAL_BOOTSTRAP="${EXTERNAL_BOOTSTRAP},"
-      EXTERNAL_BOOTSTRAP="${EXTERNAL_BOOTSTRAP}${POD_NODE}:${NP}"
+      # 找到该 svc 后端 pod 所在的节点 IP
+      POD_IP=$(kubectl get endpoints -n "${NS}" "${NAME}" -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null | awk '{print $1}')
+      if [ -n "$POD_IP" ]; then
+        POD_NODE=$(kubectl get pod -n "${NS}" -o wide --field-selector status.podIP="${POD_IP}" \
+          -o jsonpath='{.items[*].status.hostIP}' 2>/dev/null)
+        [ -z "$POD_NODE" ] && POD_NODE=$(echo "$NODE_IPS" | awk '{print $1}')
+      else
+        POD_NODE=$(echo "$NODE_IPS" | awk '{print $1}')
+      fi
+
+      if [ -n "$NP" ] && [ -n "$POD_NODE" ]; then
+        [ -n "$EXTERNAL_BOOTSTRAP" ] && EXTERNAL_BOOTSTRAP="${EXTERNAL_BOOTSTRAP},"
+        EXTERNAL_BOOTSTRAP="${EXTERNAL_BOOTSTRAP}${POD_NODE}:${NP}"
+      fi
     fi
   done
 
   if [ -n "$EXTERNAL_BOOTSTRAP" ]; then
-    echo "保存端口/地址映射到 ConfigMap/kafka-cluster-endpoints ..."
+    echo "保存端口/地址映射到 ConfigMap/kafka-cluster-endpoints (mode=${SVC_MODE})..."
     kubectl create configmap kafka-cluster-endpoints -n "${NS}" \
       --from-literal=bootstrap-internal="${INTERNAL_BOOTSTRAP}" \
       --from-literal=bootstrap-external="${EXTERNAL_BOOTSTRAP}" \
+      --from-literal=service-mode="${SVC_MODE}" \
       --from-literal=node-ips="${NODE_IPS}" \
       --dry-run=client -o yaml | kubectl apply -f -
     echo ""
@@ -135,13 +153,18 @@ if [ "${STABLE_EP}" -ge "${EXPECTED_BROKERS}" ] && [ "${EXPECTED_BROKERS}" -gt 0
   echo "  ✅ 集群内 (ClusterIP, 自动负载均衡):"
   echo "      kafka-cluster.${NS}.svc:9092"
   echo ""
-  echo "      扩容/重启后 label 自动维护, endpoints 自动更新"
+  echo "      扩容/重启后 endpoints 自动更新 (selector 用 KubeBlocks 默认 label)"
+elif [ "${EXPECTED_BROKERS}" -eq 0 ]; then
+  echo "  ⏳ broker pod 还没就绪, 稍后再看; 临时用 headless 地址:"
+  echo "      ${INTERNAL_BOOTSTRAP}"
 else
-  echo "  ⚠  ClusterIP Service label 未匹配, 直接使用 headless 地址:"
+  echo "  ⚠  ClusterIP Service 的 endpoints (${STABLE_EP}) < broker 数 (${EXPECTED_BROKERS}),"
+  echo "     可能 pod 未 Ready, 临时用 headless 地址:"
   echo "      ${INTERNAL_BOOTSTRAP}"
   echo ""
-  echo "      修复命令:"
-  echo "      kubectl label pod -n ${NS} -l app.kubernetes.io/instance=kafka-cluster,apps.kubeblocks.io/component-name=kafka-combine app.kubernetes.io/name=kafka --overwrite"
+  echo "      排查命令:"
+  echo "      kubectl get pod -n ${NS} -l app.kubernetes.io/instance=kafka-cluster,apps.kubeblocks.io/component-name=kafka-combine"
+  echo "      kubectl get endpoints kafka-cluster -n ${NS}"
 fi
 echo ""
 
@@ -152,14 +175,48 @@ for i in $(seq 0 $((EXPECTED_BROKERS - 1))); do
 done
 echo ""
 
-# ===== 集群外访问 (NodePort) =====
-echo "------- 集群外访问 (NodeIP + NodePort) -------"
-echo ""
-echo "  可用 Node IPs: ${NODE_IPS:-<取不到>}"
+# ===== 集群外访问 (NodePort 或 LoadBalancer) =====
+if [ "$SVC_MODE" = "LoadBalancer" ]; then
+  echo "------- 集群外访问 (LoadBalancer) -------"
+else
+  echo "------- 集群外访问 (NodeIP + NodePort) -------"
+fi
 echo ""
 
+if [ "$SVC_MODE" != "LoadBalancer" ]; then
+  echo "  可用 Node IPs: ${NODE_IPS:-<取不到>}"
+  echo ""
+fi
+
 if [ -z "$ADV_SVCS" ]; then
-  echo "  ⚠ NodePort Service 还没创建, --wait 重跑"
+  echo "  ⚠ advertised-listener Service 还没创建, --wait 重跑"
+elif [ "$SVC_MODE" = "LoadBalancer" ]; then
+  printf "    %-55s  %-20s  %s\n" "SERVICE" "LB-IP" "PORT"
+  PENDING_CNT=0
+  for svc in $ADV_SVCS; do
+    NAME=${svc#service/}
+    LB_IP=$(kubectl get -n "${NS}" "$svc" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+    [ -z "$LB_IP" ] && LB_IP=$(kubectl get -n "${NS}" "$svc" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+    PORT=$(kubectl get -n "${NS}" "$svc" -o jsonpath='{.spec.ports[?(@.port==9092)].port}' 2>/dev/null)
+    [ -z "$PORT" ] && PORT=9092
+    [ -z "$LB_IP" ] && { LB_IP="<pending>"; PENDING_CNT=$((PENDING_CNT+1)); }
+    printf "    %-55s  %-20s  %s\n" "${NAME}" "${LB_IP}" "${PORT}"
+  done
+  echo ""
+
+  if [ -n "$EXTERNAL_BOOTSTRAP" ]; then
+    echo "  ⭐ bootstrap.servers (LoadBalancer IP):"
+    echo "      ${EXTERNAL_BOOTSTRAP}"
+    echo ""
+  fi
+  if [ "$PENDING_CNT" -gt 0 ]; then
+    echo "  ⚠ 有 ${PENDING_CNT} 个 Service 还在 <pending>, 检查云厂商 LB / MetalLB 是否就绪:"
+    echo "      kubectl get svc -n ${NS} -l app.kubernetes.io/instance=kafka-cluster"
+    echo ""
+  fi
+  echo "  💾 固化到 ConfigMap/kafka-cluster-endpoints:"
+  echo "      集群内:  kubectl get cm kafka-cluster-endpoints -n ${NS} -o jsonpath='{.data.bootstrap-internal}'; echo"
+  echo "      集群外:  kubectl get cm kafka-cluster-endpoints -n ${NS} -o jsonpath='{.data.bootstrap-external}'; echo"
 else
   printf "    %-55s  NodePort\n" "SERVICE"
   for svc in $ADV_SVCS; do
@@ -186,9 +243,15 @@ echo ""
 # ===== 端口稳定性说明 =====
 echo "------- 端口稳定性说明 -------"
 echo ""
-echo "  ✓ Pod 重启 / OOM 恢复 / 扩容 → NodePort 不变"
-echo "  ✓ 扩容新增 broker → 老 NodePort 不变, 新 broker 多 N 个新端口"
-echo "  ✗ 删 cluster 重装 → K8s 重新分配 NodePort"
+if [ "$SVC_MODE" = "LoadBalancer" ]; then
+  echo "  ✓ Pod 重启 / OOM 恢复 / 扩容 → LB IP 不变 (Service 不重建)"
+  echo "  ✓ 扩容新增 broker → 老 LB IP 不变, 新 broker 多 N 个新 LB IP"
+  echo "  ✗ 删 cluster 重装 → 云厂商 / MetalLB 重新分配 LB IP"
+else
+  echo "  ✓ Pod 重启 / OOM 恢复 / 扩容 → NodePort 不变"
+  echo "  ✓ 扩容新增 broker → 老 NodePort 不变, 新 broker 多 N 个新端口"
+  echo "  ✗ 删 cluster 重装 → K8s 重新分配 NodePort"
+fi
 echo ""
 
 # ===== 验证命令 =====
@@ -209,7 +272,11 @@ fi
 echo "------- 端口映射关系 -------"
 echo ""
 echo "  Kafka Listener → Service 映射:"
-echo "    CLIENT (9092)   → advertised-listener svc → NodePort (外部) / kafka-cluster svc (内部)"
+if [ "$SVC_MODE" = "LoadBalancer" ]; then
+  echo "    CLIENT (9092)   → advertised-listener svc (LoadBalancer, 外部) / kafka-cluster svc (内部)"
+else
+  echo "    CLIENT (9092)   → advertised-listener svc (NodePort, 外部) / kafka-cluster svc (内部)"
+fi
 echo "    INTERNAL (9094) → headless svc (pod 间副本同步)"
 echo "    CONTROLLER (9093) → headless svc (KRaft 控制器通信)"
 echo ""
