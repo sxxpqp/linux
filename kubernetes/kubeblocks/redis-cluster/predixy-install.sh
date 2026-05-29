@@ -43,13 +43,15 @@ if ! kubectl get secret redis-cluster-password -n "${NS}" &>/dev/null; then
 fi
 echo "  ✓ Secret/redis-cluster-password 存在"
 
-# 检查 Redis Cluster headless services
-for shard in $(kubectl get svc -n "${NS}" -o name 2>/dev/null | grep redis-cluster-shard | grep headless); do
+# 检查 Redis Cluster headless services (按名字匹配, 不依赖 label)
+HEADLESS_SVCS=$(kubectl get svc -n "${NS}" -o name 2>/dev/null | grep redis-cluster-shard | grep headless)
+HEADLESS_CNT=$(echo "$HEADLESS_SVCS" | grep -c . || echo 0)
+for shard in $HEADLESS_SVCS; do
   echo "  ✓ ${shard#service/}"
 done
-HEADLESS_CNT=$(kubectl get svc -n "${NS}" -l app.kubernetes.io/instance=redis-cluster -o name 2>/dev/null | grep -c headless || true)
 if [ "$HEADLESS_CNT" -lt 3 ]; then
   echo "  ERROR: 没找到 3 个 Redis Cluster shard headless service (找到 ${HEADLESS_CNT})"
+  echo "  期望: redis-cluster-shard-*-headless"
   exit 1
 fi
 echo ""
