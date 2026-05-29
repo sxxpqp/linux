@@ -1,0 +1,79 @@
+# KubeBlocks Redis Cluster 实例 (替代 Bitnami helm chart)
+#
+# 解决的核心问题:
+# - Bitnami chart 用裸 StatefulSet, Pod 重启换 IP 后老 nodes.conf 节点 ID 找不到
+#   对应 IP, 集群路由表失效
+# - KubeBlocks 用 InstanceSet, 维持稳定 DNS 名 + 自动更新 cluster-announce-ip,
+#   IP 变化通过 reload 钩子让 Redis 自己更新拓扑
+#
+# 部署: bash deploy.sh  (或 kubectl apply -f cluster.yaml)
+# 销毁: kubectl delete -f cluster.yaml
+#
+# 注意: deletionPolicy 默认 Delete, 删 Cluster CR 会一并删 PVC.
+# 想保留数据改成 DoNotTerminate 或 Halt.
+
+apiVersion: apps.kubeblocks.io/v1alpha1
+kind: Cluster
+metadata:
+  name: redis-cluster
+  namespace: test
+  labels:
+    helm.sh/chart: redis-cluster-via-kubeblocks
+spec:
+  # cluster 整体的拓扑定义 (KubeBlocks redis addon 提供)
+  # 可选 topology:
+  #   - replication        : 1主N从 (StatefulSet 风格)
+  #   - replication-twemproxy: 1主N从 + twemproxy 代理
+  #   - cluster            : 真正的 Redis Cluster (3主3从最小)
+  clusterDef: redis
+  topology: cluster
+
+  # 删除策略
+  # - DoNotTerminate: 禁止删除 (生产推荐)
+  # - Halt:           删 K8s 资源但保留 PVC
+  # - Delete:         删 K8s 资源 + PVC (数据丢失)
+  # - WipeOut:        删全部 + 远程备份 (彻底清理)
+  terminationPolicy: Delete
+
+  componentSpecs:
+    # ---------- Redis Cluster 数据节点 ----------
+    - name: redis-cluster
+      serviceVersion: 7.2.4        # Redis 版本, 跟 KubeBlocks addon 支持的版本对齐
+      replicas: 6                  # 3 主 + 3 从, 最小可用 cluster
+      disableExporter: false       # 启用 redis_exporter 边车, 暴露 :9121 metrics
+
+      # 资源
+      resources:
+        limits:
+          cpu: "1"
+          memory: 2Gi
+        requests:
+          cpu: 100m
+          memory: 512Mi
+
+      # 持久化 (每个 pod 一份)
+      volumeClaimTemplates:
+        - name: data
+          spec:
+            storageClassName: longhorn   # 跟现有栈一致, 也可改 local-path
+            accessModes: [ ReadWriteOnce ]
+            resources:
+              requests:
+                storage: 10Gi
+
+      # 反亲和性: 同一个 component 的副本尽量打散到不同节点
+      # (KubeBlocks 默认就有, 这里显式声明便于排查)
+      affinity:
+        podAntiAffinity: Preferred
+        topologyKeys:
+          - kubernetes.io/hostname
+
+  # ---------- 集群级反亲和: redis-cluster 整体优先调度到不同节点 ----------
+  affinity:
+    podAntiAffinity: Preferred
+    topologyKeys:
+      - kubernetes.io/hostname
+    tenancy: SharedNode
+
+  # ---------- 删除保护开关 (生产记得打开) ----------
+  # 注意: terminationPolicy 已经从 spec.terminationPolicy 走
