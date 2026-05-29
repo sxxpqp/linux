@@ -1,13 +1,17 @@
 #!/bin/bash
 # 部署 KubeBlocks Redis Sharding Cluster (3 shard × 2 副本 = 6 pod).
+# 仅 ClusterIP/Headless 访问 (cluster.yaml 里 NodePort 段已注释).
 #
-# systemAccounts.secretRef 在 sharding 模式下不生效, KubeBlocks 自动生成随机密码.
-# 脚本在 cluster Ready 后把密码轮换成固定值, 并同步到固定名 Secret.
+# 密码流程:
+#   1) 先建 Secret (含 username=default + password=FIXED_PASS 两个 key, 缺一不可)
+#   2) 再 apply Cluster, systemAccounts.secretRef 指向此 Secret → KubeBlocks 直接用它做 requirepass
+#   3) --wait 模式下做密码轮换兜底 (个别版本 secretRef 仍随机生成密码时生效)
 #
 # 用法:
-#   bash install.sh                 # 默认 ns=test, 不等待
-#   bash install.sh --wait          # 等到 Running + 密码轮换完成
-#   bash install.sh --ns prod
+#   bash install.sh                          # 默认 ns=test, 密码=redis123
+#   bash install.sh --ns prod --pass 'Xxx'
+#   bash install.sh --wait                   # 等 Ready + 密码轮换兜底
+#   REDIS_PASS=MyPass bash install.sh --wait
 set -uo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -38,12 +42,26 @@ fi
 # ---------- 1. namespace ----------
 kubectl create namespace "${NS}" --dry-run=client -o yaml | kubectl apply -f -
 
-# ---------- 2. 部署 Cluster ----------
+# ---------- 2. 预创建 Secret (必须先于 Cluster!) ----------
+# cluster.yaml 里 systemAccounts.secretRef 指向 ${ALIAS_SECRET}, 必须先存在,
+# 否则 ComponentParameter reconciler 找不到 default credential, 报
+#   "has no Credential object default found when resolving vars"
+# 死循环, cluster 永远卡在 Creating.
+#
+# KubeBlocks v1 的 Credential 要求 Secret 同时有 username + password 两个 key.
+echo "预创建 Secret/${ALIAS_SECRET} (username=default, password=${FIXED_PASS})..."
+kubectl create secret generic "${ALIAS_SECRET}" -n "${NS}" \
+  --from-literal=username=default \
+  --from-literal=password="${FIXED_PASS}" \
+  --dry-run=client -o yaml | kubectl apply -f -
+echo ""
+
+# ---------- 3. 部署 Cluster ----------
 echo "部署 Redis Cluster 到 namespace=${NS}..."
 sed "s|namespace: test|namespace: ${NS}|" "${DIR}/cluster.yaml" | kubectl apply -f -
 echo ""
 
-# ---------- 3. 部署稳定 Service ----------
+# ---------- 4. 部署稳定 Service ----------
 echo "部署稳定 Service redis-cluster (名字固定, 不受 shard 后缀变化影响)..."
 sed "s|namespace: test|namespace: ${NS}|" "${DIR}/stable-service.yaml" | kubectl apply -f -
 echo ""

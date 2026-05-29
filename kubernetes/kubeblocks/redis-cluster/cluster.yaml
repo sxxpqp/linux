@@ -39,8 +39,15 @@ spec:
         replicas: 2                  # 每分片 2 副本 (1 master + 1 replica)
 
         # ===== 固定密码 (引用外部 Secret) =====
-        # 注意: systemAccounts.secretRef 在 sharding 模式下不生效, KubeBlocks 仍自动生成随机密码.
-        # 保留此段作为声明式意图记录, install.sh 在 cluster Ready 后做实际密码轮换.
+        # ⚠ 关键: 引用的 Secret 必须先于 Cluster 创建, 且同时包含 username + password 两个 key.
+        # 否则 KubeBlocks 的 ComponentParameter reconciler 找不到 default credential, 报:
+        #   "has no Credential object default found when resolving vars"
+        # cluster 会卡在 Creating, 永远不 Ready.
+        #
+        # install.sh 已在 apply Cluster 之前自动创建好这个 Secret:
+        #   kubectl create secret generic redis-cluster-password -n test \
+        #     --from-literal=username=default \
+        #     --from-literal=password='YourPass'
         systemAccounts:
           - name: default               # Redis requirepass, 对应 ComponentDef 里的 default 账号
             secretRef:
