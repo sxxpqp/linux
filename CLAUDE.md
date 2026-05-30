@@ -27,9 +27,22 @@
 | MinIO S3 API endpoint | `https://ihome.sxxpqp.top:8443` | S3 客户端 / SDK 用这个,bucket 操作走 API |
 | MinIO 控制台 UI | `https://console.ihome.sxxpqp.top:8443` | 管理界面(看 bucket / 用户 / 策略),不是 S3 API |
 | Nexus 私服(Base) | `https://nexus.ihome.sxxpqp.top:8443` | **只用于非镜像内容**:raw / helm / 二进制包。镜像已全部迁到 Harbor,不要再用 Nexus 拉镜像 |
-| 个人文件中转 | `https://chfs.sxxpqp.top:8443/chfs/shared/` | 离线包、UI zip、安装脚本(k8s/kubeadm/, k8s/helm/ 等) |
+| 个人文件中转(chfs) | `https://chfs.sxxpqp.top:8443/chfs/shared/` | 离线包、ISO、压缩包等大文件;HTTP 直接 GET |
 | 常用测试主机 | `node02` (192.168.150.253, enp1s0) | network / clash / mihomo |
 | **历史镜像入口(已弃用,只读)** | 见 [下方"历史 / 弃用"段](#历史--弃用) | 老脚本里可能见到,但**新写脚本一律用 Harbor** |
+
+### 文件 / 脚本存放约定(重要)
+
+| 类型 | 存放位置 | 拉取方式 |
+|---|---|---|
+| **脚本**(`.sh` / `.yaml` / `.conf` / 配置模板) | **git 仓库**(本仓库,公开 repo) | Nexus raw-githubusercontent 代理 GitHub,URL 形如 `<nexus>/repository/raw-githubusercontent/sxxpqp/linux/main/<path>` |
+| **大文件**(离线包、ISO、压缩包、二进制) | **chfs 或 MinIO** | chfs 走 HTTP 直拉;MinIO 走 S3 API |
+| **镜像** | **Harbor**(代理) / 阿里 ACR(推送) | 见上面 "Harbor 架构" |
+| **Helm chart** / GitHub release 二进制 | Nexus 代理 | 见下面 "Nexus 仓库映射" |
+
+**好处**:脚本改了 push 一次 git,新机器执行立即拿到最新版,**不用再手动同步到 chfs**。
+
+**反面案例**:不要把脚本同时维护两份(git + chfs),否则不知不觉就漂移了。
 
 ### Harbor 架构(关键)
 
