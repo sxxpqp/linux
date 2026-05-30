@@ -89,6 +89,7 @@ helm upgrade --install "${RELEASE_NAME}" \
   --set image.repository=bitnamilegacy/minio \
   --set clientImage.repository=bitnamilegacy/minio-client \
   --set volumePermissions.image.repository=bitnamilegacy/os-shell \
+  --set global.security.allowInsecureImages=true \
   --set resources.limits.cpu=4 \
   --set resources.limits.memory=8Gi \
   --set resources.requests.cpu=500m \
