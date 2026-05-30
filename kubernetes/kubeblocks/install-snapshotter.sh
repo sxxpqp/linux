@@ -6,23 +6,23 @@
 #
 # 用法:
 #   bash install-snapshotter.sh                # 默认内网镜像 (单文件 all-in-one)
-#   bash install-snapshotter.sh --public       # 走 GitHub raw (官方原始 yaml 分多文件)
+#   bash install-snapshotter.sh --online       # 走 Nexus raw 代理 (官方原始 yaml 分多文件)
 #   bash install-snapshotter.sh --version v8.0.1
 set -uo pipefail
 
 VERSION="v8.0.1"
-USE_PUBLIC=false
+USE_ONLINE=false
 
 # 内网整合包 (CRD + controller + RBAC 一个 yaml 搞定)
 INTERNAL_URL="https://chfs.sxxpqp.top:8443/chfs/shared/k8s/kubeblocks/snapshot.storage.k8s.yaml"
 
-# 公网官方源 (按版本分多个文件)
-PUBLIC_BASE="https://raw.githubusercontent.com/kubernetes-csi/external-snapshotter"
+# Nexus raw 代理 (按版本分多个文件)
+PUBLIC_BASE="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/kubernetes-csi/external-snapshotter"
 
 for ((i=1; i<=$#; i++)); do
   case "${!i}" in
     --version) i=$((i+1)); VERSION="${!i}" ;;
-    --public)  USE_PUBLIC=true ;;
+    --online)  USE_ONLINE=true ;;
     -h|--help)
       sed -n '2,10p' "$0" | sed 's/^# //'
       exit 0 ;;
@@ -33,21 +33,21 @@ done
 
 echo "========================================="
 echo " external-snapshotter 安装"
-echo "  source:  $([ "$USE_PUBLIC" = true ] && echo "GitHub $VERSION" || echo "内网镜像")"
+echo "  source:  $([ "$USE_ONLINE" = true ] && echo "Nexus raw $VERSION" || echo "内网镜像")"
 echo "========================================="
 echo ""
 
-if [ "$USE_PUBLIC" = false ]; then
+if [ "$USE_ONLINE" = false ]; then
   # ----- 内网整合包 (一个 yaml 含所有资源) -----
   echo "[1/1] 应用内网整合包: ${INTERNAL_URL}"
   if ! kubectl apply --server-side -f "${INTERNAL_URL}"; then
     echo ""
-    echo "ERROR: 内网镜像安装失败. 改用公网:"
-    echo "  bash install-snapshotter.sh --public"
+    echo "ERROR: 内网镜像安装失败. 改用 Nexus raw:"
+    echo "  bash install-snapshotter.sh --online"
     exit 1
   fi
 else
-  # ----- GitHub 公网 (分多文件) -----
+  # ----- Nexus raw 代理 (分多文件) -----
   echo "[1/2] 安装 VolumeSnapshot CRDs..."
   for crd in \
     snapshot.storage.k8s.io_volumesnapshotclasses.yaml \

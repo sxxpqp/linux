@@ -1,6 +1,6 @@
 ### 安装openelb控制器
 ```
-kubectl apply -f https://raw.githubusercontent.com/openelb/openelb/master/deploy/openelb.yaml
+kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/openelb/openelb/master/deploy/openelb.yaml
 ```
 ### 查看openelb控制器
 ```

@@ -32,11 +32,11 @@ while [ $# -gt 0 ]; do
 done
 
 # native 清单优先级:
-#   1. 同目录下的 metallb-native.yaml (离线 / 国内拉不到 raw.githubusercontent.com 时用)
+#   1. 同目录下的 metallb-native.yaml (离线 / Nexus 不通时用)
 #   2. --manifest <path|url> 显式指定
-#   3. 上游 raw.githubusercontent.com (在线兜底)
+#   3. Nexus raw 代理 (在线兜底)
 NATIVE_LOCAL="${DIR}/metallb-native.yaml"
-NATIVE_URL="https://raw.githubusercontent.com/metallb/metallb/${VERSION}/config/manifests/metallb-native.yaml"
+NATIVE_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/metallb/metallb/${VERSION}/config/manifests/metallb-native.yaml"
 
 if [ -f "${NATIVE_LOCAL}" ]; then
   NATIVE_SRC="${NATIVE_LOCAL}"
@@ -86,7 +86,7 @@ echo "[2/3] 安装 MetalLB 主体 (controller + speaker + CRD) ..."
 if ! kubectl apply -f "${NATIVE_SRC}"; then
   echo ""
   if [ "${NATIVE_SRC}" = "${NATIVE_URL}" ]; then
-    echo "  ERROR: 从 GitHub 拉清单失败. 离线 / 国内拉不到可以:"
+    echo "  ERROR: 从 Nexus 拉清单失败. 离线 / Nexus 不通时可以:"
     echo "    1. 本机下载: curl -kLo ${NATIVE_LOCAL} ${NATIVE_URL}"
     echo "    2. (可选) 改 image 为内网 mirror (quay.io/metallb → 你的源)"
     echo "    3. 重跑 bash install.sh (会自动用本地 metallb-native.yaml)"

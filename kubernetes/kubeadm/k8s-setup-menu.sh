@@ -20,7 +20,7 @@ URL_HELM="${BASE}/helm/install-helm.sh"
 # ================================================================
 
 # ---- 私有镜像仓库 ----
-REGISTRY="dockerhub.ihome.sxxpqp.top:8443"
+REGISTRY="huball.ihome.sxxpqp.top:8443"
 NEXUS_HELM="https://nexus.ihome.sxxpqp.top:8443/repository"
 NEXUS_LONGHORN="https://nexus.ihome.sxxpqp.top:8443/repository/hwlm-longhorn"
 NEXUS_INGRESS_NGINX="https://nexus.ihome.sxxpqp.top:8443/repository/helmingress-nginx"

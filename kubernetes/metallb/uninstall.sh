@@ -10,9 +10,9 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 VERSION="${VERSION:-v0.14.8}"
 NS="metallb-system"
 
-# 清单源: 优先本地 metallb-native.yaml, 否则用上游 URL
+# 清单源: 优先本地 metallb-native.yaml, 否则用 Nexus raw 代理
 NATIVE_LOCAL="${DIR}/metallb-native.yaml"
-NATIVE_URL="https://raw.githubusercontent.com/metallb/metallb/${VERSION}/config/manifests/metallb-native.yaml"
+NATIVE_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/metallb/metallb/${VERSION}/config/manifests/metallb-native.yaml"
 if [ -f "${NATIVE_LOCAL}" ]; then
   NATIVE_SRC="${NATIVE_LOCAL}"
 else

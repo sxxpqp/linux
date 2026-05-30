@@ -63,9 +63,10 @@ cat /etc/containerd/config.toml | grep certs.d
 # 配置加速器
 mkdir /etc/containerd/certs.d/docker.io -pv
 cat > /etc/containerd/certs.d/docker.io/hosts.toml << EOF
-server = "https://docker.io"
-[host."https://dockerhub.ihome.sxxpqp.top:8443"]
+server = "https://registry-1.docker.io"
+[host."https://huball.ihome.sxxpqp.top:8443"]
   capabilities = ["pull", "resolve"]
+  skip_verify = true
 EOF
 
 

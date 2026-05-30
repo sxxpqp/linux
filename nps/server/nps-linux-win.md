@@ -15,7 +15,7 @@ vi /etc/docker/daemon.json
 ```
 ```
 {
-  "registry-mirrors": ["https://dockerhub.sxxpqp.top"]
+  "registry-mirrors": ["https://huball.ihome.sxxpqp.top:8443"]
 }
 ```
 ### 服务端重启docker

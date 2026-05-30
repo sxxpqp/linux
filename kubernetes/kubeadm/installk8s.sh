@@ -13,7 +13,7 @@ TTY_INPUT=/dev/tty
 # ──────────────────────────────────────────────
 # 全局配置（按需修改）
 # ──────────────────────────────────────────────
-REGISTRY="dockerhub.ihome.sxxpqp.top:8443/google_containers"
+REGISTRY="registry.aliyuncs.com/google_containers"
 CONTROL_PLANE_ENDPOINT="172.16.0.49:6443"
 POD_CIDR="10.244.0.0/16"
 ALIYUN_MIRROR="https://mirrors.aliyun.com"

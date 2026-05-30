@@ -91,8 +91,8 @@ ETCD_VER=v3.4.27
 
 # choose either URL
 GOOGLE_URL=https://storage.googleapis.com/etcd
-GITHUB_URL=https://github.com/etcd-io/etcd/releases/download
-DOWNLOAD_URL=${GOOGLE_URL}
+GITHUB_URL=https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/etcd-io/etcd/releases/download
+DOWNLOAD_URL=${GITHUB_URL}
 
 rm -f /tmp/etcd-${ETCD_VER}-linux-amd64.tar.gz
 rm -rf /tmp/etcd-download-test && mkdir -p /tmp/etcd-download-test

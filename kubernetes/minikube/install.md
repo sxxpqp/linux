@@ -124,7 +124,7 @@ minikube addons list
 # 启用插件（如 ingress） 
 # minikube addons enable ingress # 国内有点问题
       ## 下载官方 yaml
-      curl -O https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/baremetal/deploy.yaml
+      curl -O https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/kubernetes/ingress-nginx/main/deploy/static/provider/baremetal/deploy.yaml
 
       ## 批量替换镜像地址
       sed -i 's|registry.k8s.io|k8s.ihome.sxxpqp.top:8443|g' deploy.yaml

@@ -1,7 +1,7 @@
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
 kubernetesVersion: v1.28.2 # 与原版本一致
-imageRepository: dockerhub.ihome.sxxpqp.top:8443/google_containers
+imageRepository: registry.aliyuncs.com/google_containers
 controlPlaneEndpoint: "172.16.0.190:6443" # 建议指向负载均衡或新 Master IP
 # networking:
 #   podSubnet: "10.244.0.0/16" # 必须与旧集群一致
