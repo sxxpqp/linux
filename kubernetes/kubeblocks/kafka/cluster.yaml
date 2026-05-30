@@ -13,7 +13,12 @@ spec:
     - name: kafka-combine
       replicas: 3
 
-      # 每个 broker 独立 NodePort (客户端连任一自动发现全部)
+      # 每个 broker 独立 LoadBalancer Service (云厂商 / MetalLB / OpenELB 分配 LB-IP).
+      # podService: true → KubeBlocks 给每个 broker pod 创建一个 LB Service.
+      # advertised.listeners 自动配成 LB-IP:9092, 客户端连任一 LB-IP 自动发现拓扑.
+      #
+      # LB-IP 由 provider 随机分配, 不强求固定. 客户端 bootstrap 由 install.sh
+      # 抓取实际 LB-IP 写到 ConfigMap/kafka-cluster-endpoints, 业务侧读它即可.
       services:
         - name: advertised-listener
           serviceType: LoadBalancer

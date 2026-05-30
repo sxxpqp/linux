@@ -33,8 +33,10 @@ spec:
           env:
             - name: KAFKA_CLUSTERS_0_NAME
               value: kafka-cluster
+            # 集群内连 kafka 用 9094 (INTERNAL listener, advertised 为 pod FQDN).
+            # 用 stable service kafka-cluster 而非 KubeBlocks 默认带后缀的 headless service.
             - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
-              value: kafka-cluster-kafka-combine-headless.test.svc:9092
+              value: kafka-cluster.test.svc:9094
           resources:
             limits:
               cpu: 500m

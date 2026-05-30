@@ -27,10 +27,14 @@ spec:
   selector:
     app.kubernetes.io/instance: kafka-cluster
     apps.kubeblocks.io/component-name: kafka-combine
+  # 关键: 集群内访问要走 9094 (INTERNAL listener), 不是 9092.
+  # 9092 是 CLIENT listener, advertised 地址是 NodeIP+NodePort, 集群内连进来会被
+  # broker metadata 告知 "去 NodeIP:NodePort 取", 多绕一跳还依赖 kube-proxy 路径.
+  # 9094 INTERNAL listener advertised 是 pod FQDN, 集群内全程 pod-to-pod, 最佳路径.
   ports:
-    - name: kafka
-      port: 9092
-      targetPort: 9092
+    - name: kafka-internal
+      port: 9094
+      targetPort: 9094
       protocol: TCP
   # 启动期间未 Ready 的 pod 也加入 endpoints, 避免业务首次启动时拿不到地址
   publishNotReadyAddresses: true
