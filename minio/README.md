@@ -1,6 +1,8 @@
 # MinIO 对象存储
 
-MinIO 对象存储 Docker Compose 部署，mc 客户端跨集群同步。
+MinIO 对象存储 **Docker Compose 部署**，mc 客户端跨集群同步。
+
+> K8s 内跨集群同步（mc mirror CronJob）见 [kubernetes/minio-sync/](../kubernetes/minio-sync/)。
 
 ## 文件说明
 

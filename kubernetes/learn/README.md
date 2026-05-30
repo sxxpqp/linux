@@ -2,6 +2,8 @@
 
 Kubernetes 集群部署、组件配置、存储、监控、CI/CD 等生产运维实践。
 
+> **注意**：本文件里的目录链接（如 `[kubeadm/](kubeadm/)`）指向的是 `kubernetes/` 下的兄弟目录，不是 `learn/` 内部子目录。在 GitHub/本地文件浏览器里点击会 404，直接去 `kubernetes/<目录名>/` 查看。完整导航见 [../README.md](../README.md)。
+
 ## 目录结构
 
 ### 集群部署

@@ -54,7 +54,8 @@ Harbor 后端是同一个,但前面挂了 **1Panel/nginx 多前端域名**,**每
 | `ghcr.io` | `ghcr.ihome.sxxpqp.top:8443` | `ghcr` | `/v2/*` → `/v2/ghcr/*` |
 | `quay.io` | `quay.ihome.sxxpqp.top:8443` | `quay` | `/v2/*` → `/v2/quay/*` |
 | `registry.k8s.io` / `k8s.gcr.io` | `k8s.ihome.sxxpqp.top:8443` | `google_containers` | `/v2/*` → `/v2/google_containers/*` |
-| `docker.io`(老别名) | `0523dw.ihome.sxxpqp.top:8443` | `dockerhub` | 同 huball |
+| `docker.io`(别名) | `0523dw.ihome.sxxpqp.top:8443` | `dockerhub` | 同 huball |
+| `docker.io`(别名) | `dockerhub.ihome.sxxpqp.top:8443` | `dockerhub` | 同 huball |
 
 ### Harbor 项目(直接 pull 时备用)
 
@@ -228,14 +229,13 @@ docker push registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 
 | 地址 | 原用途 | 现在状态 |
 |---|---|---|
-| `dockerhub.ihome.sxxpqp.top:8443` | 早期 Nexus 镜像 group | 已弃用,改用上面 Harbor 多前端域名 |
+| `dockerhub.sxxpqp.top` / `iharbor.sxxpqp.top` | 更早一代镜像加速 | 已弃用,改用 Harbor 多前端域名 |
 | `harbor.iot.store:8085` | 旧业务 Harbor(`turing-kubesphere/*` 系列) | 业务镜像仍在用,但**新镜像推阿里 ACR**;helm chart 在 `kubernetes/harbor/values.yaml` |
 | `core.harbor.iot.store` | 旧业务 Harbor UI | 见上 |
-| `dockerhub.sxxpqp.top` / `iharbor.sxxpqp.top` | 更早一代镜像加速 | 已弃用,改用 Harbor 多前端域名 |
 | `020300.ihome.sxxpqp.top:8443` | Tekton 镜像源 | **未确认**,可能是 Harbor 的另一个 nginx 别名;遇到 tekton 部署时再确认 |
 | `mirror.ghproxy.com` | GitHub 加速 | 已不可用,改走 Nexus `raw-github` |
 
-注:`ghcr.ihome.sxxpqp.top:8443` / `quay.ihome.sxxpqp.top:8443` / `k8s.ihome.sxxpqp.top:8443` / `0523dw.ihome.sxxpqp.top:8443` 等 **没有列在"弃用"里** —— 它们是 **Harbor 的现役 nginx 多前端别名**,继续使用,见上面 "Harbor 架构" 段。
+注:`ghcr.ihome.sxxpqp.top:8443` / `quay.ihome.sxxpqp.top:8443` / `k8s.ihome.sxxpqp.top:8443` / `0523dw.ihome.sxxpqp.top:8443` / `dockerhub.ihome.sxxpqp.top:8443` 等 **没有列在"弃用"里** —— 它们是 **Harbor 的现役 nginx 多前端别名**,继续使用,见上面 "Harbor 架构" 段。
 
 参考实现:`docker/kind/deploy.sh`(已更新成新架构,可复用)。
 

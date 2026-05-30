@@ -2,6 +2,8 @@
 
 基于 **kube-prometheus**（原始 manifests，非 helm chart）的 K8s 监控栈，包含 Prometheus Operator CRD、Alertmanager、PrometheusAlert 告警中心、Grafana 企业微信 Webhook。
 
+> Docker/VM 部署 Prometheus 见 [prometheus/](../../prometheus/)。
+
 ## 一键脚本
 
 | 脚本 | 用途 |

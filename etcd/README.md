@@ -1,6 +1,8 @@
 # etcd 集群
 
-etcd 集群 Docker Compose 部署及 Nginx 反向代理。
+etcd 集群 **Docker Compose 部署**及 Nginx 反向代理。
+
+> K8s 内 etcd 备份恢复（CronJob + etcdctl 脚本）见 [kubernetes/etcd/](../kubernetes/etcd/)。
 
 ## 文件说明
 

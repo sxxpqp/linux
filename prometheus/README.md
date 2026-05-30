@@ -1,6 +1,8 @@
 # Prometheus & VictoriaMetrics 监控
 
-Prometheus + Grafana Docker 部署指南，以及 VictoriaMetrics 替代方案。
+Prometheus + Grafana **Docker/VM 部署**指南，以及 VictoriaMetrics 替代方案。
+
+> K8s 集群内监控（kube-prometheus Operator + Alertmanager）见 [kubernetes/prometheus/](../kubernetes/prometheus/)。
 
 ## 文件说明
 
