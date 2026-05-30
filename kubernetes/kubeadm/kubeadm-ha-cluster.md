@@ -61,7 +61,7 @@ spec:
       value: "1"
     - name: address
       value: 172.16.0.51
-    image: huball.ihome.sxxpqp.top:8443/plndr/kube-vip:v0.4.0
+    image: docker.io/plndr/kube-vip:v0.4.0
     name: kube-vip
     resources: {}
     securityContext:

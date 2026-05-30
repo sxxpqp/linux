@@ -35,12 +35,12 @@ local-path是一个Kubernetes StorageClass的插件，它可以将PV（Persisten
 5. 创建测试pvc：
 
    ```
-kubectl apply -f https://github.com/rancher/local-path-provisioner/blob/master/examples/pvc/pvc.yaml
+kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/rancher/local-path-provisioner/blob/master/examples/pvc/pvc.yaml
    ```
 6. 创建测试pod：
 
    ```
-   kubectl apply -f https://github.com/rancher/local-path-provisioner/blob/master/examples/pod/pod.yaml
+   kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/rancher/local-path-provisioner/blob/master/examples/pod/pod.yaml
    ```
 7. 查看pod：
 

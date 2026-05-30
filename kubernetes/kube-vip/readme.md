@@ -18,7 +18,7 @@
 export VIP=192.168.215.200   # 改成实际 VIP
 export INTERFACE=ens33        # ip a 查看实际网卡名
 
-# 拉镜像（走 Harbor dockerhub 代理）
+# 拉镜像（ctr 不走 containerd mirror，需写完整 Harbor 地址）
 ctr image pull huball.ihome.sxxpqp.top:8443/plndr/kube-vip:v0.7.2
 
 # 生成 manifest，写入每个控制节点
