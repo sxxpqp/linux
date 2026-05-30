@@ -55,8 +55,11 @@ if [ -z "$ADDON_STATUS" ]; then
   fi
   helm repo update "${ADDON_REPO}" >/dev/null
 
+  # --force-conflicts: KubeBlocks operator 接管了 ComponentDefinition 的 .spec.runtime.*,
+  # helm 必须强制覆盖才能更新 image 等字段 (SSA 字段所有权冲突)
   helm upgrade --install kb-addon-minio "${ADDON_REPO}/minio" \
     -n kb-system --version "${ADDON_VERSION}" \
+    --force-conflicts \
     || { echo "  ERROR: helm 装 minio chart 失败, 检查版本/仓库"; exit 1; }
 
   # 等 addon CR 注册进来 (KB operator 扫 helm release)
