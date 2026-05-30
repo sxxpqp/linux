@@ -8,18 +8,18 @@
 # 用法:
 #   bash uninstall.sh                # 默认 ns=test, 保留 PVC 数据
 #   bash uninstall.sh --ns prod
-#   bash uninstall.sh --wipe         # 顺手删 PVC (数据全没,慎用)
+#   bash uninstall.sh --delete-pvc   # 同时删除 PVC (数据全没,慎用)
 set -uo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 NS="${NS:-test}"
 RELEASE_NAME="minio-cluster"
-WIPE=false
+DELETE_PVC=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --ns)    NS="$2"; shift 2 ;;
-    --wipe)  WIPE=true; shift ;;
+    --delete-pvc) DELETE_PVC=true; shift ;;
     -h|--help)
       sed -n '2,12p' "$0" | sed 's/^# //'
       exit 0 ;;
@@ -42,8 +42,8 @@ echo "删除 ConfigMap/${RELEASE_NAME}-endpoints..."
 kubectl delete configmap "${RELEASE_NAME}-endpoints" -n "${NS}" --ignore-not-found=true
 echo ""
 
-if [ "$WIPE" = true ]; then
-  echo "[--wipe] 删 PVC (数据全没)..."
+if [ "$DELETE_PVC" = true ]; then
+  echo "[--delete-pvc] 删除 PVC (数据全没)..."
   kubectl delete pvc -n "${NS}" -l app.kubernetes.io/instance="${RELEASE_NAME}" --ignore-not-found=true
   kubectl delete secret -n "${NS}" -l app.kubernetes.io/instance="${RELEASE_NAME}" --ignore-not-found=true
   echo ""
@@ -53,7 +53,7 @@ echo "确认残留:"
 kubectl get all,pvc,cm,secret -n "${NS}" -l app.kubernetes.io/instance="${RELEASE_NAME}"
 echo ""
 
-if [ "$WIPE" = false ]; then
-  echo "提示: PVC 已保留 (数据还在). 想彻底清理重跑 --wipe."
+if [ "$DELETE_PVC" = false ]; then
+  echo "提示: PVC 已保留 (数据还在). 想彻底清理重跑 --delete-pvc."
   echo "  kubectl get pvc -n ${NS} -l app.kubernetes.io/instance=${RELEASE_NAME}"
 fi
