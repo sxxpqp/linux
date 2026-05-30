@@ -1,35 +1,59 @@
 #!/bin/bash
-# 卸载 MinIO Cluster.
+# 卸载 MinIO 集群 (Bitnami helm chart 模式)
 #
 # 注意:
-#   terminationPolicy=Delete 会同时清掉 PVC (数据全没), 想保留数据先在 cluster.yaml 改成 Halt.
-#   Console LB Service 卸载前要确保 metallb 还在跑, 否则 finalizer 会卡 (跟之前 kafka 那个坑一样).
+#   1. helm uninstall 不会删 PVC (StatefulSet 默认保留),想清数据见下方 --wipe.
+#   2. 删 LB Service 前确保 metallb 还在跑, 否则 finalizer 会卡.
+#
+# 用法:
+#   bash uninstall.sh                # 默认 ns=test, 保留 PVC 数据
+#   bash uninstall.sh --ns prod
+#   bash uninstall.sh --wipe         # 顺手删 PVC (数据全没,慎用)
 set -uo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 NS="${NS:-test}"
+RELEASE_NAME="minio-cluster"
+WIPE=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --ns) NS="$2"; shift 2 ;;
+    --ns)    NS="$2"; shift 2 ;;
+    --wipe)  WIPE=true; shift ;;
+    -h|--help)
+      sed -n '2,12p' "$0" | sed 's/^# //'
+      exit 0 ;;
     *) echo "未知参数: $1"; exit 1 ;;
   esac
 done
 
-echo "删除 Console LoadBalancer + 稳定 ClusterIP..."
-sed "s|namespace: test|namespace: ${NS}|" "${DIR}/console-service.yaml" \
+echo "删除 Console LoadBalancer Service..."
+sed -e "s|namespace: test|namespace: ${NS}|" \
+    -e "s|__RELEASE_NAME__|${RELEASE_NAME}|g" \
+    "${DIR}/console-service.yaml" \
   | kubectl delete -f - --ignore-not-found=true
-sed "s|namespace: test|namespace: ${NS}|" "${DIR}/stable-service.yaml" \
-  | kubectl delete -f - --ignore-not-found=true
 echo ""
 
-echo "删除 MinIO Cluster..."
-kubectl delete cluster.apps.kubeblocks.io minio-cluster -n "${NS}" --ignore-not-found=true
+echo "helm uninstall ${RELEASE_NAME}..."
+helm uninstall "${RELEASE_NAME}" -n "${NS}" || true
 echo ""
 
-echo "删除 ConfigMap/minio-cluster-endpoints..."
-kubectl delete configmap minio-cluster-endpoints -n "${NS}" --ignore-not-found=true
+echo "删除 ConfigMap/${RELEASE_NAME}-endpoints..."
+kubectl delete configmap "${RELEASE_NAME}-endpoints" -n "${NS}" --ignore-not-found=true
 echo ""
 
-echo "确认残留 (PVC 应该已经被 Delete 策略带走, 没带走的话手动清理):"
-kubectl get all,pvc,cm,secret -n "${NS}" -l app.kubernetes.io/instance=minio-cluster
+if [ "$WIPE" = true ]; then
+  echo "[--wipe] 删 PVC (数据全没)..."
+  kubectl delete pvc -n "${NS}" -l app.kubernetes.io/instance="${RELEASE_NAME}" --ignore-not-found=true
+  kubectl delete secret -n "${NS}" -l app.kubernetes.io/instance="${RELEASE_NAME}" --ignore-not-found=true
+  echo ""
+fi
+
+echo "确认残留:"
+kubectl get all,pvc,cm,secret -n "${NS}" -l app.kubernetes.io/instance="${RELEASE_NAME}"
+echo ""
+
+if [ "$WIPE" = false ]; then
+  echo "提示: PVC 已保留 (数据还在). 想彻底清理重跑 --wipe."
+  echo "  kubectl get pvc -n ${NS} -l app.kubernetes.io/instance=${RELEASE_NAME}"
+fi

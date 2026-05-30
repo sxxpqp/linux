@@ -1,23 +1,24 @@
 # MinIO Console (管理 UI, 端口 9001) 走 LoadBalancer 暴露
-# 走 metallb 分配的 172.16.150.200-210 段 IP
+# 走 metallb 分配的 IP. 想关掉外部访问 (只走 ClusterIP) 把 type 改成 ClusterIP 就行.
 #
-# 想关掉外部访问 (只走 ClusterIP) 把 type 改成 ClusterIP 就行.
+# 选择器对应 Bitnami minio chart 的 pod 标签.
+# __RELEASE_NAME__ 由 install.sh 在 apply 时替换 (默认 minio-cluster).
 apiVersion: v1
 kind: Service
 metadata:
-  name: minio-cluster-console
+  name: __RELEASE_NAME__-console
   namespace: test
   labels:
-    app.kubernetes.io/managed-by: kubeblocks-stable-svc
+    app.kubernetes.io/managed-by: install-script
+    app.kubernetes.io/component: minio-console-lb
 spec:
   type: LoadBalancer
   selector:
-    app.kubernetes.io/instance: minio-cluster
-    apps.kubeblocks.io/component-name: minio
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/instance: __RELEASE_NAME__
   ports:
     - name: console
       port: 9001
       targetPort: 9001
       protocol: TCP
-  # Console 是单 leader 处理, 不需要 Local 策略
   externalTrafficPolicy: Cluster
