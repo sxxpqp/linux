@@ -23,6 +23,10 @@ NS="test"
 REPLICAS=8
 STORAGE="1Ti"
 CHART_VERSION="14.10.5"
+# Bitnami chart 走 Harbor 代理(docker.io 直连国内超时).
+# Harbor 前端 nginx 自动 rewrite /v2/* → /v2/dockerhub/*,所以路径不带 /dockerhub.
+# 如果 Harbor 拿不到,可临时改回 oci://registry-1.docker.io/bitnamicharts/minio
+CHART_OCI="oci://huball.ihome.sxxpqp.top:8443/bitnamicharts/minio"
 RELEASE_NAME="minio-cluster"
 WAIT=false
 
@@ -71,9 +75,10 @@ echo ""
 # 镜像层 (bitnami/minio) 由 containerd 的 hosts.toml 透明走 Harbor mirror.
 echo "[2/4] helm install Bitnami MinIO chart..."
 helm upgrade --install "${RELEASE_NAME}" \
-  oci://registry-1.docker.io/bitnamicharts/minio \
+  "${CHART_OCI}" \
   --namespace "${NS}" \
   --version "${CHART_VERSION}" \
+  --insecure-skip-tls-verify \
   --set mode=distributed \
   --set statefulset.replicaCount="${REPLICAS}" \
   --set persistence.size="${STORAGE}" \
