@@ -78,7 +78,8 @@ ADV_SVCS=$(kubectl get svc -n "${NS}" -l app.kubernetes.io/instance=kafka-cluste
   | grep advertised-listener | sort || true)
 NODE_IPS=$(kubectl get node -o jsonpath='{range .items[*]}{.status.addresses[?(@.type=="InternalIP")].address}{" "}{end}')
 EXTERNAL_BOOTSTRAP=""
-INTERNAL_BOOTSTRAP="kafka-cluster-kafka-combine-headless.${NS}.svc:9094"
+INTERNAL_BOOTSTRAP="kafka-cluster.${NS}.svc:9094"   # stable service + INTERNAL listener
+HEADLESS_BOOTSTRAP="kafka-cluster-kafka-combine-headless.${NS}.svc:9094"
 SVC_MODE=""   # NodePort / LoadBalancer
 
 if [ -n "$ADV_SVCS" ]; then
@@ -150,17 +151,17 @@ STABLE_EP=$(kubectl get endpoints kafka-cluster -n "${NS}" -o jsonpath='{.subset
 EXPECTED_BROKERS=$(kubectl get pod -n "${NS}" -l app.kubernetes.io/instance=kafka-cluster,apps.kubeblocks.io/component-name=kafka-combine -o name 2>/dev/null | wc -l)
 
 if [ "${STABLE_EP}" -ge "${EXPECTED_BROKERS}" ] && [ "${EXPECTED_BROKERS}" -gt 0 ]; then
-  echo "  ✅ 集群内 (ClusterIP, 自动负载均衡):"
-  echo "      kafka-cluster.${NS}.svc:9092"
+  echo "  ✅ 集群内 (ClusterIP, 自动负载均衡, INTERNAL listener):"
+  echo "      ${INTERNAL_BOOTSTRAP}"
   echo ""
   echo "      扩容/重启后 endpoints 自动更新 (selector 用 KubeBlocks 默认 label)"
 elif [ "${EXPECTED_BROKERS}" -eq 0 ]; then
   echo "  ⏳ broker pod 还没就绪, 稍后再看; 临时用 headless 地址:"
-  echo "      ${INTERNAL_BOOTSTRAP}"
+  echo "      ${HEADLESS_BOOTSTRAP}"
 else
   echo "  ⚠  ClusterIP Service 的 endpoints (${STABLE_EP}) < broker 数 (${EXPECTED_BROKERS}),"
   echo "     可能 pod 未 Ready, 临时用 headless 地址:"
-  echo "      ${INTERNAL_BOOTSTRAP}"
+  echo "      ${HEADLESS_BOOTSTRAP}"
   echo ""
   echo "      排查命令:"
   echo "      kubectl get pod -n ${NS} -l app.kubernetes.io/instance=kafka-cluster,apps.kubeblocks.io/component-name=kafka-combine"
