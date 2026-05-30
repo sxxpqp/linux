@@ -38,7 +38,10 @@ profile:
 #secret: ""
 #external-ui: ui
 #external-ui-name: zashboard
+
+# 这个可以手动解压 到 /etc/mihomo/ui目录下 就可以不用下载配置这个选项了
 #external-ui-url: "https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip"
+#external-ui-url: "https://chfs.sxxpqp.top:8443/chfs/shared/network/mihomo/zashboard-gh-pages.zip"
 
 # 嗅探（fakeip下其实可以不用嗅探）
 sniffer:
@@ -64,9 +67,9 @@ tun:
   #使用nikki，混入全部不修改的情况，开启接口指定为nikki
   #device: nikki
   #使用仅内核自行修改下面三项为true
-  auto-route: false
-  auto-redirect: false
-  auto-detect-interface: false
+  auto-route: true
+  auto-redirect: true
+  auto-detect-interface: true
 
 # DNS模块
 dns:
@@ -76,7 +79,7 @@ dns:
   ipv6: false
   respect-rules: true
   enhanced-mode: fake-ip
-  fake-ip-range: 28.0.0.1/8
+  fake-ip-range: 198.18.0.1/16
   fake-ip-filter-mode: blacklist
   fake-ip-filter:
     - "rule-set:fakeipfilter_domain"

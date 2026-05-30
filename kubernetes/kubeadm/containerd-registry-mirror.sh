@@ -5,6 +5,18 @@
 set -e
 
 CERTS_DIR="/etc/containerd/certs.d"
+CONTAINERD_CONF="/etc/containerd/config.toml"
+
+# ---- 前置检查:containerd 必须已启用 config_path,否则 hosts.toml 不会被读取 ----
+if ! grep -q 'config_path = "/etc/containerd/certs.d"' "${CONTAINERD_CONF}" 2>/dev/null; then
+  echo "✗ ${CONTAINERD_CONF} 未启用 config_path,请先手动配置以下内容后重跑本脚本:"
+  echo ""
+  echo "    [plugins.\"io.containerd.grpc.v1.cri\".registry]"
+  echo "      config_path = \"/etc/containerd/certs.d\""
+  echo ""
+  echo "  配完后 systemctl restart containerd,再跑本脚本。"
+  exit 1
+fi
 
 declare -A MIRRORS=(
   ["docker.io"]="https://0523dw.ihome.sxxpqp.top:8443"

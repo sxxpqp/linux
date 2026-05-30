@@ -45,6 +45,7 @@ server = "https://ghcr.io"
 
 [host."https://ghcr.ihome.sxxpqp.top:8443"]
   capabilities = ["pull", "resolve"]
+  skip_verify = true
 TOML
   mkdir -p /etc/containerd/certs.d/registry.k8s.io
   cat > /etc/containerd/certs.d/registry.k8s.io/hosts.toml << 'TOML'
@@ -52,13 +53,15 @@ server = "https://registry.k8s.io"
 
 [host."https://k8s.ihome.sxxpqp.top:8443"]
   capabilities = ["pull", "resolve"]
+  skip_verify = true
 TOML
-mkdir -p /etc/containerd/certs.d/quay.io
-  cat > /etc/containerd/certs.d/registry.k8s.io/hosts.toml << 'TOML'
-server = "quay.io"
+  mkdir -p /etc/containerd/certs.d/quay.io
+  cat > /etc/containerd/certs.d/quay.io/hosts.toml << 'TOML'
+server = "https://quay.io"
 
 [host."https://quay.ihome.sxxpqp.top:8443"]
   capabilities = ["pull", "resolve"]
+  skip_verify = true
 TOML
   # 重启 containerd 使配置生效
   systemctl restart containerd
