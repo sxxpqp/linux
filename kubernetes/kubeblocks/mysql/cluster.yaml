@@ -25,7 +25,7 @@ spec:
   #   Delete          删 K8s 资源 + PVC (数据丢失)
   #   WipeOut         Delete + 删远程备份
 
-  components:
+  componentSpecs:
     - name: mysql
       componentDef: mysql-8.0        # 前缀, 自动匹配最新 mysql-8.0-*
       serviceVersion: "8.0.33"       # 可选: 8.0.30 / 8.0.33 / 8.0.35

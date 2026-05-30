@@ -267,6 +267,7 @@ docker push registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 - 用户喜欢 **表格 + 代码块 + 分点** 的结构,排版清晰比文字密度更重要。
 - 用户会贴 `journalctl` / `ip route` / `systemctl status` 的原始输出 —— 直接基于输出回答,不要让用户"再跑一遍 X 命令"除非真的缺信息。
 - 修改配置文件时:**优先用 Edit 工具改本地文件**,然后告诉用户 `scp` / `git push` 推到服务器的命令,不要只在回复里贴 diff。
+- **每次修改文件后,主动询问是否 git push**,并给出建议的 commit message(格式:`bash gitpush.sh "<message>"`)。
 
 ## 已知踩坑(跨项目通用)
 

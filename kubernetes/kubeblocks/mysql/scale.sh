@@ -45,7 +45,7 @@ if [ "$TARGET" -lt 3 ]; then
 fi
 
 CURRENT=$(kubectl get cluster.apps.kubeblocks.io "${CLUSTER}" -n "${NS}" \
-  -o jsonpath="{.spec.components[?(@.name=='${COMPONENT}')].replicas}" 2>/dev/null || echo "")
+  -o jsonpath="{.spec.componentSpecs[?(@.name=='${COMPONENT}')].replicas}" 2>/dev/null || echo "")
 
 if [ -z "$CURRENT" ]; then
   echo "ERROR: 找不到 cluster.${CLUSTER} 的 component=${COMPONENT}"
