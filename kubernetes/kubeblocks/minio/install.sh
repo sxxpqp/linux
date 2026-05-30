@@ -71,8 +71,12 @@ kubectl create namespace "${NS}" --dry-run=client -o yaml | kubectl apply -f -
 echo ""
 
 # ---------- 2. helm install ----------
-# OCI chart 从 docker hub 拉,helm 4.1+ 原生支持.
-# 镜像层 (bitnami/minio) 由 containerd 的 hosts.toml 透明走 Harbor mirror.
+# OCI chart 从 Harbor (代理 docker.io) 拉,helm 4.1+ 原生支持 OCI.
+# 镜像层走 containerd 的 hosts.toml 透明 mirror 到 Harbor.
+#
+# image.repository 系列改成 bitnamilegacy/*:
+#   Bitnami 2025-08 把免费 image 归档到 bitnamilegacy namespace,原 bitnami/<x>
+#   tag 仍在 chart 默认值里但 docker hub 已删除. 必须重定向到 legacy 才能拉.
 echo "[2/4] helm install Bitnami MinIO chart..."
 helm upgrade --install "${RELEASE_NAME}" \
   "${CHART_OCI}" \
@@ -82,6 +86,9 @@ helm upgrade --install "${RELEASE_NAME}" \
   --set mode=distributed \
   --set statefulset.replicaCount="${REPLICAS}" \
   --set persistence.size="${STORAGE}" \
+  --set image.repository=bitnamilegacy/minio \
+  --set clientImage.repository=bitnamilegacy/minio-client \
+  --set volumePermissions.image.repository=bitnamilegacy/os-shell \
   --set resources.limits.cpu=4 \
   --set resources.limits.memory=8Gi \
   --set resources.requests.cpu=500m \
