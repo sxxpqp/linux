@@ -207,7 +207,10 @@ install_driver() {
 }
 
 log "安装 NVIDIA 驱动..."
-if [ "$AUTO" = true ]; then
+# curl ... | bash 时 stdin 是管道，read 不可用
+# 检测是否交互式终端，非交互式或 --auto 都直接安装
+if [ "$AUTO" = true ] || [ ! -t 0 ]; then
+  info "非交互模式，直接安装..."
   install_driver
 else
   echo ""
