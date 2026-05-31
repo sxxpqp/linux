@@ -48,8 +48,15 @@ check_prereqs() {
                 yum clean all 2>/dev/null || true
                 yum repolist 2>/dev/null | grep -q epel && yum-config-manager --disable epel 2>/dev/null || true
             fi
-            # </dev/null 切断子 bash 的 tty,docker install 脚本内部 systemctl 即使触发 pager 也没 tty 启动 less
-            curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh | bash -s docker --mirror Aliyun </dev/null 2>&1 | grep -v "^+\|Loaded\|loaded units\|list-unit-files" || true
+            # 先把 docker install 脚本下到本地再 bash 它
+            # 关键: bash 的 stdin 必须是 </dev/null 切断 tty (防 systemctl 进 less)
+            #       但 curl|bash -s 模式下,bash stdin 是脚本本身,不能再 redirect
+            #       → 用 mktemp 中转: 脚本走文件路径, stdin 独立挂 /dev/null
+            local docker_install_sh
+            docker_install_sh=$(mktemp /tmp/docker-install.XXXXXX.sh)
+            curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh -o "$docker_install_sh"
+            bash "$docker_install_sh" docker --mirror Aliyun </dev/null 2>&1 | grep -v "^+\|Loaded\|loaded units\|list-unit-files" || true
+            rm -f "$docker_install_sh"
             systemctl --no-pager enable --now docker >/dev/null 2>&1
             # 配置 Harbor 镜像加速源
             info "配置 Harbor 镜像加速..."
