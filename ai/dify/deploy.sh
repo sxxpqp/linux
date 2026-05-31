@@ -31,7 +31,7 @@ error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 # ========== 前置检查 ==========
 check_prereqs() {
     if ! command -v docker &>/dev/null; then
-        error "Docker 未安装。请先运行: bash <(curl -sL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh)"
+        error "Docker 未安装。请先运行: curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh | bash -s docker --mirror Aliyun"
         exit 1
     fi
     if ! docker compose version &>/dev/null; then
