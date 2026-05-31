@@ -229,6 +229,7 @@ Harbor 前端是自签 / 内网证书,需要:
 | 源类型 | 阿里云 | 清华 TUNA |
 |---|---|---|
 | Docker Hub 镜像加速 | `https://<id>.mirror.aliyuncs.com`(账号专属,需登录控制台获取) | — |
+| **Docker CE 安装** | `curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh \| bash -s docker --mirror Aliyun` | — |
 | **个人 ACR 命名空间** | `registry.cn-hangzhou.aliyuncs.com/sxxpqp/<image>`(杭州区,用户自己推的镜像放这里) | — |
 | 阿里 ACR(其它命名空间,只读引用) | 见下表 | — |
 | CentOS / RHEL / EPEL yum | `https://mirrors.aliyun.com/centos/` / `epel/` | `https://mirrors.tuna.tsinghua.edu.cn/centos/` |
