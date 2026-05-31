@@ -66,7 +66,15 @@ spec:
               requests:
                 storage: 50Gi
 
-  # 反亲和: Paxos 多数派强依赖跨节点容灾, 这里改成 required
+  # 反亲和: Paxos 多数派强依赖跨节点容灾
+  # 默认 preferred (软): 单节点/测试集群也能起得来
+  # 生产 ≥3 worker 时建议换成 requiredDuringSchedulingIgnoredDuringExecution (硬):
+  #   把下面 preferredDuringSchedulingIgnoredDuringExecution: 整段换成
+  #   requiredDuringSchedulingIgnoredDuringExecution:
+  #     - topologyKey: kubernetes.io/hostname
+  #       labelSelector:
+  #         matchLabels:
+  #           app.kubernetes.io/instance: mysql-paxos
   schedulingPolicy:
     affinity:
       podAntiAffinity:
