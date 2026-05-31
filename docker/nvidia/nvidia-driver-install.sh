@@ -96,12 +96,19 @@ install_toolkit() {
 
   case "${ID}" in
     ubuntu|debian)
-      local GPG_KEY_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-nvidia/nvidia-docker/gpgkey"
-      local ARCH=$(dpkg --print-architecture 2>/dev/null || echo "amd64")
-      local LIST_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-nvidia/nvidia-docker/libnvidia-container/stable/ubuntu/${VERSION_CODENAME}/${ARCH}"
-      curl -fsSL "$GPG_KEY_URL" 2>/dev/null | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg 2>/dev/null || true
-      echo "deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] $LIST_URL /" \
-        | tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+      local NEXUS="https://nexus.ihome.sxxpqp.top:8443/repository/raw-nvidia"
+      local KEYRING="/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"
+      local LIST_FILE="/etc/apt/sources.list.d/nvidia-container-toolkit.list"
+
+      # GPG key
+      curl -fsSL "${NEXUS}/libnvidia-container/gpgkey" | gpg --dearmor --yes -o "${KEYRING}" 2>/dev/null || true
+
+      # apt 源（从 Nexus 拉官方 list 并重写 URL）
+      curl -sL "${NEXUS}/libnvidia-container/stable/deb/nvidia-container-toolkit.list" \
+        | sed -e "s#https://nvidia.github.io/libnvidia-container/#${NEXUS}/libnvidia-container/#g" \
+              -e "s#^deb #deb [signed-by=${KEYRING}] #" \
+        | tee "${LIST_FILE}" >/dev/null
+
       apt update -qq
       apt install -y nvidia-container-toolkit
       ;;
