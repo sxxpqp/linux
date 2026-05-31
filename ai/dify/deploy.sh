@@ -1,7 +1,6 @@
 #!/bin/bash
 # 系统: Linux (docker-compose)
 # Dify — 开源 LLM 应用开发平台 Docker Compose 部署脚本
-# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/ai/dify/deploy.sh
 # 用法: bash <(curl -sL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/ai/dify/deploy.sh)
 #
 # 前置要求:
@@ -56,16 +55,25 @@ check_prereqs() {
     fi
     info "Docker: $(docker --version)"
     info "Compose: $(docker compose version)"
+    if ! command -v unzip &>/dev/null; then
+        info "安装 unzip..." && yum install -y -q unzip 2>/dev/null || apt-get install -y -q unzip 2>/dev/null
+    fi
 }
 
 # ========== 获取版本 ==========
 get_version() {
     if [[ "$DIFY_VERSION" == "latest" ]]; then
         info "通过 GitHub API 获取最新版本..."
-        local api_url="${NEXUS_API_GITHUB}/repos/langgenius/dify/releases/latest"
-        DIFY_VERSION=$(curl -fsSL "$api_url" 2>/dev/null | grep -o '"tag_name":"[^"]*"' | cut -d'"' -f4 | sed 's/^v//') || true
+        DIFY_VERSION=""
+        set +e
+        local json
+        json=$(curl -fsSL "${NEXUS_API_GITHUB}/repos/langgenius/dify/releases/latest" 2>/dev/null)
+        set -e
+        if [[ -n "$json" ]]; then
+            DIFY_VERSION=$(echo "$json" | grep -o '"tag_name":"[^"]*"' | cut -d'"' -f4 | sed 's/^v//')
+        fi
         if [[ -z "$DIFY_VERSION" ]]; then
-            warn "获取最新版本失败，使用默认版本"
+            warn "GitHub API 不可达，使用默认版本 1.14.2"
             DIFY_VERSION="1.14.2"
         fi
     fi
