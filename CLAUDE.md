@@ -44,7 +44,51 @@
 
 **反面案例**:不要把脚本同时维护两份(git + chfs),否则不知不觉就漂移了。
 
-**脚本首行注释约定**:每个 `.sh` 文件必须在其**首行注释块**中包含通过 Nexus 下载的 URL,格式为:
+**脚本首行注释约定**:每个 `.sh` 文件必须在其**首行注释块**中包含以下三个标记:
+
+```bash
+# 系统: <OS 兼容性>           # 一:目标系统
+# 下载: <Nexus raw URL>        # 二:Nexus 下载链接
+# 用法: curl -sL <URL> \| bash # 三:一行式执行命令
+```
+
+**系统标记(`# 系统:`)** — 说明脚本在什么 OS 上跑:
+
+| 标记值 | 含义 | 例子 |
+|---|---|---|
+| `CentOS 7+` | CentOS 7 / Rocky Linux / AlmaLinux / RHEL 7+ | yum / dnf 系的脚本 |
+| `Ubuntu 20.04+` | Ubuntu 20.04 / 22.04 / 24.04+ | apt 系的脚本 |
+| `Debian 11+` | Debian 11 / 12+ | — |
+| `Ubuntu \| CentOS` | 脚本内部有 OS 检测,两个都支持 | 安装 Docker 等通用工具 |
+| `Linux (systemd)` | 纯 systemd + shell,不挑发行版 | sysctl / 配置模板 |
+| `Docker (cross-platform)` | docker-compose / Dockerfile 类,主机 OS 不重要 | 跑容器即可 |
+| `Kubernetes (K8s)` | 纯 kubectl / helm 操作,只在 K8s 上跑 | 部署 yaml、helm install |
+
+**判定顺序**:先看脚本内容有无 OS 检测逻辑(`ID=ubuntu` / `os-release` / `yum` / `apt`);没有则从文件路径或文件名推断。
+
+**文件名约定**:
+
+```
+<动作>-<目标>[-<OS>][-<架构>][-<方式>].sh
+```
+
+| 段 | 可选? | 常见值 |
+|---|---|---|
+| **动作** | 必填 | `install` / `deploy` / `uninstall` / `backup` / `restore` / `config` / `scale` / `init` |
+| **目标** | 必填 | 软件名:docker / nginx / k8s / nvidia-driver / kafka 等 |
+| **OS** | 可选 | OS 或平台:centos / ubuntu / wsl-ubuntu / qh(青云) |
+| **架构** | 可选 | aarch64 / armv7 / x86_64 |
+| **方式** | 可选 | offline / online / binary / source |
+
+**示例**:
+- `install-docker-offline.sh` ✅ — 动作+目标+方式
+- `install-docker-wsl-ubuntu.sh` ✅ — 动作+目标+平台
+- `deploy.sh` ⚠️ — 缺少目标,只在 docker-compose/ 子目录下可接受(目录名补齐了上下文)
+- `changplugin.sh` ❌ — 拼写错误,建议改
+
+> **宽松原则**:现有文件保持原名不改。新脚本按此约定命名。不在目录或文件名下划线数量上做死板限制,能让人扫一眼就明白"干什么、在哪跑"即可。
+
+**下载链接约定**:每个 `.sh` 文件必须在首行注释块中包含通过 Nexus 下载的 URL:
 
 ```bash
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/<path>
@@ -113,6 +157,7 @@ docker push      registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 | **Helm: ingress-nginx** | `/repository/helmingress-nginx/` | `helm repo add ingress-nginx <base>/repository/helmingress-nginx/` |
 | **Helm: KubeBlocks/apecloud** | `/repository/helm-apecloud/` | `helm repo add kubeblocks <base>/repository/helm-apecloud/` |
 | **Jenkins 更新源** | `/repository/jenkins/` | 替换 `updates.jenkins.io/download/` |
+| **Claude Code 发布包** | `/repository/claude-code/` | 代理 `downloads.claude.ai/claude-code-releases`,路径不带重复;入口见 `ai/claude-code/bootstrap.cmd` |
 | **K8s 二进制** | `/repository/kubernetes-binaries` | `minikube --binary-mirror=<base>/repository/kubernetes-binaries` |
 
 通用模板(其它 helm chart 大多走 Nexus proxy 仓库,名字一般沿用上游 chart 名):
