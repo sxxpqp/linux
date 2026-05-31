@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/centos/7/upgradekernel.sh
 set -euo pipefail
 RED='\033[0;31m'
 GREEN='\033[0;32m'

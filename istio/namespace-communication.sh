@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/istio/namespace-communication.sh
 # 1. 创建两个namespace
 ip netns add sxx
 ip netns add pqp

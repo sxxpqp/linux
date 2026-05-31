@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/minio/uninstall.sh
 # 卸载 MinIO 集群 (Bitnami helm chart 模式)
 #
 # 注意:

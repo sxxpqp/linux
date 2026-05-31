@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeadm/containerd-registry-mirror.sh
 # containerd 镜像加速配置（国内必需）
 # 用法: bash containerd-registry-mirror.sh
 

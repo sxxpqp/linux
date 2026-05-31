@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/docker-compose/rocketmq/deploy-back.sh
 # =============================================================
 # RocketMQ 5.3.2 三主三从 + Controller + Proxy 一键部署脚本
 # 集群模式：3主3从  同步策略：SYNC_MASTER  Controller：启用

@@ -1,3 +1,4 @@
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubesphere/kubesphere-update-masterip.sh
 ### 修改单节点kubesphere的masterip为127.0.0.1
 oldip=192.168.1.4
 newip=127.0.0.1

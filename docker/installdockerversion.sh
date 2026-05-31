@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/installdockerversion.sh
 # installdocker.sh - 自动检测架构的Docker 20.10二进制安装脚本
 # 使用方法: ./installdocker.sh 20.10
 

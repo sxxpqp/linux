@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/helm/install-helm.sh
 
 # Helm 安装脚本
 HELM_VERSION="v4.1.0"

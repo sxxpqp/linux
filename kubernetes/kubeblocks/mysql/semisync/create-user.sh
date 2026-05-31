@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/mysql/semisync/create-user.sh
 # 创建 MySQL 业务账号并同步到 ProxySQL.
 #
 # 同时在 MySQL 主库和 ProxySQL mysql_users 表里注册,

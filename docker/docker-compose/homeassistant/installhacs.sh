@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/docker-compose/homeassistant/installhacs.sh
 # wget -O - https://get.hacs.xyz | bash -
 
 function run() {

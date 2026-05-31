@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/mysql/paxos/scale.sh
 # KubeBlocks MySQL Paxos 集群扩缩容 (改 replicas 数).
 #
 # Paxos 多数派要求:

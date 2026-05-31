@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/etcd/etcd-backup.sh
 
 # 安全配置：失败立即终止、禁止未定义变量、管道失败则整体失败
 set -o errexit

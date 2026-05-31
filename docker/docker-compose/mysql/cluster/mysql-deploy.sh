@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/docker-compose/mysql/cluster/mysql-deploy.sh
 # ================================================================
 # MySQL InnoDB Cluster 三节点生产部署脚本
 # 用法: bash deploy.sh

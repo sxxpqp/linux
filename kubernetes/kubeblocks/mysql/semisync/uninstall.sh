@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/mysql/semisync/uninstall.sh
 # 卸载 KubeBlocks MySQL 集群.
 #
 # 用法:

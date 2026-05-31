@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/kafka/install.sh
 # 部署 KubeBlocks Kafka Cluster (KRaft 模式, 3 副本) + 每 broker 独立 advertised-listener Service.
 #
 # advertised-listener Service 类型由 cluster.yaml 里的 serviceType 决定:

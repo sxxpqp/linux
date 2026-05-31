@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/mysql/semisync/install.sh
 # 部署 KubeBlocks MySQL 集群 (1 主 + 2 从, 共 3 节点).
 #
 # 用法:

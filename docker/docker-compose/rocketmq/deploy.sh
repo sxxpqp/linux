@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/docker-compose/rocketmq/deploy.sh
 # ================================================================
 # RocketMQ 3主3从集群 三节点生产部署脚本
 # 镜像: apache/rocketmq:5.3.2 (阿里云镜像)

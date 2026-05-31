@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeadm/installk8s.sh
 # ================================================================
 #  K8s 组件安装脚本
 #  作者: sxxpqp 运智运维

@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/redis-cluster/restart.sh
 # KubeBlocks Redis Sharding Cluster 滚动重启.
 #
 # 重启期间 master 所在的 shard 会先 failover 到 slave, 再重启原 master 节点.

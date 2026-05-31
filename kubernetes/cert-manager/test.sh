@@ -1,3 +1,4 @@
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/cert-manager/test.sh
 cat <<EOF > test-resources.yaml
 apiVersion: v1
 kind: Namespace

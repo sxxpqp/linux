@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/local-path/install.sh
 # 安装 local-path-provisioner (测试/开发环境 StorageClass).
 #
 # 注意: 数据存在节点本地磁盘, 节点故障数据丢失, 不适合生产.

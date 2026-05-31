@@ -1,4 +1,5 @@
 #!/bin/sh
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh
 set -e
 # Docker Engine for Linux installation script.
 #

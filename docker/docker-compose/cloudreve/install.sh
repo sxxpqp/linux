@@ -1,4 +1,5 @@
 #!/bin/sh
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/docker-compose/cloudreve/install.sh
 # 函数：检查并创建目录
 check_and_create_dir() {
   local dir_path="$1"

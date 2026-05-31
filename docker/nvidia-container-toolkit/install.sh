@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/nvidia-container-toolkit/install.sh
 # 安装 nvidia-container-toolkit, apt 源走 Nexus raw-nvidia 代理(nvidia.github.io).
 #
 # 适用: Ubuntu / Debian 节点 (containerd 或 docker 已装)

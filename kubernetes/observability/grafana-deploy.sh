@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/observability/grafana-deploy.sh
 # 更新 Grafana Helm release，读取本目录下的 grafana-values.yaml。
 # 配置改动（数据源、Tempo→Logs 映射、derivedFields 等）后跑这个生效。
 # 用法：bash grafana-deploy.sh

@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/mysql/semisync/scale.sh
 # KubeBlocks MySQL 集群扩缩容 (改 replicas 数).
 # 最小 3 副本 (1 主 + 2 从), 保证 HA 选举 quorum.
 #

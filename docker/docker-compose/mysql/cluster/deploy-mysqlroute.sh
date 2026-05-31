@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/docker-compose/mysql/cluster/deploy-mysqlroute.sh
 # ================================================================
 # MySQL Router 部署脚本
 # 每台数据库节点各运行一个 Router 实例，应用就近连接

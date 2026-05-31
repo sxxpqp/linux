@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/install.sh
 # 安装 KubeBlocks operator (按官方三步: CRD → operator → addons)。
 # 参考: https://kubeblocks.io/docs/preview/user_docs/overview/install-kubeblocks
 #

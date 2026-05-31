@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/install-snapshotter.sh
 # 安装 Kubernetes external-snapshotter (VolumeSnapshot CRD + controller).
 # KubeBlocks dataprotection 控制器依赖这个做基于 PVC 快照的备份.
 # 不装不影响 Cluster 创建, 但 BackupSchedule 不能用 snapshot 类型,

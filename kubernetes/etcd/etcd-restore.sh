@@ -1,3 +1,4 @@
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/etcd/etcd-restore.sh
 # 1. 确认snapshot.db路径（替换为你的实际路径，比如/root/snapshot.db）
 SNAPSHOT_PATH="/home/kh/snapshot.db" # 替换为实际路径
 # 定义核心参数（根据你的集群调整）

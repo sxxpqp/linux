@@ -35,7 +35,7 @@
 
 | 类型 | 存放位置 | 拉取方式 |
 |---|---|---|
-| **脚本**(`.sh` / `.yaml` / `.conf` / 配置模板) | **git 仓库**(本仓库,公开 repo) | Nexus raw-githubusercontent 代理 GitHub,URL 形如 `<nexus>/repository/raw-githubusercontent/sxxpqp/linux/main/<path>` |
+| **脚本**(`.sh` / `.yaml` / `.conf` / 配置模板) | **git 仓库**(本仓库,公开 repo) | Nexus raw-githubusercontent 代理 GitHub,URL 形如 `<nexus>/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/<path>` |
 | **大文件**(离线包、ISO、压缩包、二进制) | **chfs 或 MinIO** | chfs 走 HTTP 直拉;MinIO 走 S3 API |
 | **镜像** | **Harbor**(代理) / 阿里 ACR(推送) | 见上面 "Harbor 架构" |
 | **Helm chart** / GitHub release 二进制 | Nexus 代理 | 见下面 "Nexus 仓库映射" |
@@ -43,6 +43,15 @@
 **好处**:脚本改了 push 一次 git,新机器执行立即拿到最新版,**不用再手动同步到 chfs**。
 
 **反面案例**:不要把脚本同时维护两份(git + chfs),否则不知不觉就漂移了。
+
+**脚本首行注释约定**:每个 `.sh` 文件必须在其**首行注释块**中包含通过 Nexus 下载的 URL,格式为:
+
+```bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/<path>
+# 用法: curl -sL <URL> | bash
+```
+
+这样在 GitHub 不通的环境下,直接 `curl -sL <Nexus URL> | bash` 就能执行,**无需 git clone**,也无需再记路径。
 
 ### Harbor 架构(关键)
 

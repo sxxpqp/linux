@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/observability/uninstall.sh
 # 卸载 LGTM + Beyla 可观测性栈。
 # 用法:
 #   bash uninstall.sh             # 标准卸载，保留 PVC/PV/namespace 和历史数据

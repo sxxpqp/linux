@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/sync-deployment/sync-deployment-get.sh
 # 获取源k8s命名空间deployment的容器的镜像
 # 用法：./get_image.sh <namespace> <deployment>
 namespace=tmc-v2-test

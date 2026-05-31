@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/redis-cluster/redisinsight-install.sh
 # 部署 RedisInsight (Redis 官方 GUI, 原生支持 Cluster 模式).
 # 集群内一个 pod, NodePort 暴露 Web UI, 浏览器直接用.
 #

@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/minio/install.sh
 # 部署 MinIO 分布式集群 (8 节点) - 用 Bitnami helm chart
 #
 # 跟 KubeBlocks 官方推荐一致 (https://kubeblocks.io/docs/preview/user_docs/references/install-minio),

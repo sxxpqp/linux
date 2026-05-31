@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubesphere/imagepull.sh
 deploy=(ks-apiserver ks-console ks-controller-manager ks-installer minio)         
 for i in ${deploy[@]}; do
     kubectl -n kubesphere-system patch deployment $i -p '{"spec":{"template":{"spec":{"containers":[{"name":"'$i'","imagePullPolicy":"IfNotPresent"}]}}}}'

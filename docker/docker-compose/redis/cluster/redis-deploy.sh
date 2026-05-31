@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/docker-compose/redis/cluster/redis-deploy.sh
 # ================================================================
 # Redis Cluster 3主3从 三节点生产部署脚本
 # 镜像: registry.cn-hangzhou.aliyuncs.com/sxxpqp/redis:7.x

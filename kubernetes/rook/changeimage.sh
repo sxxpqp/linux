@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/rook/changeimage.sh
 # 把 docker-images.txt 里列出的镜像重新 tag 并推送到阿里云 ACR sxxpqp 命名空间
 # 用法: bash changeimage.sh
 # 前置: docker login registry.cn-hangzhou.aliyuncs.com  (用户名 sxxpqp)

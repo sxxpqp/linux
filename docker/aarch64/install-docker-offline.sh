@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/aarch64/install-docker-offline.sh
 
 DOCKER_DIR="/opt" # 本地 Docker 离线包目录路径
 DOCKER_VERSION="27.3.1" # 默认 Docker 版本

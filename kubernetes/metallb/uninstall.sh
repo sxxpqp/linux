@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/metallb/uninstall.sh
 # 卸载 MetalLB.
 #
 # 顺序: 删 IPAddressPool/L2Advertisement → 删 native 清单 → namespace 自动消失.

@@ -1,3 +1,4 @@
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/add-nofile-limit.sh
 # 备份原文件
 cp /etc/security/limits.conf /etc/security/limits.conf.bak
 

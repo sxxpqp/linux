@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/observability/alloy-config.sh
 # 更新 Alloy ConfigMap 并重启 DaemonSet 拉取新配置。
 # 用法：bash alloy-config.sh
 set -euo pipefail

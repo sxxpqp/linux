@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/mysql/mysqldump.sh
 #获取当前时间
 date_now=$(date "+%Y%m%d_%H%M%S")
 #定义备份目录

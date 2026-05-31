@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/metallb/install.sh
 # 安装 MetalLB (生产推荐的 Service LoadBalancer 实现).
 #
 # 默认 L2 (ARP) 模式. BGP 模式要交换机配合, 用 bgp.yaml 替代 pool.yaml 即可.

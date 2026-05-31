@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/mysql/paxos/install.sh
 # 部署 KubeBlocks MySQL Paxos 集群 (apecloud-mysql / WeSQL, 3 节点多数派).
 #
 # 与 semisync/ 的区别:

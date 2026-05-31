@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/mysql/xtrabackup/back.sh
 #(此处写#!/usr/bin/bash同理 )
 
 #查询xtrabackup是否安装

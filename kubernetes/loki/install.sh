@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/loki/install.sh
 # 安装 Loki (Grafana Helm chart, SimpleScalable 模式)。
 # 用法:
 #   bash install.sh                # 默认用 values.yaml（MinIO 本地存储）

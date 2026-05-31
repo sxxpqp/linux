@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/learn/pod-schedule.sh
 #获取node名称
 kubectl get node|grep worker |gawk -F" " '{ print $1 }'>nodes
 

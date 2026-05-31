@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/centos/7/changeyum.sh
 
 # CentOS 7 源更新脚本 - 优化版
 # 功能：备份原YUM源，替换为新源并更新缓存

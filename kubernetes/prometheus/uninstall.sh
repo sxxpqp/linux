@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/prometheus/uninstall.sh
 # 卸载 kube-prometheus 监控栈。
 # 用法:
 #   bash uninstall.sh              # 删除所有组件，保留 CRD + PVC

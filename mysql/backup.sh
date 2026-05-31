@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/mysql/backup.sh
 # 1. 环境定义
 date_now=$(date "+%Y%m%d_%H%M%S")
 backUpFolder="/database/mysql/xianshang-backup"

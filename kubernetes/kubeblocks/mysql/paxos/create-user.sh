@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/mysql/paxos/create-user.sh
 # 创建 MySQL 业务账号并同步到 ProxySQL (Paxos 集群).
 #
 # Paxos 模式下找 leader pod (kubeblocks.io/role=leader), 在 leader 上建账号

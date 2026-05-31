@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/redis-cluster/scale.sh
 # KubeBlocks Redis Sharding Cluster 扩缩容 (改 shards 数, 不是 replicas).
 # 一个 shard = 1 master + 1 replica = 2 pod.
 # 例: scale.sh 4 表示 4 个分片 = 8 pod (4 master 各分 ~4096 个槽位).

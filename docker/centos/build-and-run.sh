@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/centos/build-and-run.sh
 
 # 构建镜像
 docker build -D --rm --no-cache -t centos:systemd -f Dockerfile .

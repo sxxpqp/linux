@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/uninstalldockerversion.sh
 # uninstall_docker.sh - Docker 20.10 二进制安装版本卸载脚本
 # 使用方法: ./uninstall_docker.sh
 

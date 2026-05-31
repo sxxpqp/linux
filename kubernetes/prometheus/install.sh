@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/prometheus/install.sh
 # 安装 kube-prometheus 监控栈 (原始 manifests 方式, 非 helm chart)。
 # 包含: prometheus-operator + prometheus + alertmanager + node-exporter
 #       + kube-state-metrics + grafana + blackbox-exporter + prometheus-adapter

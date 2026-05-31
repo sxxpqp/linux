@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/istio/bridge-namespace-communication.sh
 # 1. 创建bridge sxxpqp
 ip link add sxxpqp type bridge
 ip link list

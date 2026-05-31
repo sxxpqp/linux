@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeadm/k8s-setup-menu.sh
 # ================================================================
 #  K8s 集群一键安装菜单
 #  作者: sxxpqp 运智运维
