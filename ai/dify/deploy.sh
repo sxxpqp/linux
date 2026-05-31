@@ -36,13 +36,13 @@ check_prereqs() {
         if [[ "${answer:-Y}" =~ ^[Yy]?$ ]]; then
             info "正在安装 Docker CE..."
             curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh | bash -s docker --mirror Aliyun
-            systemctl enable --now docker
+            systemctl enable --now docker >/dev/null 2>&1
             # 配置 Harbor 镜像加速源
             info "配置 Harbor 镜像加速..."
             mkdir -p /etc/docker
             printf '{\n  "registry-mirrors": ["https://dockerhub.ihome.sxxpqp.top:8443"],\n  "insecure-registries": ["dockerhub.ihome.sxxpqp.top:8443", "ghcr.ihome.sxxpqp.top:8443"],\n  "exec-opts": ["native.cgroupdriver=systemd"],\n  "log-driver": "json-file",\n  "log-opts": {"max-size": "100m", "max-file": "5"}\n}\n' > /etc/docker/daemon.json
-            systemctl daemon-reload
-            systemctl restart docker
+            systemctl daemon-reload >/dev/null 2>&1
+            systemctl restart docker >/dev/null 2>&1
             info "Docker 安装完成，镜像加速已配置"
         else
             error "请手动安装 Docker 后重试"
