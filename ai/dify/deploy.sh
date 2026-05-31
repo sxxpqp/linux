@@ -53,7 +53,6 @@ EOF
             systemctl restart docker
             info "Docker 安装完成，镜像加速已配置"
         else
-        else
             error "请手动安装 Docker 后重试"
             exit 1
         fi
