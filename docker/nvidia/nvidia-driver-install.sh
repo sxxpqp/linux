@@ -10,7 +10,10 @@
 #
 # 支持的发行版: Ubuntu / Debian / CentOS / RHEL / Rocky / Alma
 
-set -euo pipefail
+set -uo pipefail
+
+# 调试：异常退出时打印行号
+trap 'echo "[DEBUG] 脚本在第 $LINENO 行退出，退出码: $?" >&2' ERR
 
 # ========== 颜色 ==========
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
@@ -86,11 +89,13 @@ fi
 info "检测到显卡: ${GPU}"
 
 # 已装驱动则显示版本
+info "检测完成，准备查询驱动版本..."
+
 if command -v nvidia-smi &>/dev/null; then
-  CURRENT_VER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)
+  CURRENT_VER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 || true)
   warn "当前驱动版本: ${CURRENT_VER}"
   if [ "$FORCE" != true ] && [ "$AUTO" != true ]; then
-    read -rp "驱动已装，是否重装？[y/N] " confirm
+    read -rp "驱动已装，是否重装？[y/N] " confirm || confirm="y"
     [ "$confirm" != "y" ] && [ "$confirm" != "Y" ] && { log "退出"; exit 0; }
   fi
 fi
