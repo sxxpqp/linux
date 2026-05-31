@@ -31,8 +31,17 @@ error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 # ========== 前置检查 ==========
 check_prereqs() {
     if ! command -v docker &>/dev/null; then
-        error "Docker 未安装。请先运行: curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh | bash -s docker --mirror Aliyun"
-        exit 1
+        warn "Docker 未安装"
+        read -rp "是否自动安装 Docker CE？（Y/n）: " answer
+        if [[ "${answer:-Y}" =~ ^[Yy]?$ ]]; then
+            info "正在安装 Docker CE..."
+            curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh | bash -s docker --mirror Aliyun
+            systemctl enable --now docker
+            info "Docker 安装完成"
+        else
+            error "请手动安装 Docker 后重试"
+            exit 1
+        fi
     fi
     if ! docker compose version &>/dev/null; then
         error "Docker Compose v2 未安装或版本过低。请升级 Docker Engine。"
