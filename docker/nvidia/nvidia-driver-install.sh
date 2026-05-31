@@ -4,16 +4,19 @@
 # 自动检测系统和显卡，优先用系统包管理器安装最新兼容驱动
 #
 # 用法:
-#   bash nvidia-driver-install.sh
-#   curl -sL <URL> | bash
-#   bash nvidia-driver-install.sh --nvidia-toolkit  # 只装容器工具
-#   bash nvidia-driver-install.sh --driver          # 只装驱动
+#   bash nvidia-driver-install.sh                  # 安装
+#   curl -sL <URL> | bash                          # 安装
+#   bash nvidia-driver-install.sh --uninstall      # 卸载驱动
+#   bash nvidia-driver-install.sh --nvidia-toolkit # 只装容器工具
+#   bash nvidia-driver-install.sh --driver         # 只装驱动
 
 set -u
 ONLY_TOOLKIT=false
 ONLY_DRIVER=false
+DO_UNINSTALL=false
 while [ $# -gt 0 ]; do
   case "$1" in
+    --uninstall) DO_UNINSTALL=true; shift ;;
     --nvidia-toolkit) ONLY_TOOLKIT=true; shift ;;
     --driver) ONLY_DRIVER=true; shift ;;
     -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
@@ -211,9 +214,58 @@ install_toolkit() {
 }
 
 # ================================================================
+# 卸载驱动（黑屏恢复用）
+# ================================================================
+uninstall_driver() {
+  warn "开始卸载 NVIDIA 驱动..."
+  warn "如果已黑屏无法进入系统："
+  warn "  1. 重启按住 Shift 进入 GRUB 菜单"
+  warn "  2. 选 Advanced options → Recovery mode → root shell"
+  warn "  3. 执行: bash <(curl -sL <本脚本URL>) --uninstall"
+  warn "  4. 或者手动: mount -o rw,remount / && apt purge nvidia-* && update-grub && reboot"
+  echo ""
+
+  case "${ID}" in
+    ubuntu|debian)
+      apt purge -y nvidia-* cuda-* libnvidia-* 2>/dev/null || true
+      apt autoremove -y 2>/dev/null || true
+      # 清除 nvidia-container-toolkit
+      apt purge -y nvidia-container-toolkit 2>/dev/null || true
+      rm -f /etc/apt/sources.list.d/nvidia-container-toolkit.list 2>/dev/null || true
+      rm -f /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg 2>/dev/null || true
+      ;;
+    centos|rhel|rocky|almalinux)
+      yum remove -y kmod-nvidia nvidia-* cuda-* libnvidia-* 2>/dev/null || true
+      rm -f /etc/yum.repos.d/nvidia-container-toolkit.repo 2>/dev/null || true
+      ;;
+  esac
+
+  # 清理 Blacklist 和 modprobe 配置
+  rm -f /etc/modprobe.d/nvidia*.conf 2>/dev/null || true
+  rm -f /etc/modules-load.d/nvidia*.conf 2>/dev/null || true
+
+  # 移除 nomodeset（以防下次装其他显卡）
+  local GRUB_FILE="/etc/default/grub"
+  if [ -f "$GRUB_FILE" ] && grep -q "nomodeset" "$GRUB_FILE"; then
+    sed -i 's/ nomodeset//g; s/nomodeset //g' "$GRUB_FILE"
+    case "${ID}" in
+      ubuntu|debian) update-grub ;;
+      centos|rhel|rocky|almalinux) grub2-mkconfig -o /boot/grub2/grub.cfg ;;
+    esac
+    info "已移除 nomodeset"
+  fi
+
+  info "NVIDIA 驱动已卸载，重启即可恢复"
+  echo ""
+  echo "  reboot"
+}
+
+# ================================================================
 # 执行
 # ================================================================
-if [ "$ONLY_TOOLKIT" = true ]; then
+if [ "$DO_UNINSTALL" = true ]; then
+  uninstall_driver
+elif [ "$ONLY_TOOLKIT" = true ]; then
   install_toolkit
 elif [ "$ONLY_DRIVER" = true ]; then
   prepare_env
@@ -226,11 +278,13 @@ fi
 
 # 验证
 echo ""
-if command -v nvidia-smi &>/dev/null; then
-  info "驱动版本: $(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)"
-  echo ""
-  echo " nvidia-smi  # 查看 GPU 状态"
-  echo " docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi  # 验证 Docker GPU"
-else
-  warn "需要重启系统使驱动生效: reboot"
+if [ "$DO_UNINSTALL" != true ]; then
+  if command -v nvidia-smi &>/dev/null; then
+    info "驱动版本: $(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)"
+    echo ""
+    echo " nvidia-smi  # 查看 GPU 状态"
+    echo " docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi  # 验证 Docker GPU"
+  else
+    warn "需要重启系统使驱动生效: reboot"
+  fi
 fi
