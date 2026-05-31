@@ -15,11 +15,11 @@ if [ "$OS_TYPE" == "Linux" ]; then
     if [ -f /etc/debian_version ]; then
         # Debian/Ubuntu系统
         PACKAGE_MANAGER="apt-get"
-        DOCKER_PACKAGES="docker.io docker-doc docker-compose podman-docker containerd runc"
+        DOCKER_PACKAGES="docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker.io docker-doc docker-compose podman-docker containerd runc"
     elif [ -f /etc/redhat-release ]; then
         # CentOS/RHEL系统
         PACKAGE_MANAGER="yum"
-        DOCKER_PACKAGES="docker docker-client docker-common docker-engine docker-compose podman-docker containerd.io runc"
+        DOCKER_PACKAGES="docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras docker docker-client docker-common docker-engine docker-compose podman-docker runc"
     else
         echo "不支持的Linux发行版，无法确定包管理器。"
         exit 1
@@ -40,6 +40,11 @@ echo "即将卸载的Docker组件：$DOCKER_PACKAGES"
 #     echo "已取消卸载操作。"
 #     exit 0
 # fi
+
+# 停止 Docker 服务
+echo "停止 Docker 服务..."
+systemctl stop docker docker.socket 2>/dev/null || true
+systemctl disable docker docker.socket 2>/dev/null || true
 
 # 执行卸载
 echo "开始卸载Docker组件..."
@@ -74,5 +79,8 @@ if [ "$PACKAGE_MANAGER" == "yum" ]; then
     yum autoremove -y
     yum clean all
 fi
+
+echo "清理 Docker 残留文件..."
+rm -rf /var/lib/docker /var/lib/containerd /etc/docker 2>/dev/null || true
 
 echo "Docker组件卸载完成！"
