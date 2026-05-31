@@ -77,6 +77,7 @@ Linux 运维知识库，涵盖容器编排、云原生、CI/CD、监控、网络
 | 目录 | 内容 | 状态 |
 |---|---|---|
 | [ai/claude-code/](ai/claude-code/bootstrap.cmd) | Claude Code Windows 安装脚本（Nexus 加速） | 验证过 |
+| [ai/dify/](ai/dify/deploy.sh) | Dify LLM 应用平台 Docker Compose 一键部署 | 验证过 |
 | [ai/nvidia/](ai/nvidia/) | NVIDIA GPU 驱动 + Container Toolkit 安装（走 Nexus 代理） | ✅ 生产验证 |
 | [ai/nvidia-container-toolkit/](ai/nvidia-container-toolkit/) | GPU 节点 nvidia-container-toolkit 配置 | ✅ 生产验证 |
 | [ai/ollama/](ai/ollama/) | Ollama 本地 LLM 部署 | 验证过 |
