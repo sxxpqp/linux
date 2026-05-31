@@ -15,7 +15,7 @@ kubeadm init --apiserver-advertise-address $(hostname -i) --pod-network-cidr 10.
 ### 安装网络插件
 
 ```
-kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/cloudnativelabs/kube-router/master/daemonset/kubeadm-kuberouter.yaml
+kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/cloudnativelabs/kube-router/master/daemonset/kubeadm-kuberouter.yaml
 ```
 
 ### 部署负载均衡 实现 kube-apiserver 高可用

@@ -1,5 +1,5 @@
 # install docker
-curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/main/linux/docker/install-docker.sh -o get-docker.sh
+curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/main/docker/install-docker.sh -o get-docker.sh
 sh get-docker.sh
 
 if [ ! $(getent group docker) ];

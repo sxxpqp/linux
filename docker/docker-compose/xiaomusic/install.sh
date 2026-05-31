@@ -7,4 +7,4 @@ if [ -d "xiaomusic" ]; then
 else
   mkdir xiaomusic  && cd xiaomusic
 fi
-curl https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/main/linux/docker/docker-compose/xiaomusic/docker-compose.yaml -o docker-compose.yaml
+curl https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/main/docker/docker-compose/xiaomusic/docker-compose.yaml -o docker-compose.yaml

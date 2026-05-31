@@ -31,7 +31,7 @@ else
  cd $(pwd)/cloudreve
 fi
 # 下载文件通过curl
-curl https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/main/linux/docker/docker-compose/cloudreve/docker-compose.yml -o docker-compose.yml
+curl https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/main/docker/docker-compose/cloudreve/docker-compose.yml -o docker-compose.yml
 # 执行docker-compose
 if [ -d "$PWD/data" ]; then
    echo "directory \"mkdir -p $PWD/data\" exists"

@@ -36,7 +36,7 @@ done
 #   2. --manifest <path|url> 显式指定
 #   3. Nexus raw 代理 (在线兜底)
 NATIVE_LOCAL="${DIR}/metallb-native.yaml"
-NATIVE_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/metallb/metallb/${VERSION}/config/manifests/metallb-native.yaml"
+NATIVE_URL="https://nexus.ihome.sxxpqp.top:8443/metallb/metallb/${VERSION}/config/manifests/metallb-native.yaml"
 
 if [ -f "${NATIVE_LOCAL}" ]; then
   NATIVE_SRC="${NATIVE_LOCAL}"

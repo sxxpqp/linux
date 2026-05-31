@@ -24,7 +24,7 @@ bash install.sh --version v0.14.5
 ```bash
 # 通过 Nexus raw-githubusercontent 代理下载 (版本对齐 install.sh)
 curl -kLo metallb-native.yaml \
-  https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/metallb/metallb/v0.14.8/config/manifests/metallb-native.yaml
+  https://nexus.ihome.sxxpqp.top:8443/metallb/metallb/v0.14.8/config/manifests/metallb-native.yaml
 
 # 跟 install.sh 同目录, install.sh 会自动用本地的
 bash install.sh

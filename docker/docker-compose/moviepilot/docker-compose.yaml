@@ -145,7 +145,7 @@ services:
       - 'USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36'
       - 'SUBSCRIBE_SEARCH=false' # 交互搜索自动下载用户ID，使用,分割
       - 'AUTO_DOWNLOAD_USER=' # 插件市场仓库地址，多个地址使用`,`分隔，保留最后的/
-      - 'PLUGIN_MARKET=https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/jxxghp/MoviePilot-Plugins/main/' # 消息通知渠道，支持 telegram/wechat/slack/synologychat
+      - 'PLUGIN_MARKET=https://nexus.ihome.sxxpqp.top:8443/jxxghp/MoviePilot-Plugins/main/' # 消息通知渠道，支持 telegram/wechat/slack/synologychat
       - 'MESSAGER=telegram'
       - 'TELEGRAM_TOKEN=xxxxxx'
       - 'TELEGRAM_CHAT_ID=xxxxxxxxxxxx'

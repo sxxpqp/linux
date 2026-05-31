@@ -78,7 +78,7 @@ main() {
     
     # 下载新YUM源配置
     log_info "下载新YUM源配置文件"
-    repo_url="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/linux/centos/7/CentOS-Base.repo"
+    repo_url="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/centos/7/CentOS-Base.repo"
     repo_file="/etc/yum.repos.d/CentOS-Base.repo"
     
     if curl -L -o "$repo_file" "$repo_url"; then
