@@ -54,23 +54,22 @@ prepare_env() {
 
   case "${ID}" in
     ubuntu|debian)
-      if command -v gcc &>/dev/null; then
-        info "GCC 已安装: $(gcc --version | head -1)"
-      else
-        warn "未找到 GCC，安装 build-essential..."
-        apt update -qq
-        apt install -y build-essential
-        info "GCC 已安装: $(gcc --version | head -1)"
+      # GCC + 内核头文件（必须匹配当前内核版本）
+      apt update -qq
+      if ! command -v gcc &>/dev/null || ! ls /lib/modules/$(uname -r)/build &>/dev/null; then
+        warn "安装 GCC + 内核头文件 (linux-headers-$(uname -r))..."
+        apt install -y build-essential linux-headers-$(uname -r)
       fi
+      info "GCC: $(gcc --version 2>/dev/null | head -1)"
+      info "内核头: linux-headers-$(uname -r)"
       ;;
     centos|rhel|rocky|almalinux)
-      if command -v gcc &>/dev/null; then
-        info "GCC 已安装: $(gcc --version | head -1)"
-      else
-        warn "未找到 GCC，安装 gcc + kernel-devel..."
-        yum install -y gcc kernel-devel
-        info "GCC 已安装: $(gcc --version | head -1)"
+      if ! command -v gcc &>/dev/null || ! rpm -q kernel-devel &>/dev/null; then
+        warn "安装 GCC + kernel-devel..."
+        yum install -y gcc kernel-devel kernel-headers
       fi
+      info "GCC: $(gcc --version 2>/dev/null | head -1)"
+      info "内核头: kernel-devel-$(uname -r)"
       ;;
   esac
 
