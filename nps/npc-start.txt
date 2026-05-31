@@ -1,0 +1,4 @@
+sc create npc binPath= "C:\npc\npc.exe -server=nps.sxxpqp.top:8024 -vkey=wo8key8849toujc9 -type=tcp"
+sc start npc
+sc config npc start= auto
+sc qc npc

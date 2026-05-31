@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  ddns-go:
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/ddns-go
+    container_name: ddns-go
+    restart: always
+    network_mode: host
+    volumes:
+      - ./ddns-go:/root

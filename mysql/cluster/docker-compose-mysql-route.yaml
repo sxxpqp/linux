@@ -1,0 +1,15 @@
+services:  
+  mysql-router:
+    image: mysql/mysql-router:8.0
+    container_name: mysql-router
+    environment:
+      - MYSQL_HOST=172.16.150.129
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=123456  # 必须和上面 SQL 改的一致
+      - MYSQL_INNODB_CLUSTER_MEMBERS=3
+    ports:
+      - "6446:6446"
+      - "6447:6447"
+    restart: always
+    # 删掉之前的 command 这一行！

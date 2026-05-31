@@ -1,0 +1,17 @@
+version: '3.3'
+services:
+  alist:
+    restart: always
+    volumes:
+      - '/etc/alist:/opt/alist/data'
+      - '${choice_alist:-/mnt/d/chfs/}:/mnt/d/chfs/'
+    ports:
+      - '5244:5244'
+      - '5245:5245'
+    environment:
+      - PUID=0
+      - PGID=0
+      - UMASK=022
+      - TZ=Asia/Shanghai
+    container_name: alist
+    image: 'registry.cn-hangzhou.aliyuncs.com/sxxpqp/alist:latest'

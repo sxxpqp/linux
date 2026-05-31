@@ -1,0 +1,38 @@
+FROM ubuntu:22.04
+# 安装 systemd 及依赖
+RUN sed -i "s@http://.*archive.ubuntu.com@http://mirrors.huaweicloud.com@g" /etc/apt/sources.list && \
+    sed -i "s@http://.*security.ubuntu.com@http://mirrors.huaweicloud.com@g" /etc/apt/sources.list
+RUN  apt-get update && apt-get install -y --no-install-recommends \
+    systemd \
+    systemd-sysv \
+    iproute2  \
+    openssh-server sudo curl inetutils-ping && \
+    apt-get clean all
+# Create default 'sxxpqp/sxxpqp' user
+RUN   useradd --create-home --shell /bin/bash sxxpqp && echo "sxxpqp:sxxpqp" | chpasswd && adduser sxxpqp sudo
+
+# 配置SSH服务
+RUN sed -i 's/#PermitRootLogin yes/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#UseDNS yes/UseDNS no/' /etc/ssh/sshd_config && \
+    sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
+
+
+# 禁用不必要的服务（容器内无需硬件相关服务）
+RUN systemctl mask systemd-udevd.service \
+    systemd-udevd-kernel.socket \
+    systemd-udevd-control.socket \
+    systemd-modules-load.service \
+    sys-kernel-debug.mount \
+    sys-kernel-tracing.mount
+# 创建 systemd 容器标识
+RUN mkdir -p /run/systemd && echo "docker" > /run/systemd/container
+RUN systemctl enable ssh
+STOPSIGNAL SIGRTMIN+3
+# 启动 systemd（必须作为 PID 1 进程）
+CMD ["/lib/systemd/systemd"]
+
+
+# docker run -d  --privileged  --name  systemd  ubuntu:systemd 
+
+# docker rm -f systemd

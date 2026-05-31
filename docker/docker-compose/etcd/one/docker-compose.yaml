@@ -1,0 +1,107 @@
+version: '3.8'
+
+# ============================================================
+# etcd 单机版 - 生产可用
+# ============================================================
+# 用途:开发/测试/小规模生产
+# 注意:单节点没有高可用,节点挂了服务就没了,生产核心业务请用三节点集群
+# ============================================================
+
+services:
+  etcd:
+    image: bitnami/etcd:3.5.15
+    container_name: etcd
+    restart: always
+    ports:
+      - "2379:2379"   # 客户端 API 端口
+      - "2380:2380"   # peer 通信端口(单机用不上,但留着方便以后扩成集群)
+    environment:
+      # ---------- 基础配置 ----------
+      - ETCD_NAME=etcd-single
+      - ETCD_DATA_DIR=/bitnami/etcd/data
+
+      # ---------- 监听地址 ----------
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd:2380
+
+      # ---------- 集群配置(单节点集群)----------
+      - ETCD_INITIAL_CLUSTER=etcd-single=http://etcd:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster-single
+
+      # ---------- 认证 ----------
+      # 生产环境强烈建议开启认证,测试环境可设为 yes 关闭认证
+      - ALLOW_NONE_AUTHENTICATION=no
+      - ETCD_ROOT_PASSWORD=Root@Etcd2026
+
+      # ---------- 存储与压缩(生产优化)----------
+      # 自动压缩历史版本,单位为小时,避免数据无限增长
+      - ETCD_AUTO_COMPACTION_MODE=periodic
+      - ETCD_AUTO_COMPACTION_RETENTION=1h
+      # 配额上限 8GB,超过会拒绝写入
+      - ETCD_QUOTA_BACKEND_BYTES=8589934592
+      # 单次请求最大字节数(默认 1.5MB,按需调整)
+      - ETCD_MAX_REQUEST_BYTES=1572864
+
+      # ---------- 快照与心跳 ----------
+      - ETCD_SNAPSHOT_COUNT=10000
+      - ETCD_HEARTBEAT_INTERVAL=100
+      - ETCD_ELECTION_TIMEOUT=1000
+
+      # ---------- 日志 ----------
+      - ETCD_LOG_LEVEL=info
+      - ETCD_LOGGER=zap
+
+      # ---------- 兼容 v2 API(仅当你需要 v2 API 时开启)----------
+      # v2 API 已废弃,默认不开启;如确实需要,取消下一行注释
+      # - ETCD_ENABLE_V2=true
+
+      - TZ=Asia/Shanghai
+
+    volumes:
+      - ./data:/bitnami/etcd/data
+
+    # ---------- 资源限制 ----------
+    mem_limit: 2g
+    cpus: 2.0
+
+    # ---------- 健康检查 ----------
+    healthcheck:
+      test: ["CMD", "etcdctl", "--user=root:Root@Etcd2026", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+    networks:
+      - etcd-net
+
+networks:
+  etcd-net:
+    driver: bridge
+
+# ============================================================
+# 启动步骤:
+#   1. 创建数据目录:       mkdir -p data
+#   2. 设置权限:           chmod 700 data
+#   3. 启动:              docker compose up -d
+#   4. 查看日志:           docker compose logs -f etcd
+#   5. 验证:              docker exec -it etcd etcdctl --user=root:Root@Etcd2026 endpoint status
+#
+# 首次启动后,root 用户已自动创建,但需要手工启用认证:
+#   docker exec -it etcd etcdctl --user=root:Root@Etcd2026 auth enable
+#
+# 常用命令:
+#   写 key:  docker exec -it etcd etcdctl --user=root:Root@Etcd2026 put /foo bar
+#   读 key:  docker exec -it etcd etcdctl --user=root:Root@Etcd2026 get /foo
+#   列出:    docker exec -it etcd etcdctl --user=root:Root@Etcd2026 get --prefix /
+#
+# 备份:
+#   docker exec -it etcd etcdctl --user=root:Root@Etcd2026 \
+#       snapshot save /bitnami/etcd/data/backup-$(date +%Y%m%d).db
+# ============================================================
+
+
+

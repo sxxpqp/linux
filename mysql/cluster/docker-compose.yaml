@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-mgr
+    restart: always
+    network_mode: host  # 直接使用物理机网络，方便 MGR 节点互联
+    environment:
+      MYSQL_ROOT_PASSWORD: YourRootPassword
+    volumes:
+      - ./conf/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./data:/var/lib/mysql
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"

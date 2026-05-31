@@ -1,0 +1,9 @@
+{
+  "log-opts": {
+    "max-size": "5m",
+    "max-file": "3"
+  },
+  "registry-mirrors": [
+    "https://xxx.dockerhub.sxxpqp.top/"
+  ]
+}

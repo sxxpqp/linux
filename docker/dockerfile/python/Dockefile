@@ -1,0 +1,38 @@
+# 使用官方的 Python 镜像作为基础
+FROM registry.cn-hangzhou.aliyuncs.com/sxxpqp/python:3.11.9-slim
+
+# 设置工作目录
+WORKDIR /app
+
+# 添加 apt 包依赖
+RUN sed -i 's|http://deb.debian.org/debian|https://mirrors.tuna.tsinghua.edu.cn/debian|g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's|http://deb.debian.org/debian-security|https://mirrors.tuna.tsinghua.edu.cn/debian-security|g' /etc/apt/sources.list.d/debian.sources &&  \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    libssl-dev \
+    libffi-dev \
+    libxml2-dev \
+    libxslt1-dev \
+    zlib1g-dev \
+    gdal-bin \
+    libgdal-dev \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 配置 pip 加速源
+RUN mkdir -p /root/.pip && \
+    echo "[global]\nindex-url = https://pypi.tuna.tsinghua.edu.cn/simple\n[install]\ntrusted-host = pypi.tuna.tsinghua.edu.cn" > /root/.pip/pip.conf
+
+# 拷贝项目文件到容器
+COPY . .
+
+# 安装 pip 依赖
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1
+
+# 默认启动命令
+CMD ["python", "data.py"]

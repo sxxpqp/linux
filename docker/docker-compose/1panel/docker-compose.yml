@@ -1,0 +1,22 @@
+services:
+  1panel:
+    container_name: 1panel # 容器名
+    restart: always
+    network_mode: "host"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./volumes:/var/lib/docker/volumes
+      - ${choice_1panel:-/opt/1panel}/opt:${choice_1panel:-/opt/1panel}/opt # 文件存储映射
+      - ./root:/root  # 可选的文件存储映射
+    environment:
+      - TZ=Asia/Shanghai  # 时区设置
+      - PANEL_BASE_DIR=${choice_1panel:-/opt/1panel}/opt
+      - PANEL_PORT=10088
+      - PANEL_ENTRANCE=koryking
+      - PANEL_USERNAME=koryking
+      - PANEL_PASSWORD=koryking999
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/1panel:latest
+    labels:
+      createdBy: "Apps"
+
+ 

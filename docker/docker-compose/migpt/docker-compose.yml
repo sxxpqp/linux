@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  migpt-next:
+    image: idootop/migpt-next:latest
+    container_name: migpt-next
+    volumes:
+      - ./config.js:/app/config.js
+    stdin_open: true
+    tty: true
+    restart: unless-stopped

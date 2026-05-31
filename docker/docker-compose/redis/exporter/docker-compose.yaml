@@ -1,0 +1,20 @@
+services:
+  redis-exporter-master:
+    image: hub.wishfoxs.com:6443/middleware/redis_exporter
+    container_name: redis-exporter-master
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=192.168.100.24:6379
+      - REDIS_PASSWORD=redis123
+    restart: always
+
+  redis-exporter-slave:
+    image: hub.wishfoxs.com:6443/middleware/redis_exporter
+    container_name: redis-exporter-slave
+    ports:
+      - "9122:9121"
+    environment:
+      - REDIS_ADDR=192.168.100.24:6380
+      - REDIS_PASSWORD=redis123
+    restart: always

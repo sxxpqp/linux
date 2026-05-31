@@ -1,0 +1,61 @@
+---
+  apiVersion: networking.k8s.io/v1
+  kind: Ingress
+  metadata:
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: "50000m"
+      nginx.ingress.kubernetes.io/client-max-body-size: "50000m"  
+    name: dockerhub
+    namespace: default
+  spec:
+    ingressClassName: nginx
+    rules:
+    - host: dockerhub.sxxpqp.us.kg
+      http:
+        paths:
+        - backend:
+            service:
+              name: dockerhub
+              port:
+                number: 80
+          path: /
+          pathType: Prefix
+    tls:
+    - hosts:
+      - dockerhub.sxxpqp.us.kg
+      secretName: dockerhub
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dockerhub-deployment
+  labels:
+    app: dockerhub
+spec:
+  replicas: 1  # Number of Nginx pods to run
+  selector:
+    matchLabels:
+      app: dockerhub
+  template:
+    metadata:
+      labels:
+        app: dockerhub
+    spec:
+      containers:
+      - name: dockerhub
+        image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/dockerproxy:v4 # Use the official Nginx image
+        ports:
+        - containerPort: 80  # Expose port 80 inside the container
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dockerhub
+spec:
+  selector:
+    app: dockerhub  # Match the label of the Nginx pods
+  ports:
+    - protocol: TCP
+      port: 80  # External port (can be any valid port, e.g., 80 or 8080)
+      targetPort: 80

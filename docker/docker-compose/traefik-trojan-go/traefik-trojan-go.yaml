@@ -1,0 +1,62 @@
+# mkdir  traefik-trojan-go
+#cd traefik-trojan-go
+#mkdir config 
+#cd config
+#wget  config.json
+
+#cd ..
+#mkdir letsencrypt
+
+#cd letsencrypt
+#touch acme.json
+
+
+version: '3.7'
+services:
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    restart: always
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=sxxpqp@sxxpqp.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.sxxpqp.top`) || Host(`clash.sxxpqp.top`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=myresolver"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./letsencrypt:/letsencrypt"
+    networks:
+      - web
+  certdumper:
+    image: humenius/traefik-certs-dumper:latest
+    volumes:
+    - ./letsencrypt/acme.json:/traefik/acme.json:ro
+    - ./ssl:/output:rw
+  trojan:
+    image: trojangfw/trojan
+    restart: always
+    network_mode: "host"
+    volumes:
+      - ./config:/etc/trojan
+      - ./ssl:/etc/trojan/ssl
+    environment:
+      - TZ=Asia/Shanghai
+    command: trojan -c /etc/trojan/config.json
+networks:
+  web:
+    external: true     

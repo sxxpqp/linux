@@ -1,0 +1,1 @@
+dockerfile 文件中的版本需要修改不是对应版本了 add https://github.com/alibaba/nacos/blob/2.5.0/distribution/conf/mysql-schema.sql 

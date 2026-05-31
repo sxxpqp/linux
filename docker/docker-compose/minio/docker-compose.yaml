@@ -1,0 +1,18 @@
+version: '3'
+
+services:
+  minio:
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/minio
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=nas.3216.cn
+      - MINIO_DOMAIN=nas.3216.cn
+    command: server --console-address ":9001" /data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+volumes:
+  minio_data:

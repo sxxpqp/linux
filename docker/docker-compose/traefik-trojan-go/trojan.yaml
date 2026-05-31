@@ -1,0 +1,24 @@
+# mkdir  traefik-trojan-go
+#cd traefik-trojan-go
+#mkdir config
+#cd config
+#wget  config.json
+
+#cd ..
+#mkdir letsencrypt
+
+#cd letsencrypt
+#touch acme.json
+
+version: "3.7"
+services:
+  trojan:
+    image: trojangfw/trojan
+    restart: always
+    network_mode: "host"
+    volumes:
+      - ./config:/etc/trojan
+      - ./ssl:/etc/trojan/ssl
+    environment:
+      - TZ=Asia/Shanghai
+    command: trojan -c /etc/trojan/config.json

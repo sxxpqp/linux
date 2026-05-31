@@ -1,0 +1,7 @@
+{
+  "log-opts": {
+    "max-size": "5m",
+    "max-file":"3"
+  },
+  "registry-mirrors": ["https://dockerproxy.1panel.live","https://dockerhubk.sxxpqp.top"]
+}

@@ -1,0 +1,32 @@
+# 仅供学习使用，不得用于商业用途
+version: '3'
+services:
+  clash:
+    # image: dreamacro/clash-premium
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/clash-premium
+    container_name: clash-premium
+    volumes:
+      - ./config.yaml:/root/.config/clash/config.yaml
+      #- ./profiles:/root/.config/clash/profiles
+      # - ./ui:/ui # 需要启用 UI 时取消注释此行
+    # ports:
+    #   - "7890:7890"   # SOCKS5 代理
+    #   - "7891:7891"   # HTTP 代理
+    #   - "9090:9090"   # 外部控制（Restful API）
+    # TUN 模式（如果需要）
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    restart: unless-stopped
+    # network_mode: "bridge"  # 或者 "host" 模式
+    network_mode: "host"  # 或者 "host" 模式
+
+  yacd:
+    # image: ghcr.io/haishanh/yacd:master
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/yacd:master
+    container_name: clash-yacd
+    ports:
+      - "1234:80"   # Yacd Web UI 默认端口
+    restart: unless-stopped
+    network_mode: "bridge"

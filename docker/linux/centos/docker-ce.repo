@@ -1,0 +1,27 @@
+[docker-ce-stable]
+name=Docker CE Stable - $basearch
+baseurl=https://mirrors.ihome.sxxpqp.top:8443/docker-ce/linux/centos/$releasever/$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey=https://mirrors.ihome.sxxpqp.top:8443/docker-ce/linux/centos/gpg
+
+[docker-ce-stable-source]
+name=Docker CE Stable - Sources
+baseurl=https://mirrors.ihome.sxxpqp.top:8443/docker-ce/linux/centos/$releasever/source/stable
+enabled=0
+gpgcheck=1
+gpgkey=https://mirrors.ihome.sxxpqp.top:8443/docker-ce/linux/centos/gpg
+
+[docker-ce-test]
+name=Docker CE Test - $basearch
+baseurl=https://mirrors.ihome.sxxpqp.top:8443/docker-ce/linux/centos/$releasever/$basearch/test
+enabled=0
+gpgcheck=1
+gpgkey=https://mirrors.ihome.sxxpqp.top:8443/docker-ce/linux/centos/gpg
+
+[docker-ce-test-source]
+name=Docker CE Test - Sources
+baseurl=https://mirrors.ihome.sxxpqp.top:8443/docker-ce/linux/centos/$releasever/source/test
+enabled=0
+gpgcheck=1
+gpgkey=https://mirrors.ihome.sxxpqp.top:8443/docker-ce/linux/centos/gpg

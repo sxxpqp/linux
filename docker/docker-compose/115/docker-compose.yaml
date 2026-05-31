@@ -1,0 +1,12 @@
+version: '3'
+services:
+  115pc:
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/115pc:latest
+    container_name: 115pc
+    ports:
+      - "11580:5800"
+      - "11591:5900"
+    volumes:
+      - ./config:/config
+      - ./115download:/Downloads/115download
+    restart: always

@@ -1,0 +1,4 @@
+docker run -d --name=frps --restart=always \
+    --network host \
+    -v /root/frps/frps.toml:/frp/frps.toml  \
+    stilleshan/frps

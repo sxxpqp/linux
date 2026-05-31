@@ -1,0 +1,30 @@
+services:
+  redis:
+    # 移除了过时的 'version: 2' 键
+    # 使用您指定的私有仓库镜像
+    image: dockerhub.ihome.sxxpqp.top:8443/library/redis:7.4  
+    restart: always
+    ports:
+      - '6379:6379'
+    volumes:
+      - ./tmp:/tmp
+      # 确保您本地存在 redis.conf 文件
+      - ./data:/data
+      # 使用 Docker 管理的命名卷进行数据持久化
+      #  - 'redis_data:/data'
+    # 添加工作目录，帮助解决权限问题
+    working_dir: /data
+    command:
+        # 指定服务器运行时使用这个工作目录
+      - redis-server
+      - /data/redis.conf
+      # 确保 Redis 在后台启动，并将数据文件放在 /data 目录
+      - --dir
+      - /data
+
+# 定义 Docker 管理的命名卷
+volumes:
+  redis_data:
+    driver: local
+
+# 移除了未使用的 networks 部分

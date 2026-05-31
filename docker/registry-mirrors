@@ -1,0 +1,38 @@
+加速源地址：https://02bi.dockerhub.sxxpqp.top   
+***需要重启docker生效***
+1. linux
+https://chfs.sxxpqp.top:8443/chfs/shared/docker/video/linux-install-docker.mp4
+2. nas群晖
+https://chfs.sxxpqp.top:8443/chfs/shared/docker/video/Synologynas.png
+3. 极空间
+https://chfs.sxxpqp.top:8443/chfs/shared/docker/video/ESnas.mp4
+4.绿联
+https://chfs.sxxpqp.top:8443/chfs/shared/docker/video/UGREENnas.mp4
+5. 飞牛
+https://chfs.sxxpqp.top:8443/chfs/shared/docker/video/fnos-docker.png
+6. windows
+https://chfs.sxxpqp.top:8443/chfs/shared/docker/video/win-docker.png
+---
+linux 配置镜像加速 xxx替换实际的值<<加速源地址>>
+sudo vi /etc/docker/daemon.json
+{
+  "registry-mirrors": ["https://xxx.sxxpqp.top"]
+}
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+---
+---
+windodws Docker Engine中修改镜像加速 xxx替换实际的值<<加速源地址>>
+{
+  "experimental": false,
+  "registry-mirrors": [
+    "https://xxx.sxxpqp.top"
+  ]
+}
+---
+---
+测试命令：
+docker run hello-world
+出现Hello from Docker! 表示正常
+---
+如：无法正常使用修改dns为223.5.5.5 关闭代理等 

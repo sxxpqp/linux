@@ -1,0 +1,189 @@
+version: '3.8'
+
+# ============================================================
+# etcd 三节点集群 - 生产高可用
+# ============================================================
+# Raft 协议要求多数派存活:3 节点允许挂 1 个
+# 生产建议:
+#   - 三台节点放在不同物理机(这里用 docker-compose 演示部署在一台机器上仅作测试)
+#   - 真正生产应使用 3 台独立服务器,每台跑一个 etcd 容器,通过实机 IP 互联
+# ============================================================
+
+x-etcd-common: &etcd-common
+  image: bitnami/etcd:3.5.15
+  restart: always
+  environment: &etcd-common-env
+    # ---------- 集群通用配置 ----------
+    ETCD_INITIAL_CLUSTER_STATE: new
+    ETCD_INITIAL_CLUSTER_TOKEN: etcd-cluster-prod
+    ETCD_INITIAL_CLUSTER: etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+
+    # ---------- 认证 ----------
+    ALLOW_NONE_AUTHENTICATION: "no"
+    ETCD_ROOT_PASSWORD: Root@Etcd2026
+
+    # ---------- 存储与压缩 ----------
+    ETCD_AUTO_COMPACTION_MODE: periodic
+    ETCD_AUTO_COMPACTION_RETENTION: 1h
+    ETCD_QUOTA_BACKEND_BYTES: 8589934592
+    ETCD_MAX_REQUEST_BYTES: 1572864
+
+    # ---------- 快照 ----------
+    ETCD_SNAPSHOT_COUNT: 10000
+
+    # ---------- Raft 心跳与选举超时 ----------
+    # 同机房网络延迟低,100ms 心跳足够;跨机房可调大到 250-500
+    ETCD_HEARTBEAT_INTERVAL: 100
+    ETCD_ELECTION_TIMEOUT: 1000
+
+    # ---------- 日志 ----------
+    ETCD_LOG_LEVEL: info
+    ETCD_LOGGER: zap
+
+    TZ: Asia/Shanghai
+  mem_limit: 4g
+  cpus: 2.0
+  networks:
+    - etcd-net
+
+services:
+  # ============ 节点 1 ============
+  etcd1:
+    <<: *etcd-common
+    container_name: etcd1
+    hostname: etcd1
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    environment:
+      <<: *etcd-common-env
+      ETCD_NAME: etcd1
+      ETCD_DATA_DIR: /bitnami/etcd/data
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd1:2379
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd1:2380
+    volumes:
+      - ./data/etcd1:/bitnami/etcd/data
+    healthcheck:
+      test: ["CMD", "etcdctl", "--user=root:Root@Etcd2026", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ============ 节点 2 ============
+  etcd2:
+    <<: *etcd-common
+    container_name: etcd2
+    hostname: etcd2
+    ports:
+      - "2389:2379"
+      - "2390:2380"
+    environment:
+      <<: *etcd-common-env
+      ETCD_NAME: etcd2
+      ETCD_DATA_DIR: /bitnami/etcd/data
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd2:2379
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd2:2380
+    volumes:
+      - ./data/etcd2:/bitnami/etcd/data
+    healthcheck:
+      test: ["CMD", "etcdctl", "--user=root:Root@Etcd2026", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ============ 节点 3 ============
+  etcd3:
+    <<: *etcd-common
+    container_name: etcd3
+    hostname: etcd3
+    ports:
+      - "2399:2379"
+      - "2400:2380"
+    environment:
+      <<: *etcd-common-env
+      ETCD_NAME: etcd3
+      ETCD_DATA_DIR: /bitnami/etcd/data
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd3:2379
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd3:2380
+    volumes:
+      - ./data/etcd3:/bitnami/etcd/data
+    healthcheck:
+      test: ["CMD", "etcdctl", "--user=root:Root@Etcd2026", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  etcd-net:
+    driver: bridge
+
+# ============================================================
+# 启动步骤:
+#   1. 创建数据目录:   mkdir -p data/etcd1 data/etcd2 data/etcd3
+#   2. 启动集群:      docker compose up -d
+#   3. 查看状态:      docker compose ps
+#   4. 等待 Leader 选举(约 10 秒)
+#
+# 验证集群:
+#   # 查看成员列表
+#   docker exec -it etcd1 etcdctl --user=root:Root@Etcd2026 \
+#       --endpoints=etcd1:2379,etcd2:2379,etcd3:2379 member list
+#
+#   # 查看各节点状态
+#   docker exec -it etcd1 etcdctl --user=root:Root@Etcd2026 \
+#       --endpoints=etcd1:2379,etcd2:2379,etcd3:2379 \
+#       endpoint status --write-out=table
+#
+#   # 查看 Leader
+#   docker exec -it etcd1 etcdctl --user=root:Root@Etcd2026 \
+#       --endpoints=etcd1:2379,etcd2:2379,etcd3:2379 \
+#       endpoint status --write-out=table | grep true
+#
+# 启用认证(首次部署后执行):
+#   docker exec -it etcd1 etcdctl --user=root:Root@Etcd2026 auth enable
+#
+# 数据读写:
+#   docker exec -it etcd1 etcdctl --user=root:Root@Etcd2026 put /foo bar
+#   docker exec -it etcd2 etcdctl --user=root:Root@Etcd2026 get /foo
+#
+# 备份(从 Leader 节点执行):
+#   docker exec -it etcd1 etcdctl --user=root:Root@Etcd2026 \
+#       snapshot save /bitnami/etcd/data/backup-$(date +%Y%m%d-%H%M).db
+#
+# 故障模拟(演示高可用):
+#   docker stop etcd1             # 挂掉一个节点
+#   docker exec -it etcd2 etcdctl ... endpoint status   # 集群仍正常工作
+#   docker start etcd1            # 恢复
+# ============================================================
+
+# ============================================================
+# ⚠️ 生产部署建议(真·分布式)
+# ============================================================
+# 上面的 compose 把 3 个节点跑在一台机器上,只是演示。真正高可用必须:
+#   1. 三台独立的物理机/云主机(不同可用区更好)
+#   2. 每台跑一个 etcd 容器,通过 host 网络或实机 IP 互联
+#   3. 建议开启 TLS:peer 间通信和 client 访问都用证书
+#   4. 使用 SSD 磁盘,etcd 对 fsync 延迟非常敏感
+#   5. 配置定时 snapshot 备份(cron + etcdctl snapshot save)
+#   6. 接入 Prometheus 监控 etcd 暴露的 /metrics 接口
+#
+# 分布式部署示例(三台机器,IP 分别 10.0.0.1/2/3):
+#   每台机器上运行一个简化的 compose 文件,关键环境变量:
+#     ETCD_NAME=etcdX  (X=1/2/3)
+#     ETCD_ADVERTISE_CLIENT_URLS=http://10.0.0.X:2379
+#     ETCD_INITIAL_ADVERTISE_PEER_URLS=http://10.0.0.X:2380
+#     ETCD_INITIAL_CLUSTER=etcd1=http://10.0.0.1:2380,etcd2=http://10.0.0.2:2380,etcd3=http://10.0.0.3:2380
+#     network_mode: host  (使用主机网络)
+# ============================================================
+
+
+

@@ -1,0 +1,1 @@
+docker run -d -p 3000:8080 --gpus all -v open-webui:/app/backend/data --name open-webui registry.cn-hangzhou.aliyuncs.com/sxxpqp/open-webui:cuda
