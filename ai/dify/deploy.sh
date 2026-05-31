@@ -40,15 +40,7 @@ check_prereqs() {
             # 配置 Harbor 镜像加速源
             info "配置 Harbor 镜像加速..."
             mkdir -p /etc/docker
-            cat > /etc/docker/daemon.json <<'EOF'
-{
-  "registry-mirrors": ["https://dockerhub.ihome.sxxpqp.top:8443"],
-  "insecure-registries": ["dockerhub.ihome.sxxpqp.top:8443", "ghcr.ihome.sxxpqp.top:8443"],
-  "exec-opts": ["native.cgroupdriver=systemd"],
-  "log-driver": "json-file",
-  "log-opts": {"max-size": "100m", "max-file": "5"}
-}
-EOF
+            printf '{\n  "registry-mirrors": ["https://dockerhub.ihome.sxxpqp.top:8443"],\n  "insecure-registries": ["dockerhub.ihome.sxxpqp.top:8443", "ghcr.ihome.sxxpqp.top:8443"],\n  "exec-opts": ["native.cgroupdriver=systemd"],\n  "log-driver": "json-file",\n  "log-opts": {"max-size": "100m", "max-file": "5"}\n}\n' > /etc/docker/daemon.json
             systemctl daemon-reload
             systemctl restart docker
             info "Docker 安装完成，镜像加速已配置"
