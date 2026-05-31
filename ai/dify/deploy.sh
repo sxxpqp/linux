@@ -40,7 +40,7 @@ check_prereqs() {
             # 配置 Harbor 镜像加速源
             info "配置 Harbor 镜像加速..."
             mkdir -p /etc/docker
-            cat > /etc/docker/daemon.json <<-EOF
+            cat > /etc/docker/daemon.json <<'EOF'
 {
   "registry-mirrors": ["https://dockerhub.ihome.sxxpqp.top:8443"],
   "insecure-registries": ["dockerhub.ihome.sxxpqp.top:8443", "ghcr.ihome.sxxpqp.top:8443"],
