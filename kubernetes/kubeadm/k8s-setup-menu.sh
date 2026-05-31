@@ -11,7 +11,7 @@ set -uo pipefail
 # 所有 read 命令通过 TTY 变量显式指定输入源
 TTY_INPUT=/dev/tty
 
-BASE="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/main/kubernetes"
+BASE="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes"
 URL_KERNEL="${BASE}/kubeadm/k8skerneloptimize.sh"
 URL_K8S="${BASE}/kubeadm/installk8s.sh"
 URL_HELM="${BASE}/helm/install-helm.sh"
