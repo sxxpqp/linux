@@ -111,7 +111,7 @@ if !ERRORLEVEL! neq 0 (
 
 REM Run claude install to set up launcher and shell integration
 echo Setting up Claude Code...
-"!BINARY_PATH!" install --force "!TARGET!"
+"!BINARY_PATH!" install "!TARGET!" --force
 set "INSTALL_RESULT=!ERRORLEVEL!"
 
 REM Clean up downloaded file
