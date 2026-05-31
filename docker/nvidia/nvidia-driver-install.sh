@@ -125,16 +125,27 @@ install_driver() {
       info "检测推荐驱动版本..."
       ubuntu-drivers devices
       echo ""
-      # 自动安装推荐版本
-      ubuntu-drivers autoinstall || {
-        warn "ubuntu-drivers 自动安装失败，尝试手动安装..."
-        RECOMMENDED=$(ubuntu-drivers devices 2>/dev/null | grep "recommended" | grep -oP "nvidia-driver-\d+" | head -1)
-        if [ -n "$RECOMMENDED" ]; then
-          apt install -y "$RECOMMENDED"
-        else
+
+      # 优先装 @recommended 标记的版本
+      RECOMMENDED=$(ubuntu-drivers devices 2>/dev/null | grep "recommended" | grep -oP "nvidia-driver-\d+" | head -1)
+
+      if [ -n "$RECOMMENDED" ]; then
+        info "安装推荐版本: ${RECOMMENDED}"
+        apt install -y "$RECOMMENDED"
+      else
+        # 无推荐时根据显卡架构选合适的驱动系列
+        GPU_MODEL=$(echo "$GPU" | tr '[:upper:]' '[:lower:]')
+        if echo "$GPU_MODEL" | grep -qE 'rtx 50[0-9]0|blackwell|5080|5090|5070'; then
+          info "RTX 50 系列，安装 nvidia-driver-570"
+          apt install -y nvidia-driver-570
+        elif echo "$GPU_MODEL" | grep -qE 'rtx 40[0-9]0|ada|4080|4090|4070|4060'; then
+          info "RTX 40 系列，安装 nvidia-driver-550"
           apt install -y nvidia-driver-550
+        else
+          info "未知架构，安装最新可用驱动..."
+          apt install -y nvidia-driver-535
         fi
-      }
+      fi
       # 尝试加载驱动模块，避免必须重启
       modprobe nvidia 2>/dev/null || true
       modprobe nvidia_uvm 2>/dev/null || true
