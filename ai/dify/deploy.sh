@@ -28,6 +28,9 @@ info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
+# 禁用 systemd pager（否则 systemctl 会进 less 导致脚本卡住）
+export SYSTEMD_PAGER=
+
 # ========== 前置检查 ==========
 check_prereqs() {
     if ! command -v docker &>/dev/null; then
