@@ -43,6 +43,15 @@ check_prereqs() {
             printf '{\n  "registry-mirrors": ["https://dockerhub.ihome.sxxpqp.top:8443"],\n  "insecure-registries": ["dockerhub.ihome.sxxpqp.top:8443", "ghcr.ihome.sxxpqp.top:8443"],\n  "exec-opts": ["native.cgroupdriver=systemd"],\n  "log-driver": "json-file",\n  "log-opts": {"max-size": "100m", "max-file": "5"}\n}\n' > /etc/docker/daemon.json
             systemctl daemon-reload >/dev/null 2>&1
             systemctl restart docker >/dev/null 2>&1
+            # 等待 Docker 就绪（最多等 20 秒）
+            for i in $(seq 1 10); do
+                if docker info &>/dev/null; then break; fi
+                sleep 2
+            done
+            if ! docker info &>/dev/null; then
+                error "Docker 启动失败，请检查: journalctl -u docker"
+                exit 1
+            fi
             info "Docker 安装完成，镜像加速已配置"
         else
             error "请手动安装 Docker 后重试"
