@@ -40,7 +40,7 @@ check_prereqs() {
                 yum clean all 2>/dev/null || true
                 yum repolist 2>/dev/null | grep -q epel && yum-config-manager --disable epel 2>/dev/null || true
             fi
-            curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh | bash -s docker --mirror Aliyun
+            curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh | bash -s docker --mirror Aliyun 2>&1 | grep -v "^+\|Loaded\|loaded units\|list-unit-files" || true
             systemctl enable --now docker >/dev/null 2>&1
             # 配置 Harbor 镜像加速源
             info "配置 Harbor 镜像加速..."
