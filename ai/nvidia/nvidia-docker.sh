@@ -1,5 +1,5 @@
 #!/bin/bash
-# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/nvidia/nvidia-docker.sh
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/ai/nvidia/nvidia-docker.sh
 
 #NVIDIA_DOCKER_URL="https://mirror.cs.uchicago.edu/nvidia-docker/libnvidia-container/stable/ubuntu20.04/amd64/"
 #!/bin/bash

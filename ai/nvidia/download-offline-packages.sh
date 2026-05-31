@@ -1,5 +1,5 @@
 #!/bin/bash
-# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/nvidia/download-offline-packages.sh
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/ai/nvidia/download-offline-packages.sh
 mkdir nvidia-packages
 # 赋予文件夹可读可写权限（临时调整，方便下载）
 sudo chmod +777 nvidia-packages

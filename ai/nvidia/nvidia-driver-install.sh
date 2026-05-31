@@ -1,5 +1,5 @@
 #!/bin/bash
-# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/nvidia/nvidia-driver-install.sh
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/ai/nvidia/nvidia-driver-install.sh
 # NVIDIA 显卡驱动自动安装脚本（跨平台）
 # 自动检测系统和显卡，优先用系统包管理器安装最新兼容驱动
 #

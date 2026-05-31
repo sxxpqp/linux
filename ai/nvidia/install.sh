@@ -1,10 +1,10 @@
 #!/bin/bash
-# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/nvidia/install.sh
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/ai/nvidia/install.sh
 
 # 设置一些变量
-GPG_KEY_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/nvidia/gpgkey"
+GPG_KEY_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/ai/nvidia/gpgkey"
 KEYRING_PATH="/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"
-LIST_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/nvidia/nvidia-container-toolkit.list"
+LIST_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/ai/nvidia/nvidia-container-toolkit.list"
 LIST_PATH="/etc/apt/sources.list.d/nvidia-container-toolkit.list"
 
 # 步骤 1: 导入 GPG 密钥

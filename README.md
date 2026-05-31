@@ -93,5 +93,5 @@ Linux 运维知识库，涵盖容器编排、云原生、CI/CD、监控、网络
 | MinIO 对象存储 | [minio/README.md](minio/README.md) |
 | KubeBlocks MySQL operator（K8s HA 部署） | [kubernetes/kubeblocks/mysql/](kubernetes/kubeblocks/mysql/) |
 | mihomo 代理（裸核 TUN，生产在跑） | [network/mihomo/](network/mihomo/) |
-| GPU 节点 nvidia-container-toolkit（走 Nexus 代理） | [docker/nvidia-container-toolkit/](docker/nvidia-container-toolkit/) |
+| GPU 节点 nvidia-container-toolkit（走 Nexus 代理） | [ai/nvidia-container-toolkit/](ai/nvidia-container-toolkit/) |
 | Harbor 仓库架构（huball/ghcr/quay/k8s 多前端） | [CLAUDE.md](CLAUDE.md) → "Harbor 架构" 段 |
