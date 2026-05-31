@@ -35,6 +35,11 @@ check_prereqs() {
         read -rp "是否自动安装 Docker CE？（Y/n）: " answer
         if [[ "${answer:-Y}" =~ ^[Yy]?$ ]]; then
             info "正在安装 Docker CE..."
+            # 修复 yum 源（EPEL 不通会导致 docker 脚本安装 yum-utils 失败）
+            if command -v yum &>/dev/null; then
+                yum clean all 2>/dev/null || true
+                yum repolist 2>/dev/null | grep -q epel && yum-config-manager --disable epel 2>/dev/null || true
+            fi
             curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh | bash -s docker --mirror Aliyun
             systemctl enable --now docker >/dev/null 2>&1
             # 配置 Harbor 镜像加速源
