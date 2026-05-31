@@ -1,4 +1,10 @@
-# KubeBlocks MySQL 集群 (1 主 + 2 从, 共 3 节点)
+# KubeBlocks MySQL — 半同步主从模式 (1 主 + 2 从, 共 3 节点)
+#
+# 选型对比 (两个子目录二选一):
+#   semisync (本目录)  社区 MySQL + 半同步, KubeBlocks operator 监控选主
+#                      → 兼容性最好, 工具链全 (canal/binlog/DTS), 生产首选
+#   paxos    (../paxos) apecloud-mysql (WeSQL), 内置 Paxos 多数派, 节点内选主
+#                      → 强一致, 适合金融/对一致性敏感场景
 #
 # 拓扑: 单 Component, replicas=3, KubeBlocks 自动选举 primary/secondary
 #
@@ -11,7 +17,7 @@
 #   - 写入走 mysql-cluster-mysql 的主节点 VIP (KubeBlocks 自动维护 primary endpoint)
 #   - 读取可连任意副本 (headless service 做 round-robin)
 #
-# 扩缩容: bash scale.sh --replicas 5
+# 扩缩容: bash scale.sh 5
 
 apiVersion: apps.kubeblocks.io/v1
 kind: Cluster
