@@ -7,6 +7,9 @@ set -e
 
 DOCKER_CONF="/etc/docker/daemon.json"
 
+# 目录不存在则创建
+mkdir -p "$(dirname "${DOCKER_CONF}")"
+
 # 备份旧配置
 if [ -f "${DOCKER_CONF}" ]; then
   cp "${DOCKER_CONF}" "${DOCKER_CONF}.bak.$(date +%Y%m%d%H%M%S)"
