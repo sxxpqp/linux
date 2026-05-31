@@ -47,6 +47,54 @@ else
 fi
 
 # ================================================================
+# 环境准备：GCC + nomodeset
+# ================================================================
+prepare_env() {
+  info "检查编译环境..."
+
+  case "${ID}" in
+    ubuntu|debian)
+      if command -v gcc &>/dev/null; then
+        info "GCC 已安装: $(gcc --version | head -1)"
+      else
+        warn "未找到 GCC，安装 build-essential..."
+        apt update -qq
+        apt install -y build-essential
+        info "GCC 已安装: $(gcc --version | head -1)"
+      fi
+      ;;
+    centos|rhel|rocky|almalinux)
+      if command -v gcc &>/dev/null; then
+        info "GCC 已安装: $(gcc --version | head -1)"
+      else
+        warn "未找到 GCC，安装 gcc + kernel-devel..."
+        yum install -y gcc kernel-devel
+        info "GCC 已安装: $(gcc --version | head -1)"
+      fi
+      ;;
+  esac
+
+  info "配置 nomodeset（禁用 noveau，避免驱动冲突）..."
+  local GRUB_FILE="/etc/default/grub"
+  if [ -f "$GRUB_FILE" ]; then
+    if grep -q "nomodeset" "$GRUB_FILE"; then
+      info "nomodeset 已配置"
+    else
+      sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="nomodeset /' "$GRUB_FILE"
+      info "已添加 nomodeset 到 GRUB"
+
+      case "${ID}" in
+        ubuntu|debian) update-grub ;;
+        centos|rhel|rocky|almalinux) grub2-mkconfig -o /boot/grub2/grub.cfg ;;
+      esac
+      info "GRUB 已更新，重启后生效"
+    fi
+  else
+    warn "未找到 ${GRUB_FILE}，跳过 nomodeset 配置"
+  fi
+}
+
+# ================================================================
 # 安装驱动
 # ================================================================
 install_driver() {
@@ -139,8 +187,10 @@ install_toolkit() {
 if [ "$ONLY_TOOLKIT" = true ]; then
   install_toolkit
 elif [ "$ONLY_DRIVER" = true ]; then
+  prepare_env
   install_driver
 else
+  prepare_env
   install_driver
   install_toolkit
 fi
