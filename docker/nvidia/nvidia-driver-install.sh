@@ -69,6 +69,9 @@ install_driver() {
           apt install -y nvidia-driver-550
         fi
       }
+      # 尝试加载驱动模块，避免必须重启
+      modprobe nvidia 2>/dev/null || true
+      modprobe nvidia_uvm 2>/dev/null || true
       ;;
 
     centos|rhel|rocky|almalinux)
@@ -94,7 +97,8 @@ install_toolkit() {
   case "${ID}" in
     ubuntu|debian)
       local GPG_KEY_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-nvidia/nvidia-docker/gpgkey"
-      local LIST_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-nvidia/nvidia-docker/libnvidia-container/stable/ubuntu/${VERSION_CODENAME}/\$(ARCH)"
+      local ARCH=$(dpkg --print-architecture 2>/dev/null || echo "amd64")
+      local LIST_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-nvidia/nvidia-docker/libnvidia-container/stable/ubuntu/${VERSION_CODENAME}/${ARCH}"
       curl -fsSL "$GPG_KEY_URL" 2>/dev/null | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg 2>/dev/null || true
       echo "deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] $LIST_URL /" \
         | tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
