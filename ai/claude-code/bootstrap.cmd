@@ -8,9 +8,6 @@ REM 安装命令(Nexus 加速):
 REM   curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/claude-code/install.cmd -o install.cmd && install.cmd && del install.cmd
 REM
 REM 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/ai/claude-code/bootstrap.cmd
-REM
-REM 从 Nexus 直接安装(跳过 install.cmd):
-REM   set "DOWNLOAD_BASE_URL=https://nexus.ihome.sxxpqp.top:8443/repository/claude-code" && curl -fsSL "!DOWNLOAD_BASE_URL!/latest" -o "%TEMP%\claude-version" && set /p VERSION=<"%TEMP%\claude-version" && del "%TEMP%\claude-version" && curl -fsSL "!DOWNLOAD_BASE_URL!/!VERSION!/win32-x64/claude.exe" -o "%TEMP%\claude.exe" && "%TEMP%\claude.exe" install && del "%TEMP%\claude.exe"
 
 REM Parse command line argument
 set "TARGET=%~1"
