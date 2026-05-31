@@ -150,6 +150,7 @@ docker push      registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 |---|---|---|
 | **raw (GitHub raw 文件)** | `/repository/raw-githubusercontent/` | 把 `raw.githubusercontent.com/<x>` → `<base>/<前缀><x>` |
 | **raw (GitHub release / 源码 zip)** | `/repository/raw-github/` | 把 `github.com/<x>` → `<base>/<前缀><x>`;Nexus 自动跟随 302 到 codeload / objects 子域 |
+| **raw (GitHub API)** | `/repository/raw-github-api/` | 代理 `api.github.com`,用于脚本中获取最新 release 版本号;Dify 脚本用到 |
 | **raw (nvidia GitHub Pages)** | `/repository/raw-nvidia/` | 代理 `nvidia.github.io`,用于 nvidia-container-toolkit 的 apt repo + gpgkey;脚本见 `ai/nvidia-container-toolkit/install.sh` |
 | **Helm: Grafana** | `/repository/grafana/` | `helm repo add grafana <base>/repository/grafana/` (loki / grafana / mimir / tempo / promtail) |
 | **Helm: Prometheus** | `/repository/prometheus-community/` | `helm repo add prometheus-community <base>/repository/prometheus-community/` |

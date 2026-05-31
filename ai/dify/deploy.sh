@@ -18,9 +18,10 @@ DIFY_VERSION="${1:-1.14.2}"
 INSTALL_DIR="${2:-/opt/dify}"
 DIFY_GITHUB="https://github.com/langgenius/dify"
 
-# Nexus 代理前缀（GitHub raw / release 走 Nexus）
+# Nexus 代理前缀（GitHub raw / release / API 走 Nexus）
 NEXUS_RAW_GITHUB="https://nexus.ihome.sxxpqp.top:8443/repository/raw-github"
 NEXUS_GITHUB_CONTENT="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent"
+NEXUS_API_GITHUB="https://nexus.ihome.sxxpqp.top:8443/repository/raw-github-api"
 
 # ========== 颜色输出 ==========
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -59,6 +60,15 @@ check_prereqs() {
 
 # ========== 获取版本 ==========
 get_version() {
+    if [[ "$DIFY_VERSION" == "latest" ]]; then
+        info "通过 GitHub API 获取最新版本..."
+        local api_url="${NEXUS_API_GITHUB}/repos/langgenius/dify/releases/latest"
+        DIFY_VERSION=$(curl -fsSL "$api_url" 2>/dev/null | grep -o '"tag_name":"[^"]*"' | cut -d'"' -f4 | sed 's/^v//') || true
+        if [[ -z "$DIFY_VERSION" ]]; then
+            warn "获取最新版本失败，使用默认版本"
+            DIFY_VERSION="1.14.2"
+        fi
+    fi
     info "Dify 版本: ${DIFY_VERSION}"
 }
 
@@ -174,6 +184,7 @@ show_help() {
 环境变量覆盖:
   NEXUS_RAW_GITHUB           Nexus GitHub release 代理地址
   NEXUS_GITHUB_CONTENT       Nexus GitHub raw 代理地址
+  NEXUS_API_GITHUB           Nexus GitHub API 代理地址
 EOF
     exit 0
 }
