@@ -22,7 +22,7 @@
 
 | 项 | 值 | 备注 |
 |---|---|---|
-| **镜像拉取入口(Harbor)** | `huball.ihome.sxxpqp.top:8443` | **纯代理(pull-through cache),不接受 push**。所有镜像从这里拉,项目划分见下表 |
+| **镜像拉取入口(Harbor)** | `dockerhub.ihome.sxxpqp.top:8443` | **纯代理(pull-through cache),不接受 push**。所有镜像从这里拉,项目划分见下表 |
 | **镜像推送目标(阿里 ACR)** | `registry.cn-hangzhou.aliyuncs.com/sxxpqp/` | 自己构建的镜像统一推这里(用户名 `sxxpqp`,杭州区) |
 | MinIO S3 API endpoint | `https://ihome.sxxpqp.top:8443` | S3 客户端 / SDK 用这个,bucket 操作走 API |
 | MinIO 控制台 UI | `https://console.ihome.sxxpqp.top:8443` | 管理界面(看 bucket / 用户 / 策略),不是 S3 API |
@@ -59,12 +59,11 @@ Harbor 后端是同一个,但前面挂了 **1Panel/nginx 多前端域名**,**每
 
 | 上游 | 对应前端域名(1Panel/nginx) | 后端 Harbor 项目 | nginx 内部 rewrite |
 |---|---|---|---|
-| `docker.io` | `huball.ihome.sxxpqp.top:8443` | `dockerhub` | `/v2/*` → `/v2/dockerhub/*` |
+| `docker.io` | `dockerhub.ihome.sxxpqp.top:8443` | `dockerhub` | `/v2/*` → `/v2/dockerhub/*` |
 | `ghcr.io` | `ghcr.ihome.sxxpqp.top:8443` | `ghcr` | `/v2/*` → `/v2/ghcr/*` |
 | `quay.io` | `quay.ihome.sxxpqp.top:8443` | `quay` | `/v2/*` → `/v2/quay/*` |
 | `registry.k8s.io` / `k8s.gcr.io` | `k8s.ihome.sxxpqp.top:8443` | `google_containers` | `/v2/*` → `/v2/google_containers/*` |
-| `docker.io`(别名) | `0523dw.ihome.sxxpqp.top:8443` | `dockerhub` | 同 huball |
-| `docker.io`(别名) | `dockerhub.ihome.sxxpqp.top:8443` | `dockerhub` | 同 huball |
+| `docker.io`(历史别名) | `dockerhub.ihome.sxxpqp.top:8443` | `dockerhub` | 已弃用, 统一用 `dockerhub` |
 
 ### Harbor 项目(直接 pull 时备用)
 
@@ -133,9 +132,9 @@ helm repo update
 ```json
 {
   "exec-opts": ["native.cgroupdriver=systemd"],
-  "registry-mirrors": ["https://huball.ihome.sxxpqp.top:8443"],
+  "registry-mirrors": ["https://dockerhub.ihome.sxxpqp.top:8443"],
   "insecure-registries": [
-    "huball.ihome.sxxpqp.top:8443",
+    "dockerhub.ihome.sxxpqp.top:8443",
     "ghcr.ihome.sxxpqp.top:8443",
     "quay.ihome.sxxpqp.top:8443",
     "k8s.ihome.sxxpqp.top:8443"
@@ -155,7 +154,7 @@ helm repo update
 ```toml
 # /etc/containerd/certs.d/docker.io/hosts.toml
 server = "https://registry-1.docker.io"
-[host."https://huball.ihome.sxxpqp.top:8443"]
+[host."https://dockerhub.ihome.sxxpqp.top:8443"]
   capabilities = ["pull", "resolve"]
   skip_verify = true
 ```
@@ -164,7 +163,7 @@ server = "https://registry-1.docker.io"
 
 | 目录 | upstream server | mirror host |
 |---|---|---|
-| `docker.io/` | `https://registry-1.docker.io` | `huball.ihome.sxxpqp.top:8443` |
+| `docker.io/` | `https://registry-1.docker.io` | `dockerhub.ihome.sxxpqp.top:8443` |
 | `ghcr.io/` | `https://ghcr.io` | `ghcr.ihome.sxxpqp.top:8443` |
 | `quay.io/` | `https://quay.io` | `quay.ihome.sxxpqp.top:8443` |
 | `registry.k8s.io/` | `https://registry.k8s.io` | `k8s.ihome.sxxpqp.top:8443` |
@@ -245,7 +244,7 @@ docker push registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 | `020300.ihome.sxxpqp.top:8443` | Tekton 镜像源 | **未确认**,可能是 Harbor 的另一个 nginx 别名;遇到 tekton 部署时再确认 |
 | `mirror.ghproxy.com` | GitHub 加速 | 已不可用,改走 Nexus `raw-github` |
 
-注:`ghcr.ihome.sxxpqp.top:8443` / `quay.ihome.sxxpqp.top:8443` / `k8s.ihome.sxxpqp.top:8443` / `0523dw.ihome.sxxpqp.top:8443` / `dockerhub.ihome.sxxpqp.top:8443` 等 **没有列在"弃用"里** —— 它们是 **Harbor 的现役 nginx 多前端别名**,继续使用,见上面 "Harbor 架构" 段。
+注:`ghcr.ihome.sxxpqp.top:8443` / `quay.ihome.sxxpqp.top:8443` / `k8s.ihome.sxxpqp.top:8443` / `dockerhub.ihome.sxxpqp.top:8443` / `dockerhub.ihome.sxxpqp.top:8443` 等 **没有列在"弃用"里** —— 它们是 **Harbor 的现役 nginx 多前端别名**,继续使用,见上面 "Harbor 架构" 段。
 
 参考实现:`linux/docker/kind/deploy.sh`(已更新成新架构,可复用)。
 

@@ -35,7 +35,7 @@ for node in $(kind get nodes --name kind); do
   cat > /etc/containerd/certs.d/docker.io/hosts.toml << 'TOML'
 server = "https://registry-1.docker.io"
 
-[host."https://0523dw.ihome.sxxpqp.top:8443"]
+[host."https://dockerhub.ihome.sxxpqp.top:8443"]
   capabilities = ["pull", "resolve"]
   skip_verify = true
 TOML

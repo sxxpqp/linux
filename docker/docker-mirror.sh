@@ -19,9 +19,9 @@ fi
 cat > "${DOCKER_CONF}" << JSON
 {
   "exec-opts": ["native.cgroupdriver=systemd"],
-  "registry-mirrors": ["https://huball.ihome.sxxpqp.top:8443"],
+  "registry-mirrors": ["https://dockerhub.ihome.sxxpqp.top:8443"],
   "insecure-registries": [
-    "huball.ihome.sxxpqp.top:8443",
+    "dockerhub.ihome.sxxpqp.top:8443",
     "ghcr.ihome.sxxpqp.top:8443",
     "quay.ihome.sxxpqp.top:8443",
     "k8s.ihome.sxxpqp.top:8443"

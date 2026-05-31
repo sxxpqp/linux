@@ -3,7 +3,7 @@ services:
     # 移除了过时的 'version: 2' 键
     # Harbor 代理(huball = docker.io 入口,nginx 自动重写到 /v2/dockerhub/)
     # 老地址 dockerhub.ihome.sxxpqp.top:8443 已弃用,改用 huball
-    image: huball.ihome.sxxpqp.top:8443/library/redis:7.4
+    image: dockerhub.ihome.sxxpqp.top:8443/library/redis:7.4
     restart: always
     ports:
       - '6379:6379'

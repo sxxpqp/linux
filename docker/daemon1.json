@@ -4,7 +4,7 @@
     "max-file": "3"
   },
   "registry-mirrors": [
-    "https://huball.ihome.sxxpqp.top:8443"
+    "https://dockerhub.ihome.sxxpqp.top:8443"
   ],
   "exec-opts": [
     "native.cgroupdriver=systemd"

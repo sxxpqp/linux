@@ -27,7 +27,7 @@ CHART_VERSION="14.10.5"
 # Bitnami chart 走 Harbor 代理(docker.io 直连国内超时).
 # Harbor 前端 nginx 自动 rewrite /v2/* → /v2/dockerhub/*,所以路径不带 /dockerhub.
 # 如果 Harbor 拿不到,可临时改回 oci://registry-1.docker.io/bitnamicharts/minio
-CHART_OCI="oci://huball.ihome.sxxpqp.top:8443/bitnamicharts/minio"
+CHART_OCI="oci://dockerhub.ihome.sxxpqp.top:8443/bitnamicharts/minio"
 RELEASE_NAME="minio-cluster"
 WAIT=false
 

@@ -20,7 +20,7 @@ if ! grep -q 'config_path = "/etc/containerd/certs.d"' "${CONTAINERD_CONF}" 2>/d
 fi
 
 declare -A MIRRORS=(
-  ["docker.io"]="https://0523dw.ihome.sxxpqp.top:8443"
+  ["docker.io"]="https://dockerhub.ihome.sxxpqp.top:8443"
   ["ghcr.io"]="https://ghcr.ihome.sxxpqp.top:8443"
   ["registry.k8s.io"]="https://k8s.ihome.sxxpqp.top:8443"
   ["quay.io"]="https://quay.ihome.sxxpqp.top:8443"

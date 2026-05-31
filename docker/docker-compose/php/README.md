@@ -18,5 +18,5 @@ PHP-FPM + Nginx 经典开发组合,**镜像版本明显过气**:
 ## 如果只是新写代码
 
 不要用这套。新项目用:
-- PHP 8.x:`huball.ihome.sxxpqp.top:8443/library/php:8.3-fpm-alpine`
-- Nginx 主线:`huball.ihome.sxxpqp.top:8443/library/nginx:alpine`
+- PHP 8.x:`dockerhub.ihome.sxxpqp.top:8443/library/php:8.3-fpm-alpine`
+- Nginx 主线:`dockerhub.ihome.sxxpqp.top:8443/library/nginx:alpine`
