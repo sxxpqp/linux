@@ -28,8 +28,13 @@ info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
-# 禁用 systemd pager（否则 systemctl 会进 less 导致脚本卡住）
-export SYSTEMD_PAGER=
+# 禁用所有 pager —— 防止 systemctl / 子脚本进 less 接管屏幕导致脚本卡住
+# - SYSTEMD_PAGER: systemd 工具专用
+# - PAGER:         git / man / 部分 systemd 老版本 fallback
+# - SYSTEMD_LESS:  systemd 老版本会读这个再起 less
+export SYSTEMD_PAGER=''
+export PAGER='cat'
+export SYSTEMD_LESS=''
 
 # ========== 前置检查 ==========
 check_prereqs() {
@@ -43,14 +48,15 @@ check_prereqs() {
                 yum clean all 2>/dev/null || true
                 yum repolist 2>/dev/null | grep -q epel && yum-config-manager --disable epel 2>/dev/null || true
             fi
-            curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh | bash -s docker --mirror Aliyun 2>&1 | grep -v "^+\|Loaded\|loaded units\|list-unit-files" || true
-            systemctl enable --now docker >/dev/null 2>&1
+            # </dev/null 切断子 bash 的 tty,docker install 脚本内部 systemctl 即使触发 pager 也没 tty 启动 less
+            curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh | bash -s docker --mirror Aliyun </dev/null 2>&1 | grep -v "^+\|Loaded\|loaded units\|list-unit-files" || true
+            systemctl --no-pager enable --now docker >/dev/null 2>&1
             # 配置 Harbor 镜像加速源
             info "配置 Harbor 镜像加速..."
             mkdir -p /etc/docker
             printf '{\n  "registry-mirrors": ["https://dockerhub.ihome.sxxpqp.top:8443"],\n  "insecure-registries": ["dockerhub.ihome.sxxpqp.top:8443", "ghcr.ihome.sxxpqp.top:8443"],\n  "exec-opts": ["native.cgroupdriver=systemd"],\n  "log-driver": "json-file",\n  "log-opts": {"max-size": "100m", "max-file": "5"}\n}\n' > /etc/docker/daemon.json
-            systemctl daemon-reload >/dev/null 2>&1
-            systemctl restart docker >/dev/null 2>&1
+            systemctl --no-pager daemon-reload >/dev/null 2>&1
+            systemctl --no-pager restart docker >/dev/null 2>&1
             # 等待 Docker 就绪（最多等 20 秒）
             for i in $(seq 1 10); do
                 if docker info &>/dev/null; then break; fi
