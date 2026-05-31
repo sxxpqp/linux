@@ -1,7 +1,6 @@
 #!/bin/bash
 # CentOS 7 切换 yum 源为阿里云镜像
-# 用法: curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/main/linux/centos/switch-aliyun-mirror.sh | bash
-# 或者: wget -qO- ... | bash
+# 用法(推荐): curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/centos/switch-aliyun-mirror.sh | bash
 # 或者本地: bash switch-aliyun-mirror.sh
 
 set -e

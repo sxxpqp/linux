@@ -22,7 +22,7 @@ PUBLIC_REPO="https://apecloud.github.io/helm-charts"
 
 # CRD 文件下载地址 (内网共享镜像优先, GitHub 兜底)
 # 内网地址按版本拼接, 比如 v1.0.2 → kubeblocks_crds.yaml
-CRD_URL_INTERNAL="https://chfs.sxxpqp.top:8443/chfs/shared/k8s/kubeblocks/kubeblocks_crds.yaml"
+CRD_URL_INTERNAL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/linux/kubernetes/kubeblocks/kubeblocks_crds.yaml"
 
 for ((i=1; i<=$#; i++)); do
   case "${!i}" in

@@ -26,10 +26,10 @@ echo "172.16.0.190 k8s-node1" >> /etc/hosts
 tar -zxvpf k8s-pki-all.tar.gz -C /
 
 # 通过etcd-restore.sh  恢复etcd数据  需要修改配置文件 ip name  db文件位置
-wget https://chfs.sxxpqp.top:8443/chfs/shared/k8s/etcd/etcd-restore.sh
+wget https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/linux/kubernetes/etcd/etcd-restore.sh
 # 修改地址和ip
 
-wget https://chfs.sxxpqp.top:8443/chfs/shared/k8s/kubeadm/restore/kubeadm-config.yaml
+wget https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/linux/kubernetes/kubeadm/restore/kubeadm-config.yaml
 # 安装
 kubeadm init --config=kubeadm-config.yaml \
   --ignore-preflight-errors=DirAvailable--etc-kubernetes-pki,DirAvailable--var-lib-etcd 
