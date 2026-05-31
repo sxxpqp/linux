@@ -5,7 +5,7 @@ REM Claude Code Windows CMD Bootstrap Script
 REM 系统: Windows (cross-platform)
 REM
 REM 安装命令(Nexus 加速):
-REM   curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/claude-code/install.cmd -o install.cmd && install.cmd && del install.cmd
+REM   curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/ai/claude-code/bootstrap.cmd -o bootstrap.cmd && bootstrap.cmd && del bootstrap.cmd
 REM
 REM 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/ai/claude-code/bootstrap.cmd
 
