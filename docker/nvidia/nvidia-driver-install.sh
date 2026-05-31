@@ -52,26 +52,45 @@ fi
 prepare_env() {
   info "检查编译环境..."
 
+  # 获取内核编译用的 GCC 版本
+  local KERNEL_GCC_VER=$(cat /proc/version 2>/dev/null | grep -oP 'gcc[^0-9]*\K[0-9]+\.[0-9]+' | head -1 || echo "")
+  local SYS_GCC_VER=$(gcc -dumpversion 2>/dev/null || echo "")
+  local KERNEL_GCC_MAJOR=${KERNEL_GCC_VER%%.*}
+  local SYS_GCC_MAJOR=${SYS_GCC_VER%%.*}
+
   case "${ID}" in
     ubuntu|debian)
-      # GCC + 内核头文件（必须匹配当前内核版本）
       apt update -qq
       if ! command -v gcc &>/dev/null || ! ls /lib/modules/$(uname -r)/build &>/dev/null; then
         warn "安装 GCC + 内核头文件 (linux-headers-$(uname -r))..."
         apt install -y build-essential linux-headers-$(uname -r)
+        SYS_GCC_VER=$(gcc -dumpversion 2>/dev/null || echo "")
+        SYS_GCC_MAJOR=${SYS_GCC_VER%%.*}
       fi
-      info "GCC: $(gcc --version 2>/dev/null | head -1)"
-      info "内核头: linux-headers-$(uname -r)"
+
+      # GCC 版本不匹配则提示（非致命）
+      if [ -n "$KERNEL_GCC_MAJOR" ] && [ -n "$SYS_GCC_MAJOR" ] && [ "$KERNEL_GCC_MAJOR" != "$SYS_GCC_MAJOR" ]; then
+        warn "内核编译用 GCC ${KERNEL_GCC_VER}，系统当前 GCC ${SYS_GCC_VER}"
+        warn "建议安装匹配版本: apt install -y gcc-${KERNEL_GCC_MAJOR}"
+      fi
       ;;
     centos|rhel|rocky|almalinux)
       if ! command -v gcc &>/dev/null || ! rpm -q kernel-devel &>/dev/null; then
         warn "安装 GCC + kernel-devel..."
         yum install -y gcc kernel-devel kernel-headers
+        SYS_GCC_VER=$(gcc -dumpversion 2>/dev/null || echo "")
+        SYS_GCC_MAJOR=${SYS_GCC_VER%%.*}
       fi
-      info "GCC: $(gcc --version 2>/dev/null | head -1)"
-      info "内核头: kernel-devel-$(uname -r)"
+
+      if [ -n "$KERNEL_GCC_MAJOR" ] && [ -n "$SYS_GCC_MAJOR" ] && [ "$KERNEL_GCC_MAJOR" != "$SYS_GCC_MAJOR" ]; then
+        warn "内核编译用 GCC ${KERNEL_GCC_VER}，系统当前 GCC ${SYS_GCC_VER}"
+        warn "建议安装匹配版本: yum install -y gcc-${KERNEL_GCC_MAJOR}"
+      fi
       ;;
   esac
+
+  info "GCC: $(gcc --version 2>/dev/null | head -1)"
+  info "内核头: 匹配 $(uname -r)"
 
   info "配置 nomodeset（禁用 noveau，避免驱动冲突）..."
   local GRUB_FILE="/etc/default/grub"
