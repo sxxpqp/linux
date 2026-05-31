@@ -1,6 +1,8 @@
 services:
   redis-exporter-master:
-    image: hub.wishfoxs.com:6443/middleware/redis_exporter
+    # 老镜像 hub.wishfoxs.com:6443/middleware/redis_exporter 是外部 harbor, 自己环境拉不到
+    # 改走 huball (docker.io 代理), 镜像 = oliver006/redis_exporter
+    image: huball.ihome.sxxpqp.top:8443/oliver006/redis_exporter:latest
     container_name: redis-exporter-master
     ports:
       - "9121:9121"
@@ -10,7 +12,9 @@ services:
     restart: always
 
   redis-exporter-slave:
-    image: hub.wishfoxs.com:6443/middleware/redis_exporter
+    # 老镜像 hub.wishfoxs.com:6443/middleware/redis_exporter 是外部 harbor, 自己环境拉不到
+    # 改走 huball (docker.io 代理), 镜像 = oliver006/redis_exporter
+    image: huball.ihome.sxxpqp.top:8443/oliver006/redis_exporter:latest
     container_name: redis-exporter-slave
     ports:
       - "9122:9121"
