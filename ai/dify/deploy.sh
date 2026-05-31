@@ -14,7 +14,7 @@
 set -euo pipefail
 
 # ========== 配置 ==========
-DIFY_VERSION="${1:-latest}"
+DIFY_VERSION="${1:-1.14.2}"
 INSTALL_DIR="${2:-/opt/dify}"
 DIFY_GITHUB="https://github.com/langgenius/dify"
 
@@ -58,22 +58,7 @@ check_prereqs() {
 }
 
 # ========== 获取版本 ==========
-get_latest_version() {
-    if [[ "$DIFY_VERSION" == "latest" ]]; then
-        info "获取 Dify 最新稳定版本..."
-        # 通过 Nexus 代理 GitHub API 获取最新 release tag
-        local api_url="${NEXUS_GITHUB_CONTENT}/langgenius/dify/refs/heads/main/docker/docker-compose.yaml"
-        # 改用从 GitHub release 页面获取最新版本
-        local release_url="${NEXUS_RAW_GITHUB}/langgenius/dify/releases/latest"
-        local redirect
-        redirect=$(curl -fsSLI -o /dev/null -w '%{redirect_url}' "$release_url" 2>/dev/null || true)
-        if [[ -n "$redirect" ]]; then
-            DIFY_VERSION=$(basename "$redirect" | sed 's/^v//')
-        else
-            warn "无法从 Nexus 获取最新版本，使用默认 stable 版本"
-            DIFY_VERSION="1.2.0"
-        fi
-    fi
+get_version() {
     info "Dify 版本: ${DIFY_VERSION}"
 }
 
@@ -89,8 +74,8 @@ download_dify() {
     mkdir -p "$target_dir"
 
     # 通过 Nexus raw-github 代理下载 Dify release zip
-    local zip_url="${NEXUS_RAW_GITHUB}/langgenius/dify/archive/refs/tags/v${DIFY_VERSION}.zip"
-    local zip_file="/tmp/dify-v${DIFY_VERSION}.zip"
+    local zip_url="${NEXUS_RAW_GITHUB}/langgenius/dify/archive/refs/tags/${DIFY_VERSION}.zip"
+    local zip_file="/tmp/dify-${DIFY_VERSION}.zip"
 
     info "下载 Dify v${DIFY_VERSION}..."
     curl -fsSL "$zip_url" -o "$zip_file"
@@ -205,7 +190,7 @@ main() {
     echo ""
 
     check_prereqs
-    get_latest_version
+    get_version
     download_dify
     setup_env
     start_services
