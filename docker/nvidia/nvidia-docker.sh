@@ -17,7 +17,7 @@ if [[ ! " ${SUPPORTED_VERSIONS[@]} " =~ " ${UBUNTU_VERSION} " ]]; then
 fi
 
 # 定义下载链接和本地文件名（包含版本号）
-LIST_URL="https://chfs.sxxpqp.top:8443/chfs/shared/docker/nvidia/nvidia-docker-ubuntu${UBUNTU_VERSION}.tar.gz"
+LIST_URL="https://chfs.sxxpqp.top:8443/chfs/shared/linux/docker/nvidia/nvidia-docker-ubuntu${UBUNTU_VERSION}.tar.gz"
 LIST_PATH="nvidia-docker-ubuntu${UBUNTU_VERSION}.tar.gz"
 
 # 下载离线包

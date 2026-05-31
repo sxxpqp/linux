@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # 设置一些变量
-GPG_KEY_URL="https://chfs.sxxpqp.top:8443/chfs/shared/docker/nvidia/gpgkey"
+GPG_KEY_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/main/linux/docker/nvidia/gpgkey"
 KEYRING_PATH="/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"
-LIST_URL="https://chfs.sxxpqp.top:8443/chfs/shared/docker/nvidia/nvidia-container-toolkit.list"
+LIST_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/main/linux/docker/nvidia/nvidia-container-toolkit.list"
 LIST_PATH="/etc/apt/sources.list.d/nvidia-container-toolkit.list"
 
 # 步骤 1: 导入 GPG 密钥

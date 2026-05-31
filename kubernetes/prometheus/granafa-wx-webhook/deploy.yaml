@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wx-webhook
+  namespace: monitoring
+  labels:
+    app: wx-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wx-webhook
+  template:
+    metadata:
+      labels:
+        app: wx-webhook
+    spec:
+      containers:
+        - name: wx-webhook
+          image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/wx-webhook:latest   # 替换为你的 Harbor 地址
+          ports:
+            - containerPort: 5001
+          env:
+            - name: WX_WEBHOOK_URL
+              value: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=6dd8d89f-a0a0-47e1-9992-81c16ab11582"
+            - name: GRAFANA_URL
+              value: "http://192.168.100.21:32228"
+            - name: LISTEN_ADDR
+              value: ":5001"
+            - name: ENV_NAME
+              value: '"生产环境"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wx-webhook
+  namespace: monitoring
+spec:
+  selector:
+    app: wx-webhook
+  ports:
+    - port: 5001
+      targetPort: 5001

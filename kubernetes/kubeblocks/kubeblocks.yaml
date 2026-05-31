@@ -1,0 +1,3725 @@
+---
+# Source: kubeblocks/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubeblocks
+  namespace: kb-system
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: kubeblocks/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubeblocks-dataprotection-exec-worker
+  namespace: kb-system
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: kubeblocks/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kubeblocks-secret
+  namespace: kb-system
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+type: Opaque
+stringData:
+  dataProtectionEncryptionKey: kubeblocks-dp-aes256
+---
+# Source: kubeblocks/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubeblocks-manager-config
+  namespace: kb-system
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+data:
+  config.yaml: |
+    # the default storage class name.
+    DEFAULT_STORAGE_CLASS: ""
+---
+# Source: kubeblocks/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubeblocks-host-ports
+  namespace: kb-system
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+data: {}
+---
+# Source: kubeblocks/templates/i18n-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubeblocks-i18n-resources
+  namespace: kb-system
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+data:
+  en: |
+    v1/ConfigMap/Creation=configuration file %s/%s is created.
+    v1/Pod/Creation=Pod %s/%s is created.
+    v1/Pod/Update=Pod %s/%s is updated.
+  zh_CN: |
+    v1/ConfigMap/Creation=配置文件 %s/%s 创建成功。
+    v1/Pod/Creation=Pod %s/%s 创建成功。
+    v1/Pod/Update=Pod %s/%s 更新成功。
+---
+# Source: kubeblocks/templates/rbac/apps_cluster_editor_role.yaml
+# permissions for end users to edit clusters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-cluster-editor-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - apps.kubeblocks.io
+  resources:
+  - clusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps.kubeblocks.io
+  resources:
+  - clusters/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/apps_clusterdefinition_editor_role.yaml
+# permissions for end users to edit clusterdefinitions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-clusterdefinition-editor-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - apps.kubeblocks.io
+  resources:
+  - clusterdefinitions
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps.kubeblocks.io
+  resources:
+  - clusterdefinitions/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/apps_configconstraint_editor_role.yaml
+# permissions for end users to edit configconstraints.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-configconstraint-editor-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - apps.kubeblocks.io
+  resources:
+  - configconstraints
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps.kubeblocks.io
+  resources:
+  - configconstraints/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/apps_sidecardefinition_editor_role.yaml
+# permissions for end users to edit sidecardefinitions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-sidecardefinition-editor-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - apps.kubeblocks.io
+  resources:
+  - sidecardefinitions
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps.kubeblocks.io
+  resources:
+  - sidecardefinitions/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/auth_proxy_client_clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-metrics-reader
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- nonResourceURLs:
+  - "/metrics"
+  verbs:
+  - get
+---
+# Source: kubeblocks/templates/rbac/auth_proxy_role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-proxy-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+# Source: kubeblocks/templates/rbac/cluster_pod_required_role.yaml
+# permissions for end users to edit clusters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-cluster-pod-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      app.kubernetes.io/name: kubeblocks
+      app.kubernetes.io/instance: kubeblocks
+      app.kubernetes.io/required-by: pod
+---
+# Source: kubeblocks/templates/rbac/cluster_pod_required_role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-kbagent-pod-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/required-by: pod
+rules:
+# this is needed to create role probe events
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - get
+  - update
+---
+# Source: kubeblocks/templates/rbac/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+aggregationRule:
+  clusterRoleSelectors:
+  - matchLabels:
+      app.kubernetes.io/name: kubeblocks
+      app.kubernetes.io/instance: kubeblocks
+---
+# Source: kubeblocks/templates/rbac/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-manager-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+  - apiGroups:
+    - ""
+    resources:
+    - nodes
+    verbs:
+    - list
+    - watch
+  - apiGroups:
+    - apps
+    resources:
+    - deployments
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - apps
+    resources:
+    - statefulsets
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - apps
+    resources:
+    - statefulsets/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - apps
+    resources:
+    - statefulsets/status
+    verbs:
+    - get
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - clusterdefinitions
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - clusterdefinitions/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - clusterdefinitions/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - clusters
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - clusters/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - clusters/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - componentdefinitions
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - componentdefinitions/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - componentdefinitions/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - components
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - components/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - components/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - componentversions
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - componentversions/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - componentversions/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - servicedescriptors
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - servicedescriptors/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - servicedescriptors/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - shardingdefinitions
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - shardingdefinitions/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - shardingdefinitions/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - sidecardefinitions
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - sidecardefinitions/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - apps.kubeblocks.io
+    resources:
+    - sidecardefinitions/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - batch
+    resources:
+    - cronjobs
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - batch
+    resources:
+    - cronjobs/finalizers
+    verbs:
+    - patch
+    - update
+  - apiGroups:
+    - batch
+    resources:
+    - cronjobs/status
+    verbs:
+    - get
+  - apiGroups:
+    - batch
+    resources:
+    - jobs
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - batch
+    resources:
+    - jobs/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - batch
+    resources:
+    - jobs/status
+    verbs:
+    - get
+  - apiGroups:
+    - coordination.k8s.io
+    resources:
+    - leases
+    verbs:
+    - create
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - configmaps
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - configmaps/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - ""
+    resources:
+    - events
+    verbs:
+    - create
+    - get
+    - list
+    - patch
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - persistentvolumeclaims
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - persistentvolumeclaims/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - ""
+    resources:
+    - persistentvolumeclaims/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - ""
+    resources:
+    - persistentvolumes
+    verbs:
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - pods
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - pods/exec
+    verbs:
+    - create
+  - apiGroups:
+    - ""
+    resources:
+    - pods/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - ""
+    resources:
+    - pods/log
+    verbs:
+    - get
+    - list
+  - apiGroups:
+    - ""
+    resources:
+    - pods/resize
+    verbs:
+    - update
+  - apiGroups:
+    - ""
+    resources:
+    - pods/status
+    verbs:
+    - get
+  - apiGroups:
+    - ""
+    resources:
+    - secrets
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - secrets/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - ""
+    resources:
+    - serviceaccounts
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - serviceaccounts/status
+    verbs:
+    - get
+  - apiGroups:
+    - ""
+    resources:
+    - services
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - services/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - ""
+    resources:
+    - services/status
+    verbs:
+    - get
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - actionsets
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - actionsets/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - actionsets/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backuppolicies
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backuppolicies/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backuppolicies/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backuppolicytemplates
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backuppolicytemplates/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backuppolicytemplates/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backuprepos
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backuprepos/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backuprepos/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backups
+    verbs:
+    - create
+    - delete
+    - deletecollection
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backups/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backups/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backupschedules
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backupschedules/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - backupschedules/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - restores
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - restores/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - restores/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - storageproviders
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - storageproviders/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - dataprotection.kubeblocks.io
+    resources:
+    - storageproviders/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - experimental.kubeblocks.io
+    resources:
+    - nodecountscalers
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - experimental.kubeblocks.io
+    resources:
+    - nodecountscalers/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - experimental.kubeblocks.io
+    resources:
+    - nodecountscalers/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - extensions.kubeblocks.io
+    resources:
+    - addons
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - extensions.kubeblocks.io
+    resources:
+    - addons/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - extensions.kubeblocks.io
+    resources:
+    - addons/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - operations.kubeblocks.io
+    resources:
+    - opsdefinitions
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - operations.kubeblocks.io
+    resources:
+    - opsdefinitions/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - operations.kubeblocks.io
+    resources:
+    - opsdefinitions/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - operations.kubeblocks.io
+    resources:
+    - opsrequests
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - operations.kubeblocks.io
+    resources:
+    - opsrequests/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - operations.kubeblocks.io
+    resources:
+    - opsrequests/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - parameters.kubeblocks.io
+    resources:
+    - componentparameters
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - parameters.kubeblocks.io
+    resources:
+    - componentparameters/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - parameters.kubeblocks.io
+    resources:
+    - componentparameters/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - parameters.kubeblocks.io
+    resources:
+    - paramconfigrenderers
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - parameters.kubeblocks.io
+    resources:
+    - paramconfigrenderers/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - parameters.kubeblocks.io
+    resources:
+    - paramconfigrenderers/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - parameters.kubeblocks.io
+    resources:
+    - parameters
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - parameters.kubeblocks.io
+    resources:
+    - parameters/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - parameters.kubeblocks.io
+    resources:
+    - parameters/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - parameters.kubeblocks.io
+    resources:
+    - parametersdefinitions
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - parameters.kubeblocks.io
+    resources:
+    - parametersdefinitions/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - parameters.kubeblocks.io
+    resources:
+    - parametersdefinitions/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - rbac.authorization.k8s.io
+    resources:
+    - rolebindings
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - rbac.authorization.k8s.io
+    resources:
+    - rolebindings/status
+    verbs:
+    - get
+  - apiGroups:
+    - rbac.authorization.k8s.io
+    resources:
+    - roles
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - rbac.authorization.k8s.io
+    resources:
+    - roles/status
+    verbs:
+    - get
+  - apiGroups:
+    - snapshot.storage.k8s.io
+    resources:
+    - volumesnapshotclasses
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - snapshot.storage.k8s.io
+    resources:
+    - volumesnapshotclasses/finalizers
+    verbs:
+    - patch
+    - update
+  - apiGroups:
+    - snapshot.storage.k8s.io
+    resources:
+    - volumesnapshots
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - snapshot.storage.k8s.io
+    resources:
+    - volumesnapshots/finalizers
+    verbs:
+    - patch
+    - update
+  - apiGroups:
+    - storage.k8s.io
+    resources:
+    - csidrivers
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - storage.k8s.io
+    resources:
+    - storageclasses
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - trace.kubeblocks.io
+    resources:
+    - reconciliationtraces
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - trace.kubeblocks.io
+    resources:
+    - reconciliationtraces/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - trace.kubeblocks.io
+    resources:
+    - reconciliationtraces/status
+    verbs:
+    - get
+    - patch
+    - update
+  - apiGroups:
+    - workloads.kubeblocks.io
+    resources:
+    - instancesets
+    verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+  - apiGroups:
+    - workloads.kubeblocks.io
+    resources:
+    - instancesets/finalizers
+    verbs:
+    - update
+  - apiGroups:
+    - workloads.kubeblocks.io
+    resources:
+    - instancesets/status
+    verbs:
+    - get
+    - patch
+    - update
+---
+# Source: kubeblocks/templates/rbac/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-dataprotection-worker-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+# need to run "kubectl patch backup" inside a worker pod to update the status
+- apiGroups:
+  - dataprotection.kubeblocks.io
+  resources:
+  - backups
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - dataprotection.kubeblocks.io
+  resources:
+  - backups/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - delete
+---
+# Source: kubeblocks/templates/rbac/dataprotection_backup_editor_role.yaml
+# permissions for end users to edit backups.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-backup-editor-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - dataprotection.kubeblocks.io
+  resources:
+  - backups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - dataprotection.kubeblocks.io
+  resources:
+  - backups/status
+  verbs:
+  - get
+---
+# Source: kubeblocks/templates/rbac/dataprotection_backuppolicy_editor_role.yaml
+# permissions for end users to edit backuppolicies.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-backuppolicy-editor-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - dataprotection.kubeblocks.io
+  resources:
+  - backuppolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - dataprotection.kubeblocks.io
+  resources:
+  - backuppolicies/status
+  verbs:
+  - get
+---
+# Source: kubeblocks/templates/rbac/dataprotection_backuppolicytemplate_role.yaml
+# permissions for end users to edit backuppolicytemplates.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-backuppolicytemplate-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - dataprotection.kubeblocks.io
+  resources:
+  - backuppolicytemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - dataprotection.kubeblocks.io
+  resources:
+  - backuppolicytemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/dataprotection_exec_worker_clusterrole.yaml
+# permissions for dataprotection workers to run "kubectl exec".
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-dataprotection-exec-worker-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - pods/exec
+  verbs:
+  - create
+---
+# Source: kubeblocks/templates/rbac/dataprotection_restore_editor_role.yaml
+# permissions for end users to edit restores.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-restore-editor-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - dataprotection.kubeblocks.io
+  resources:
+  - restores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - dataprotection.kubeblocks.io
+  resources:
+  - restores/status
+  verbs:
+  - get
+---
+# Source: kubeblocks/templates/rbac/experimental_nodecountscaler_editor_role.yaml
+# permissions for end users to edit nodecountscalers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+  name: kubeblocks-nodecountscaler-editor-role
+rules:
+- apiGroups:
+  - experimental.kubeblocks.io
+  resources:
+  - nodecountscalers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - experimental.kubeblocks.io
+  resources:
+  - nodecountscalers/status
+  verbs:
+  - get
+---
+# Source: kubeblocks/templates/rbac/extensions_addon_editor_role.yaml
+# permissions for end users to edit addons.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-editor-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - extensions.kubeblocks.io
+  resources:
+  - addons
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - extensions.kubeblocks.io
+  resources:
+  - addons/status
+  verbs:
+  - get
+---
+# Source: kubeblocks/templates/rbac/operations_opsdefinition_role.yaml
+# permissions for end users to edit opsdefinitions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-opsdefinition-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - operations.kubeblocks.io
+  resources:
+  - opsdefinitions
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - operations.kubeblocks.io
+  resources:
+  - opsdefinitions/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/operations_opsrequest_role.yaml
+# permissions for end users to edit opsrequests.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-opsrequest-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - operations.kubeblocks.io
+  resources:
+  - opsrequests
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - operations.kubeblocks.io
+  resources:
+  - opsrequests/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/parameters_componentparameter_role.yaml
+# permissions for end users to edit componentparameters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-componentparameter-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - parameters.kubeblocks.io
+  resources:
+  - componentparameters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - parameters.kubeblocks.io
+  resources:
+  - componentparameters/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/parameters_paramconfigrenderer_role.yaml
+# permissions for end users to edit paramconfigrenderers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-paramconfigrenderer-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - parameters.kubeblocks.io
+  resources:
+  - paramconfigrenderers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - parameters.kubeblocks.io
+  resources:
+  - paramconfigrenderers/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/parameters_parameter_role.yaml
+# permissions for end users to edit parameters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-parameter-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - parameters.kubeblocks.io
+  resources:
+  - parameters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - parameters.kubeblocks.io
+  resources:
+  - parameters/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/parameters_parametersdefinition_role.yaml
+# permissions for end users to edit parametersdefinitions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-parametersdefinition-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - parameters.kubeblocks.io
+  resources:
+  - parametersdefinitions
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - parameters.kubeblocks.io
+  resources:
+  - parametersdefinitions/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/rbac_manager_additaional_role.yaml
+# Additional role that is required for addons. Can be defined by user.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-rbac-manager-additional-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+# rabbitmq/patroni needs this
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - get
+  - patch
+  - update
+  - create
+  - list
+  - watch
+  - delete
+# user defined rules
+---
+# Source: kubeblocks/templates/rbac/rbac_manager_role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-rbac-manager-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+    - rbac.authorization.k8s.io
+  resources:
+    - clusterrolebindings
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+- apiGroups:
+    - rbac.authorization.k8s.io
+  resources:
+    - clusterrolebindings/finalizers
+  verbs:
+    - update
+- apiGroups:
+    - rbac.authorization.k8s.io
+  resources:
+    - clusterrolebindings/status
+  verbs:
+    - get
+    - patch
+    - update
+---
+# Source: kubeblocks/templates/rbac/rbac_role.yaml
+# permissions for end users to edit paramconfigrenderers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-rbac-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/shardingdefinition_editor_role.yaml
+# permissions for end users to edit shardingdefinitions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeblocks-shardingdefinition-editor-role
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - apps.kubeblocks.io
+  resources:
+  - shardingdefinitions
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps.kubeblocks.io
+  resources:
+  - shardingdefinitions/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/workloads_instanceset_editor_role.yaml
+# permissions for end users to edit instancesets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+  name: kubeblocks-instanceset-editor-role
+rules:
+- apiGroups:
+  - workloads.kubeblocks.io
+  resources:
+  - instancesets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - workloads.kubeblocks.io
+  resources:
+  - instancesets/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+# Source: kubeblocks/templates/rbac/auth_proxy_role_binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubeblocks-proxy
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeblocks-proxy-role
+subjects:
+- kind: ServiceAccount
+  name: kubeblocks
+  namespace: kb-system
+---
+# Source: kubeblocks/templates/rbac/clusterrole_binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubeblocks-rolebinding
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeblocks
+subjects:
+- kind: ServiceAccount
+  name: kubeblocks
+  namespace: kb-system
+---
+# Source: kubeblocks/templates/rbac/dataprotection_exec_worker_clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubeblocks-dataprotection-exec-worker
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeblocks-dataprotection-exec-worker-role
+subjects:
+- kind: ServiceAccount
+  name: kubeblocks-dataprotection-exec-worker
+  namespace: kb-system
+---
+# Source: kubeblocks/templates/rbac/leader_election_role.yaml
+# permissions to do leader election.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kubeblocks-leader-election-role
+  namespace: kb-system
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+# Source: kubeblocks/templates/rbac/leader_election_role_binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kubeblocks-leader-election-rolebinding
+  namespace: kb-system
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kubeblocks-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: kubeblocks
+  namespace: kb-system
+---
+# Source: kubeblocks/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubeblocks
+  namespace: kb-system
+  labels:
+    control-plane: controller-manager
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9443
+      targetPort: webhook-server
+      protocol: TCP
+      name: webhook-server
+  selector:
+    app.kubernetes.io/component: "apps"
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+---
+# Source: kubeblocks/templates/dataprotection.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubeblocks-dataprotection
+  namespace: kb-system
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: "dataprotection"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: "dataprotection"
+      app.kubernetes.io/name: kubeblocks
+      app.kubernetes.io/instance: kubeblocks
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 40%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: "dataprotection"
+        app.kubernetes.io/name: kubeblocks
+        app.kubernetes.io/instance: kubeblocks
+    spec:
+      priorityClassName: 
+      serviceAccountName: kubeblocks
+      securityContext:
+        runAsNonRoot: true
+      initContainers: # only download tools image to local
+        - name: tools
+          image: "apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-tools:1.0.2"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 50m
+              memory: 64Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          command:
+            - /bin/true
+      containers:
+        - name: dataprotection
+          args:
+            - "--health-probe-bind-address=:8081"
+            - "--metrics-bind-address=:8080"
+            - "--leader-elect"
+            - "--leader-elect-id=abd03fda"
+            - "--zap-devel=false"
+            - "--zap-time-encoding=iso8601"
+            - "--zap-encoder=console"
+            - "--user-agent=kubeblocks"
+          env:
+            - name: CM_NAMESPACE
+              value: kb-system
+            - name: CM_AFFINITY
+              value: "{\"nodeAffinity\":{\"preferredDuringSchedulingIgnoredDuringExecution\":[{\"preference\":{\"matchExpressions\":[{\"key\":\"kb-controller\",\"operator\":\"In\",\"values\":[\"true\"]}]},\"weight\":100}]}}"
+            - name: CM_TOLERATIONS
+              value: "[{\"effect\":\"NoSchedule\",\"key\":\"kb-controller\",\"operator\":\"Equal\",\"value\":\"true\"}]"
+            - name: KUBEBLOCKS_IMAGE_PULL_POLICY
+              value: IfNotPresent
+            - name: KUBEBLOCKS_IMAGE_PULL_SECRETS
+              value: "[]"
+            - name: KUBEBLOCKS_TOOLS_IMAGE
+              value: "apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-tools:1.0.2"
+            - name: KUBEBLOCKS_SERVICEACCOUNT_NAME
+              value: kubeblocks
+            - name: DP_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kubeblocks-secret
+                  key: dataProtectionEncryptionKey
+            - name: DATASAFED_IMAGE
+              value: "apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/datasafed:0.2.3"
+            - name: GC_FREQUENCY_SECONDS
+              value: "3600"
+            - name: WORKER_SERVICE_ACCOUNT_NAME
+              value: kubeblocks-dataprotection-worker
+            - name: EXEC_WORKER_SERVICE_ACCOUNT_NAME
+              value: kubeblocks-dataprotection-exec-worker
+            - name: WORKER_SERVICE_ACCOUNT_ANNOTATIONS
+              value: "{}"
+            - name: WORKER_CLUSTER_ROLE_NAME
+              value: kubeblocks-dataprotection-worker-role
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+          image: "apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-dataprotection:1.0.2"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: webhook-server
+              containerPort: 9443
+              protocol: TCP
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 500m
+              memory: 1Gi
+          volumeMounts:
+            - mountPath: /etc/kubeblocks
+              name: manager-config
+      dnsPolicy: ClusterFirst
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: kb-controller
+                operator: In
+                values:
+                - "true"
+            weight: 100
+      tolerations:
+        - effect: NoSchedule
+          key: kb-controller
+          operator: Equal
+          value: "true"
+      terminationGracePeriodSeconds: 10
+      volumes:
+        - name: manager-config
+          configMap:
+            name: kubeblocks-manager-config
+---
+# Source: kubeblocks/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubeblocks
+  namespace: kb-system
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: "apps"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: "apps"
+      app.kubernetes.io/name: kubeblocks
+      app.kubernetes.io/instance: kubeblocks
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 40%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: "apps"
+        app.kubernetes.io/name: kubeblocks
+        app.kubernetes.io/instance: kubeblocks
+    spec:
+      priorityClassName: 
+      serviceAccountName: kubeblocks
+      securityContext:
+        runAsNonRoot: true
+      initContainers: # only download tools image to local
+        - name: tools
+          image: "apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-tools:1.0.2"
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: 50m
+              memory: 64Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+          command:
+            - /bin/true
+      containers:
+        - name: manager
+          args:
+            - "--health-probe-bind-address=:8081"
+            - "--metrics-bind-address=:8080"
+            - "--leader-elect"
+            - "--leader-elect-id=001c317f"
+            - "--zap-devel=false"
+            - "--zap-time-encoding=iso8601"
+            - "--zap-encoder=console"
+            - "--apps=true"
+            - "--workloads=true"
+            - "--operations=true"
+            - "--extensions=true"
+            - "--experimental=false"
+            - "--trace=false"
+            - "--user-agent=kubeblocks"
+          env:
+            - name: CM_NAMESPACE
+              value: kb-system
+            - name: CM_AFFINITY
+              value: "{\"nodeAffinity\":{\"preferredDuringSchedulingIgnoredDuringExecution\":[{\"preference\":{\"matchExpressions\":[{\"key\":\"kb-controller\",\"operator\":\"In\",\"values\":[\"true\"]}]},\"weight\":100}]}}"
+            - name: CM_TOLERATIONS
+              value: "[{\"effect\":\"NoSchedule\",\"key\":\"kb-controller\",\"operator\":\"Equal\",\"value\":\"true\"}]"
+            - name: KUBEBLOCKS_IMAGE_PULL_POLICY
+              value: IfNotPresent
+            - name: KUBEBLOCKS_IMAGE_PULL_SECRETS
+              value: "[]"
+            - name: KUBEBLOCKS_TOOLS_IMAGE
+              value: "apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-tools:1.0.2"
+            - name: KUBEBLOCKS_SERVICEACCOUNT_NAME
+              value: kubeblocks
+            - name: ENABLE_RBAC_MANAGER
+              value: "true"
+            - name: ADDON_JOB_TTL
+              value: "5m"
+            - name: ADDON_JOB_IMAGE_PULL_POLICY
+              value: IfNotPresent
+            - name: KUBEBLOCKS_ADDON_HELM_INSTALL_OPTIONS
+              value: --atomic --cleanup-on-fail --wait --insecure-skip-tls-verify
+            - name: KUBEBLOCKS_ADDON_CHARTS_IMAGE_PULL_POLICY
+              value: IfNotPresent
+            - name: DP_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kubeblocks-secret
+                  key: dataProtectionEncryptionKey
+            - name: KUBE_PROVIDER
+              value: ""
+            - name: HOST_PORT_INCLUDE_RANGES
+              value: '1025-65536'
+            - name: HOST_PORT_EXCLUDE_RANGES
+              value: '6443,10250,10257,10259,2379-2380,30000-32767'
+            - name: HOST_PORT_CM_NAME
+              value: kubeblocks-host-ports
+            - name: COMPONENT_REPLICAS_ANNOTATION
+              value: "true"
+            - name: IN_PLACE_POD_VERTICAL_SCALING
+              value: "false"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+          image: "apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks:1.0.2"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: webhook-server
+              containerPort: 9443
+              protocol: TCP
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 500m
+              memory: 1Gi
+            requests:
+              cpu: 500m
+              memory: 1Gi
+          volumeMounts:
+            - mountPath: /etc/kubeblocks
+              name: manager-config
+      dnsPolicy: ClusterFirst
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: kb-controller
+                operator: In
+                values:
+                - "true"
+            weight: 100
+      tolerations:
+        - effect: NoSchedule
+          key: kb-controller
+          operator: Equal
+          value: "true"
+      terminationGracePeriodSeconds: 10
+      volumes:
+        - name: manager-config
+          configMap:
+            name: kubeblocks-manager-config
+---
+# Source: kubeblocks/templates/addons/apecloud-mysql-addon.yaml
+apiVersion: extensions.kubeblocks.io/v1alpha1
+kind: Addon
+metadata:
+  name: apecloud-mysql
+  labels:
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    addon.kubeblocks.io/version: 1.0.1
+    addon.kubeblocks.io/name: apecloud-mysql
+    addon.kubeblocks.io/provider: community
+    addon.kubeblocks.io/model: RDBMS
+  annotations:
+    addon.kubeblocks.io/kubeblocks-version: '>=1.0.0'
+    helm.sh/resource-policy: keep
+spec:
+  description: 'ApeCloud MySQL is a database that is compatible with MySQL syntax and achieves high availability through the utilization of the RAFT consensus protocol.'
+  type: Helm
+  helm:    
+    chartLocationURL: file:///apecloud-mysql-1.0.1.tgz
+    chartsImage: apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-charts:1.0.2
+    chartsPathInImage: /charts    
+  defaultInstallValues:
+  - enabled: true
+  installable:
+    autoInstall: true
+---
+# Source: kubeblocks/templates/addons/etcd-addon.yaml
+apiVersion: extensions.kubeblocks.io/v1alpha1
+kind: Addon
+metadata:
+  name: etcd
+  labels:
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    addon.kubeblocks.io/version: 1.0.2
+    addon.kubeblocks.io/name: etcd
+    addon.kubeblocks.io/provider: community
+    addon.kubeblocks.io/model: key-value
+  annotations:
+    addon.kubeblocks.io/kubeblocks-version: '>=0.9.0'
+    helm.sh/resource-policy: keep
+spec:
+  description: 'etcd is a strongly consistent, distributed key-value store that provides a reliable way to store data that needs to be accessed by a distributed system or cluster of machines.'
+  type: Helm
+  helm:    
+    chartLocationURL: file:///etcd-1.0.2.tgz
+    chartsImage: apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-charts:1.0.2
+    chartsPathInImage: /charts    
+  defaultInstallValues:
+  - enabled: true
+  installable:
+    autoInstall: true
+---
+# Source: kubeblocks/templates/addons/kafka-addon.yaml
+apiVersion: extensions.kubeblocks.io/v1alpha1
+kind: Addon
+metadata:
+  name: kafka
+  labels:
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    addon.kubeblocks.io/version: 1.0.2
+    addon.kubeblocks.io/name: kafka
+    addon.kubeblocks.io/provider: community
+    addon.kubeblocks.io/model: streaming
+  annotations:
+    addon.kubeblocks.io/kubeblocks-version: '>=1.0.0'
+    helm.sh/resource-policy: keep
+spec:
+  description: 'Apache Kafka is a distributed streaming platform designed to build real-time pipelines and can be used as a message broker or as a replacement for a log aggregation solution for big data applications.'
+  type: Helm
+  helm:    
+    chartLocationURL: file:///kafka-1.0.2.tgz
+    chartsImage: apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-charts:1.0.2
+    chartsPathInImage: /charts    
+  defaultInstallValues:
+  - enabled: true
+  installable:
+    autoInstall: true
+---
+# Source: kubeblocks/templates/addons/mongodb-addon.yaml
+apiVersion: extensions.kubeblocks.io/v1alpha1
+kind: Addon
+metadata:
+  name: mongodb
+  labels:
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    addon.kubeblocks.io/version: 1.0.2
+    addon.kubeblocks.io/name: mongodb
+    addon.kubeblocks.io/provider: community
+    addon.kubeblocks.io/model: document
+  annotations:
+    addon.kubeblocks.io/kubeblocks-version: '>=1.0.0'
+    helm.sh/resource-policy: keep
+spec:
+  description: 'MongoDB is a document database designed for ease of application development and scaling.'
+  type: Helm
+  helm:    
+    chartLocationURL: file:///mongodb-1.0.2.tgz
+    chartsImage: apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-charts:1.0.2
+    chartsPathInImage: /charts    
+  defaultInstallValues:
+  - enabled: true
+  installable:
+    autoInstall: true
+---
+# Source: kubeblocks/templates/addons/mysql-addon.yaml
+apiVersion: extensions.kubeblocks.io/v1alpha1
+kind: Addon
+metadata:
+  name: mysql
+  labels:
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    addon.kubeblocks.io/version: 1.0.2
+    addon.kubeblocks.io/name: mysql
+    addon.kubeblocks.io/provider: community
+    addon.kubeblocks.io/model: RDBMS
+  annotations:
+    addon.kubeblocks.io/kubeblocks-version: '>=1.0.0'
+    helm.sh/resource-policy: keep
+spec:
+  description: 'MySQL is a widely used, open-source relational database management system (RDBMS).'
+  type: Helm
+  helm:    
+    chartLocationURL: file:///mysql-1.0.2.tgz
+    chartsImage: apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-charts:1.0.2
+    chartsPathInImage: /charts    
+  defaultInstallValues:
+  - enabled: true
+  installable:
+    autoInstall: true
+---
+# Source: kubeblocks/templates/addons/postgresql-addon.yaml
+apiVersion: extensions.kubeblocks.io/v1alpha1
+kind: Addon
+metadata:
+  name: postgresql
+  labels:
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    addon.kubeblocks.io/version: 1.0.2
+    addon.kubeblocks.io/name: postgresql
+    addon.kubeblocks.io/provider: community
+    addon.kubeblocks.io/model: RDBMS
+  annotations:
+    addon.kubeblocks.io/kubeblocks-version: '>=1.0.0'
+    helm.sh/resource-policy: keep
+spec:
+  description: 'PostgreSQL (Postgres) is an open source object-relational database known for reliability and data integrity. ACID-compliant, it supports foreign keys, joins, views, triggers and stored procedures.'
+  type: Helm
+  helm:    
+    chartLocationURL: file:///postgresql-1.0.2.tgz
+    chartsImage: apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-charts:1.0.2
+    chartsPathInImage: /charts    
+  defaultInstallValues:
+  - enabled: true
+  installable:
+    autoInstall: true
+---
+# Source: kubeblocks/templates/addons/qdrant-addon.yaml
+apiVersion: extensions.kubeblocks.io/v1alpha1
+kind: Addon
+metadata:
+  name: qdrant
+  labels:
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    addon.kubeblocks.io/version: 1.0.2
+    addon.kubeblocks.io/name: qdrant
+    addon.kubeblocks.io/provider: community
+    addon.kubeblocks.io/model: vector
+  annotations:
+    addon.kubeblocks.io/kubeblocks-version: '>=1.0.0'
+    helm.sh/resource-policy: keep
+spec:
+  description: 'Qdrant is an open source (Apache-2.0 licensed), vector similarity search engine and vector database.'
+  type: Helm
+  helm:    
+    chartLocationURL: file:///qdrant-1.0.2.tgz
+    chartsImage: apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-charts:1.0.2
+    chartsPathInImage: /charts    
+  defaultInstallValues:
+  - enabled: true
+  installable:
+    autoInstall: false
+---
+# Source: kubeblocks/templates/addons/rabbitmq-addon.yaml
+apiVersion: extensions.kubeblocks.io/v1alpha1
+kind: Addon
+metadata:
+  name: rabbitmq
+  labels:
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    addon.kubeblocks.io/version: 1.0.2
+    addon.kubeblocks.io/name: rabbitmq
+    addon.kubeblocks.io/provider: community
+    addon.kubeblocks.io/model: message
+  annotations:
+    addon.kubeblocks.io/kubeblocks-version: '>=1.0.0'
+    helm.sh/resource-policy: keep
+spec:
+  description: 'RabbitMQ is a reliable and mature messaging and streaming broker.'
+  type: Helm
+  helm:    
+    chartLocationURL: file:///rabbitmq-1.0.2.tgz
+    chartsImage: apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-charts:1.0.2
+    chartsPathInImage: /charts    
+  defaultInstallValues:
+  - enabled: true
+  installable:
+    autoInstall: false
+---
+# Source: kubeblocks/templates/addons/redis-addon.yaml
+apiVersion: extensions.kubeblocks.io/v1alpha1
+kind: Addon
+metadata:
+  name: redis
+  labels:
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    addon.kubeblocks.io/version: 1.0.2
+    addon.kubeblocks.io/name: redis
+    addon.kubeblocks.io/provider: community
+    addon.kubeblocks.io/model: key-value
+  annotations:
+    addon.kubeblocks.io/kubeblocks-version: '>=1.0.0'
+    helm.sh/resource-policy: keep
+spec:
+  description: 'Redis is an open source (BSD licensed), in-memory data structure store, used as a database, cache and message broker.'
+  type: Helm
+  helm:    
+    chartLocationURL: file:///redis-1.0.2.tgz
+    chartsImage: apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com/apecloud/kubeblocks-charts:1.0.2
+    chartsPathInImage: /charts    
+  defaultInstallValues:
+  - enabled: true
+  installable:
+    autoInstall: true
+---
+# Source: kubeblocks/templates/storageprovider/azureblob.yaml
+# azureblob is a storage provider for [Azure Blob Storage](https://azure.microsoft.com/en-us/products/storage/blobs).
+apiVersion: dataprotection.kubeblocks.io/v1alpha1
+kind: StorageProvider
+metadata:
+  name: azureblob
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  datasafedConfigTemplate: |
+    [storage]
+    type = azureblob
+    account = {{ index .Parameters "accountName" }}
+    key = {{ index .Parameters "accountKey" }}
+    {{- $endpoint := index .Parameters "endpoint" }}
+    {{- if $endpoint }}
+    endpoint = {{ $endpoint }}
+    {{- end }}
+    root = {{ index .Parameters "container" }}
+    no_check_container = {{ index .Parameters "noCheckContainer" }}
+    chunk_size = 50Mi
+
+  parametersSchema:
+    openAPIV3Schema:
+      type: "object"
+      properties:
+        container:
+          type: string
+          description: "Azure Blob Storage container"
+        accountName:
+          type: string
+          description: "Azure Blob Storage account name"
+        accountKey:
+          type: string
+          description: "Azure Blob Storage account key"
+        endpoint:
+          type: string
+          description: "Azure Blob Storage endpoint (optional)"
+        noCheckContainer:
+          type: boolean
+          default: false
+          description: "Do not check if the container exists, and do not try to create it"
+
+      required:
+        - container
+        - accountName
+        - accountKey
+
+    credentialFields:
+      - accountName
+      - accountKey
+---
+# Source: kubeblocks/templates/storageprovider/cos.yaml
+# cos is a storage provider for [Tencent Cloud Object Storage](https://cloud.tencent.com/product/cos)
+apiVersion: dataprotection.kubeblocks.io/v1alpha1
+kind: StorageProvider
+metadata:
+  name: cos
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  csiDriverName: ru.yandex.s3.csi
+  csiDriverSecretTemplate: |
+    accessKeyID: {{ index .Parameters "accessKeyId" }}
+    secretAccessKey: {{ index .Parameters "secretAccessKey" }}
+    {{- $region := index .Parameters "region" }}
+    {{- $endpoint := index .Parameters "endpoint" }}
+    {{- if not $endpoint }}
+      {{- $endpoint = (printf "https://cos.%s.myqcloud.com" $region) }}
+    {{- end }}
+    endpoint: {{ $endpoint }}
+
+  storageClassTemplate: |
+    provisioner: ru.yandex.s3.csi
+    parameters:
+      mounter: geesefs
+      # you can set mount options here, for example limit memory cache size (recommended)
+      options: {{ printf "--memory-limit %s --read-ahead-large %s --dir-mode 0777 --file-mode 0666 %s --subdomain" .Parameters.geesefsMemoryLimit .Parameters.geesefsReadAheadLarge .Parameters.mountOptions }}
+      bucket: {{ index .Parameters "bucket" }}
+      csi.storage.k8s.io/provisioner-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/provisioner-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/controller-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/controller-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-stage-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-stage-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+
+  datasafedConfigTemplate: |
+    [storage]
+    type = s3
+    provider = TencentCOS
+    env_auth = false
+    access_key_id = {{ index .Parameters "accessKeyId" }}
+    secret_access_key = {{ index .Parameters "secretAccessKey" }}
+    {{- $region := index .Parameters "region" }}
+    {{- $endpoint := index .Parameters "endpoint" }}
+    {{- if not $endpoint }}
+      {{- $endpoint = (printf "cos.%s.myqcloud.com" $region) }}
+    {{- end }}
+    endpoint = {{ $endpoint }}
+    root = {{ index .Parameters "bucket" }}
+    no_check_certificate = {{ index .Parameters "insecure" }}
+    no_check_bucket = {{ index .Parameters "noCheckBucket" }}
+    chunk_size = 50Mi
+
+  parametersSchema:
+    openAPIV3Schema:
+      type: "object"
+      properties:
+        region:
+          type: string
+          description: "COS region, e.g. cn-guangzhou"
+        bucket:
+          type: string
+          description: "COS bucket"
+        endpoint:
+          type: string
+          description: "COS endpoint (optional)"
+        mountOptions:
+          type: string
+          description: "Extra mount options for geesefs"
+        geesefsMemoryLimit:
+          type: integer
+          default: 512
+          description: "The value of --memory-limit parameter for geesefs, in MB"
+        geesefsReadAheadLarge:
+          type: integer
+          default: 20480
+          description: "The value of --read-ahead-large parameter for geesefs, in KB"
+        accessKeyId:
+          type: string
+          description: "COS access key"
+        secretAccessKey:
+          type: string
+          description: "COS secret key"
+        insecure:
+          type: boolean
+          default: false
+          description: "Do not verify the server SSL certificate"
+        noCheckBucket:
+          type: boolean
+          default: false
+          description: "Do not check if the bucket exists, and do not try to create it"
+
+      required:
+        - bucket
+        - region
+        - accessKeyId
+        - secretAccessKey
+
+    credentialFields:
+      - accessKeyId
+      - secretAccessKey
+---
+# Source: kubeblocks/templates/storageprovider/ftp.yaml
+apiVersion: dataprotection.kubeblocks.io/v1alpha1
+kind: StorageProvider
+metadata:
+  name: ftp
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  datasafedConfigTemplate: |
+    [storage]
+    type = ftp
+    host = {{ .Parameters.ftpHost }}
+    port = {{ if ne .Parameters.ftpPort "0" }}{{ .Parameters.ftpPort }}{{ else }}21{{ end }}
+    user = {{ .Parameters.ftpUser }}
+    pass.need_obscure = {{ .Parameters.ftpPassword }}
+    tls = {{ .Parameters.ftpTls | default false }}
+
+  parametersSchema:
+    openAPIV3Schema:
+      type: "object"
+      properties:
+        ftpHost:
+          type: string
+          description: "Host of the FTP server"
+        ftpPort:
+          type: integer
+          description: "Port of the FTP server (optional)"
+          default: 21
+        ftpUser:
+          type: string
+          description: "the FTP user"
+        ftpPassword:
+          type: string
+          description: "the password of the user"
+        ftpTls:
+          type: boolean
+          description: "enable FTP over TLS (optional)"
+          default: false
+
+      required:
+        - ftpHost
+        - ftpUser
+        - ftpPassword
+
+    credentialFields:
+      - ftpUser
+      - ftpPassword
+---
+# Source: kubeblocks/templates/storageprovider/gcs-s3comp.yaml
+# gcs-s3comp is a storage provider for [Google Cloud Storage](https://cloud.google.com/storage/), by using its S3-compatible API.
+apiVersion: dataprotection.kubeblocks.io/v1alpha1
+kind: StorageProvider
+metadata:
+  name: gcs-s3comp
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  csiDriverName: ru.yandex.s3.csi
+  csiDriverSecretTemplate: |
+    {{- $endpoint := index .Parameters "endpoint" }}
+    {{- if not $endpoint }}
+      {{- $endpoint = (printf "https://storage.googleapis.com") }}
+    {{- end }}
+    accessKeyID: {{ index .Parameters "accessKeyId" }}
+    secretAccessKey: {{ index .Parameters "secretAccessKey" }}
+    endpoint: {{ $endpoint }}
+
+  storageClassTemplate: |
+    provisioner: ru.yandex.s3.csi
+    parameters:
+      mounter: geesefs
+      # you can set mount options here, for example limit memory cache size (recommended)
+      options: {{ printf "--memory-limit %s --read-ahead-large %s --dir-mode 0777 --file-mode 0666 %s --subdomain" .Parameters.geesefsMemoryLimit .Parameters.geesefsReadAheadLarge .Parameters.mountOptions }}
+      bucket: {{ index .Parameters "bucket" }}
+      csi.storage.k8s.io/provisioner-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/provisioner-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/controller-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/controller-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-stage-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-stage-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+
+  datasafedConfigTemplate: |
+    [storage]
+    type = s3
+    provider = GCS
+    env_auth = false
+    access_key_id = {{ index .Parameters "accessKeyId" }}
+    secret_access_key = {{ index .Parameters "secretAccessKey" }}
+    {{- $endpoint := index .Parameters "endpoint" }}
+    {{- if not $endpoint }}
+      {{- $endpoint = (printf "https://storage.googleapis.com") }}
+    {{- end }}
+    endpoint = {{ $endpoint }}
+    region = {{ index .Parameters "region" }}
+    root = {{ index .Parameters "bucket" }}
+    no_check_certificate = {{ index .Parameters "insecure" }}
+    no_check_bucket = true
+    chunk_size = 50Mi
+
+  parametersSchema:
+    openAPIV3Schema:
+      type: "object"
+      properties:
+        region:
+          type: string
+          description: "GCS region, e.g. auto"
+        bucket:
+          type: string
+          description: "GCS bucket, the bucket must already exist"
+        endpoint:
+          type: string
+          description: "GCS endpoint (optional)"
+        mountOptions:
+          type: string
+          description: "Extra mount options for geesefs"
+        geesefsMemoryLimit:
+          type: integer
+          default: 512
+          description: "The value of --memory-limit parameter for geesefs, in MB"
+        geesefsReadAheadLarge:
+          type: integer
+          default: 20480
+          description: "The value of --read-ahead-large parameter for geesefs, in KB"
+        accessKeyId:
+          type: string
+          description: "GCS access key"
+        secretAccessKey:
+          type: string
+          description: "GCS secret key"
+        insecure:
+          type: boolean
+          default: false
+          description: "Do not verify the server SSL certificate"
+
+      required:
+        - bucket
+        - region
+        - accessKeyId
+        - secretAccessKey
+
+    credentialFields:
+      - accessKeyId
+      - secretAccessKey
+---
+# Source: kubeblocks/templates/storageprovider/minio.yaml
+apiVersion: dataprotection.kubeblocks.io/v1alpha1
+kind: StorageProvider
+metadata:
+  name: minio
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  csiDriverName: ru.yandex.s3.csi
+  csiDriverSecretTemplate: |
+    accessKeyID: {{ index .Parameters "accessKeyId" }}
+    secretAccessKey: {{ index .Parameters "secretAccessKey" }}
+    endpoint: {{ index .Parameters "endpoint" }}
+
+  storageClassTemplate: |
+    provisioner: ru.yandex.s3.csi
+    parameters:
+      mounter: geesefs
+      {{ $regionOption := "" }}
+      {{ if .Parameters.region }}
+        {{ $regionOption = (printf "--region %s" .Parameters.region) }}
+      {{ end }}
+      # you can set mount options here, for example limit memory cache size (recommended)
+      options: {{ printf "--memory-limit %s --read-ahead-large %s --dir-mode 0777 --file-mode 0666 %s %s" .Parameters.geesefsMemoryLimit .Parameters.geesefsReadAheadLarge .Parameters.mountOptions $regionOption }}
+      bucket: {{ index .Parameters "bucket" }}
+      csi.storage.k8s.io/provisioner-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/provisioner-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/controller-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/controller-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-stage-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-stage-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+
+  datasafedConfigTemplate: |
+    [storage]
+    type = s3
+    provider = Minio
+    env_auth = false
+    access_key_id = {{ index .Parameters "accessKeyId" }}
+    secret_access_key = {{ index .Parameters "secretAccessKey" }}
+    region = {{ index .Parameters "region" }}
+    endpoint = {{ index .Parameters "endpoint" }}
+    root = {{ index .Parameters "bucket" }}
+    no_check_certificate = {{ index .Parameters "insecure" }}
+    no_check_bucket = {{ index .Parameters "noCheckBucket" }}
+    chunk_size = 50Mi
+
+  parametersSchema:
+    openAPIV3Schema:
+      type: "object"
+      properties:
+        region:
+          type: string
+          description: "MinIO region (optional), e.g. us-west-1"
+        bucket:
+          type: string
+          description: "MinIO bucket"
+        endpoint:
+          type: string
+          description: "MinIO endpoint"
+        mountOptions:
+          type: string
+          description: "Extra mount options for geesefs"
+        geesefsMemoryLimit:
+          type: integer
+          default: 512
+          description: "The value of --memory-limit parameter for geesefs, in MB"
+        geesefsReadAheadLarge:
+          type: integer
+          default: 20480
+          description: "The value of --read-ahead-large parameter for geesefs, in KB"
+        accessKeyId:
+          type: string
+          description: "MinIO access key"
+        secretAccessKey:
+          type: string
+          description: "MinIO secret key"
+        insecure:
+          type: boolean
+          default: false
+          description: "Do not verify the server SSL certificate"
+        noCheckBucket:
+          type: boolean
+          default: false
+          description: "Do not check if the bucket exists, and do not try to create it"
+
+      required:
+        - bucket
+        - endpoint
+        - accessKeyId
+        - secretAccessKey
+
+    credentialFields:
+      - accessKeyId
+      - secretAccessKey
+---
+# Source: kubeblocks/templates/storageprovider/nfs.yaml
+apiVersion: dataprotection.kubeblocks.io/v1alpha1
+kind: StorageProvider
+metadata:
+  name: nfs
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  csiDriverName: nfs.csi.k8s.io
+
+  storageClassTemplate: |
+    provisioner: nfs.csi.k8s.io
+    parameters:
+      server: {{ .Parameters.nfsServer }}
+      share: {{ .Parameters.nfsShare }}
+      subDir: {{ .Parameters.nfsSubDir }}
+      mountPermissions: "0777"
+    {{- if .Parameters.nfsMountOptions }}
+    {{- $options := splitList " " .Parameters.nfsMountOptions }}
+    mountOptions: {{ $options | toJson }}
+    {{- end }}
+
+  parametersSchema:
+    openAPIV3Schema:
+      type: "object"
+      properties:
+        nfsServer:
+          type: string
+          description: "NFS Server address"
+        nfsShare:
+          type: string
+          description: "NFS share path"
+          default: "/"
+        nfsSubDir:
+          type: string
+          description: "sub directory under nfs share"
+        nfsMountOptions:
+          type: string
+          description: "extra mount options"
+
+      required:
+        - nfsServer
+---
+# Source: kubeblocks/templates/storageprovider/obs.yaml
+# obs is a storage provider for [Huawei OBS](https://www.huaweicloud.com/product/obs.html) object storage.
+apiVersion: dataprotection.kubeblocks.io/v1alpha1
+kind: StorageProvider
+metadata:
+  name: obs
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  csiDriverName: ru.yandex.s3.csi
+  csiDriverSecretTemplate: |
+    accessKeyID: {{ index .Parameters "accessKeyId" }}
+    secretAccessKey: {{ index .Parameters "secretAccessKey" }}
+    {{- $region := index .Parameters "region" }}
+    {{- $endpoint := index .Parameters "endpoint" }}
+    {{- if not $endpoint }}
+      {{- $endpoint = (printf "https://obs.%s.myhuaweicloud.com" $region) }}
+    {{- end }}
+    endpoint: {{ $endpoint }}
+
+  storageClassTemplate: |
+    provisioner: ru.yandex.s3.csi
+    parameters:
+      mounter: geesefs
+      # you can set mount options here, for example limit memory cache size (recommended)
+      options: {{ printf "--memory-limit %s --read-ahead-large %s --dir-mode 0777 --file-mode 0666 %s --subdomain" .Parameters.geesefsMemoryLimit .Parameters.geesefsReadAheadLarge .Parameters.mountOptions }}
+      bucket: {{ index .Parameters "bucket" }}
+      csi.storage.k8s.io/provisioner-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/provisioner-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/controller-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/controller-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-stage-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-stage-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+
+  datasafedConfigTemplate: |
+    [storage]
+    type = s3
+    provider = HuaweiOBS
+    env_auth = false
+    access_key_id = {{ index .Parameters "accessKeyId" }}
+    secret_access_key = {{ index .Parameters "secretAccessKey" }}
+    region = {{ index .Parameters "region" }}
+    {{- $region := index .Parameters "region" }}
+    {{- $endpoint := index .Parameters "endpoint" }}
+    {{- if not $endpoint }}
+      {{- $endpoint = (printf "obs.%s.myhuaweicloud.com" $region) }}
+    {{- end }}
+    endpoint = {{ $endpoint }}
+    root = {{ index .Parameters "bucket" }}
+    no_check_certificate = {{ index .Parameters "insecure" }}
+    no_check_bucket = {{ index .Parameters "noCheckBucket" }}
+    chunk_size = 50Mi
+
+  parametersSchema:
+    openAPIV3Schema:
+      type: "object"
+      properties:
+        region:
+          type: string
+          description: "OBS region, e.g. cn-north-4"
+        bucket:
+          type: string
+          description: "OBS bucket"
+        endpoint:
+          type: string
+          description: "OBS endpoint (optional)"
+        mountOptions:
+          type: string
+          description: "Extra mount options for geesefs"
+        geesefsMemoryLimit:
+          type: integer
+          default: 512
+          description: "The value of --memory-limit parameter for geesefs, in MB"
+        geesefsReadAheadLarge:
+          type: integer
+          default: 20480
+          description: "The value of --read-ahead-large parameter for geesefs, in KB"
+        accessKeyId:
+          type: string
+          description: "OBS access key"
+        secretAccessKey:
+          type: string
+          description: "OBS secret key"
+        insecure:
+          type: boolean
+          default: false
+          description: "Do not verify the server SSL certificate"
+        noCheckBucket:
+          type: boolean
+          default: false
+          description: "Do not check if the bucket exists, and do not try to create it"
+
+      required:
+        - bucket
+        - region
+        - accessKeyId
+        - secretAccessKey
+
+    credentialFields:
+      - accessKeyId
+      - secretAccessKey
+---
+# Source: kubeblocks/templates/storageprovider/oss.yaml
+apiVersion: dataprotection.kubeblocks.io/v1alpha1
+kind: StorageProvider
+metadata:
+  name: oss
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  csiDriverName: ru.yandex.s3.csi
+  csiDriverSecretTemplate: |
+    accessKeyID: {{ index .Parameters "accessKeyId" }}
+    secretAccessKey: {{ index .Parameters "secretAccessKey" }}
+    {{- $region := index .Parameters "region" }}
+    {{- $endpoint := index .Parameters "endpoint" }}
+    {{- if not $endpoint }}
+      {{- $endpoint = (printf "https://oss-%s.aliyuncs.com" $region) }}
+    {{- end }}
+    endpoint: {{ $endpoint }}
+
+  storageClassTemplate: |
+    provisioner: ru.yandex.s3.csi
+    parameters:
+      mounter: geesefs
+      # you can set mount options here, for example limit memory cache size (recommended)
+      options: {{ printf "--memory-limit %s --read-ahead-large %s --dir-mode 0777 --file-mode 0666 %s --subdomain" .Parameters.geesefsMemoryLimit .Parameters.geesefsReadAheadLarge .Parameters.mountOptions }}
+      bucket: {{ index .Parameters "bucket" }}
+      csi.storage.k8s.io/provisioner-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/provisioner-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/controller-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/controller-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-stage-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-stage-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+
+  datasafedConfigTemplate: |
+    [storage]
+    type = s3
+    provider = Alibaba
+    env_auth = false
+    access_key_id = {{ index .Parameters "accessKeyId" }}
+    secret_access_key = {{ index .Parameters "secretAccessKey" }}
+    {{- $region := index .Parameters "region" }}
+    {{- $endpoint := index .Parameters "endpoint" }}
+    {{- if not $endpoint }}
+      {{- $endpoint = (printf "oss-%s.aliyuncs.com" $region) }}
+    {{- end }}
+    endpoint = {{ $endpoint }}
+    root = {{ index .Parameters "bucket" }}
+    no_check_certificate = {{ index .Parameters "insecure" }}
+    no_check_bucket = {{ index .Parameters "noCheckBucket" }}
+    use_already_exists = false
+    chunk_size = 50Mi
+
+  parametersSchema:
+    openAPIV3Schema:
+      type: "object"
+      properties:
+        region:
+          type: string
+          description: "OSS region, e.g. cn-hangzhou"
+        bucket:
+          type: string
+          description: "OSS bucket"
+        endpoint:
+          type: string
+          description: "OSS endpoint (optional)"
+        mountOptions:
+          type: string
+          description: "Extra mount options for geesefs"
+        geesefsMemoryLimit:
+          type: integer
+          default: 512
+          description: "The value of --memory-limit parameter for geesefs, in MB"
+        geesefsReadAheadLarge:
+          type: integer
+          default: 20480
+          description: "The value of --read-ahead-large parameter for geesefs, in KB"
+        accessKeyId:
+          type: string
+          description: "OSS access key"
+        secretAccessKey:
+          type: string
+          description: "OSS secret key"
+        insecure:
+          type: boolean
+          default: false
+          description: "Do not verify the server SSL certificate"
+        noCheckBucket:
+          type: boolean
+          default: false
+          description: "Do not check if the bucket exists, and do not try to create it"
+
+      required:
+        - bucket
+        - region
+        - accessKeyId
+        - secretAccessKey
+
+    credentialFields:
+      - accessKeyId
+      - secretAccessKey
+---
+# Source: kubeblocks/templates/storageprovider/pvc.yaml
+apiVersion: dataprotection.kubeblocks.io/v1alpha1
+kind: StorageProvider
+metadata:
+  name: pvc
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  persistentVolumeClaimTemplate: |
+    spec:
+      storageClassName: {{ .Parameters.storageClassName | default "" }}
+      accessModes:
+        - {{ .Parameters.accessMode | default "ReadWriteOnce" }}
+      volumeMode: {{ .Parameters.volumeMode | default "Filesystem" }}
+
+  parametersSchema:
+    openAPIV3Schema:
+      type: "object"
+      properties:
+        storageClassName:
+          type: string
+          description: "the name of the StorageClass used to create the PVC"
+        accessMode:
+          type: string
+          description: "the access mode used to create the PVC"
+          default: "ReadWriteOnce"
+          enum: ["ReadWriteOnce", "ReadWriteMany", "ReadWriteOncePod"]
+        volumeMode:
+          type: string
+          description: "the volume mode used to create the PVC"
+          default: "Filesystem"
+          enum: ["Filesystem", "Block"]
+---
+# Source: kubeblocks/templates/storageprovider/s3-compatible.yaml
+apiVersion: dataprotection.kubeblocks.io/v1alpha1
+kind: StorageProvider
+metadata:
+  name: s3-compatible
+spec:
+  csiDriverName: ru.yandex.s3.csi
+  csiDriverSecretTemplate: |
+    accessKeyID: {{ index .Parameters "accessKeyId" }}
+    secretAccessKey: {{ index .Parameters "secretAccessKey" }}
+    endpoint: {{ index .Parameters "endpoint" }}
+  storageClassTemplate: |
+    provisioner: ru.yandex.s3.csi
+    parameters:
+      mounter: geesefs
+      {{ $regionOption := "" }}
+      {{ if .Parameters.region }}
+        {{ $regionOption = (printf "--region %s" .Parameters.region) }}
+      {{ end }}
+      # you can set mount options here, for example limit memory cache size (recommended)
+      options: {{ printf "--memory-limit %s --read-ahead-large %s --dir-mode 0777 --file-mode 0666 %s %s" .Parameters.geesefsMemoryLimit .Parameters.geesefsReadAheadLarge .Parameters.mountOptions $regionOption }}
+      bucket: {{ index .Parameters "bucket" }}
+      csi.storage.k8s.io/provisioner-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/provisioner-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/controller-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/controller-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-stage-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-stage-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+  datasafedConfigTemplate: |
+    [storage]
+    type = s3
+    provider = {{ index .Parameters "serviceProvider" | default "Other" }}
+    env_auth = false
+    access_key_id = {{ index .Parameters "accessKeyId" }}
+    secret_access_key = {{ index .Parameters "secretAccessKey" }}
+    region = {{ index .Parameters "region" }}
+    endpoint = {{ index .Parameters "endpoint" }}
+    root = {{ index .Parameters "bucket" }}
+    no_check_certificate = {{ index .Parameters "insecure" }}
+    no_check_bucket = {{ index .Parameters "noCheckBucket" }}
+    chunk_size = 50Mi
+    force_path_style = {{ index .Parameters "forcePathStyle" | default "false" }}
+  parametersSchema:
+    openAPIV3Schema:
+      type: "object"
+      properties:
+        region:
+          type: string
+          description: "Storage region (optional), e.g. us-west-1"
+        bucket:
+          type: string
+          description: "Storage bucket"
+        endpoint:
+          type: string
+          description: "Storage endpoint"
+        mountOptions:
+          type: string
+          description: "Extra mount options for geesefs"
+        geesefsMemoryLimit:
+          type: integer
+          default: 512
+          description: "The value of --memory-limit parameter for geesefs, in MB"
+        geesefsReadAheadLarge:
+          type: integer
+          default: 20480
+          description: "The value of --read-ahead-large parameter for geesefs, in KB"
+        accessKeyId:
+          type: string
+          description: "Storage access key"
+        secretAccessKey:
+          type: string
+          description: "Storage secret key"
+        insecure:
+          type: boolean
+          default: false
+          description: "Do not verify the server SSL certificate"
+        noCheckBucket:
+          type: boolean
+          default: false
+          description: "Do not check if the bucket exists, and do not try to create it"
+        serviceProvider:
+          type: string
+          default: "Other"
+          description: "Provider name supported by rclone (https://rclone.org/s3/#configuration), e.g. DigitalOcean"
+        forcePathStyle:
+          type: boolean
+          default: false
+          description: "Force path-style access"
+      required:
+        - bucket
+        - endpoint
+        - accessKeyId
+        - secretAccessKey
+    credentialFields:
+      - accessKeyId
+      - secretAccessKey
+---
+# Source: kubeblocks/templates/storageprovider/s3.yaml
+apiVersion: dataprotection.kubeblocks.io/v1alpha1
+kind: StorageProvider
+metadata:
+  name: s3
+  labels:
+    helm.sh/chart: kubeblocks-1.0.2
+    app.kubernetes.io/name: kubeblocks
+    app.kubernetes.io/instance: kubeblocks
+    app.kubernetes.io/version: "1.0.2"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  csiDriverName: ru.yandex.s3.csi
+  csiDriverSecretTemplate: |
+    accessKeyID: {{ index .Parameters "accessKeyId" }}
+    secretAccessKey: {{ index .Parameters "secretAccessKey" }}
+    {{- $region := index .Parameters "region" }}
+    {{- $endpoint := index .Parameters "endpoint" }}
+    {{- if not $endpoint }}
+      {{- if hasPrefix "cn-" $region }}
+        {{- $endpoint = (printf "https://s3.%s.amazonaws.com.cn" $region) }}
+      {{- else }}
+        {{- $endpoint = (printf "https://s3.%s.amazonaws.com" $region) }}
+      {{- end }}
+    {{- end }}
+    endpoint: {{ $endpoint }}
+
+  storageClassTemplate: |
+    provisioner: ru.yandex.s3.csi
+    parameters:
+      mounter: geesefs
+      # you can set mount options here, for example limit memory cache size (recommended)
+      options: {{ printf "--memory-limit %s --read-ahead-large %s --dir-mode 0777 --file-mode 0666 %s --region %s" .Parameters.geesefsMemoryLimit .Parameters.geesefsReadAheadLarge .Parameters.mountOptions .Parameters.region }}
+      bucket: {{ index .Parameters "bucket" }}
+      csi.storage.k8s.io/provisioner-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/provisioner-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/controller-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/controller-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-stage-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-stage-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+      csi.storage.k8s.io/node-publish-secret-name: {{ .CSIDriverSecretRef.Name }}
+      csi.storage.k8s.io/node-publish-secret-namespace: {{ .CSIDriverSecretRef.Namespace }}
+
+  datasafedConfigTemplate: |
+    [storage]
+    type = s3
+    provider = AWS
+    env_auth = false
+    access_key_id = {{ index .Parameters "accessKeyId" }}
+    secret_access_key = {{ index .Parameters "secretAccessKey" }}
+    region = {{ index .Parameters "region" }}
+    endpoint = {{ index .Parameters "endpoint" }}
+    root = {{ index .Parameters "bucket" }}
+    no_check_certificate = {{ index .Parameters "insecure" }}
+    no_check_bucket = {{ index .Parameters "noCheckBucket" }}
+    chunk_size = 50Mi
+
+  parametersSchema:
+    openAPIV3Schema:
+      type: "object"
+      properties:
+        region:
+          type: string
+          description: "AWS region, e.g. us-west-1"
+        bucket:
+          type: string
+          description: "S3 bucket"
+        endpoint:
+          type: string
+          description: "S3 endpoint (optional)"
+        mountOptions:
+          type: string
+          description: "Extra mount options for geesefs"
+        geesefsMemoryLimit:
+          type: integer
+          default: 512
+          description: "The value of --memory-limit parameter for geesefs, in MB"
+        geesefsReadAheadLarge:
+          type: integer
+          default: 20480
+          description: "The value of --read-ahead-large parameter for geesefs, in KB"
+        accessKeyId:
+          type: string
+          description: "AWS access key"
+        secretAccessKey:
+          type: string
+          description: "AWS secret key"
+        insecure:
+          type: boolean
+          default: false
+          description: "Do not verify the server SSL certificate"
+        noCheckBucket:
+          type: boolean
+          default: false
+          description: "Do not check if the bucket exists, and do not try to create it"
+
+      required:
+        - bucket
+        - region
+        - accessKeyId
+        - secretAccessKey
+
+    credentialFields:
+      - accessKeyId
+      - secretAccessKey

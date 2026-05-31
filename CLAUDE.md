@@ -151,7 +151,7 @@ server = "https://registry-1.docker.io"
   skip_verify = true
 ```
 
-完整的 5 个文件模板见 `docker/kind/deploy.sh`(里面有可复用的循环写法,新机器也能跑)。
+完整的 5 个文件模板见 `linux/docker/kind/deploy.sh`(里面有可复用的循环写法,新机器也能跑)。
 
 | 目录 | upstream server | mirror host |
 |---|---|---|
@@ -238,7 +238,7 @@ docker push registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 
 注:`ghcr.ihome.sxxpqp.top:8443` / `quay.ihome.sxxpqp.top:8443` / `k8s.ihome.sxxpqp.top:8443` / `0523dw.ihome.sxxpqp.top:8443` / `dockerhub.ihome.sxxpqp.top:8443` 等 **没有列在"弃用"里** —— 它们是 **Harbor 的现役 nginx 多前端别名**,继续使用,见上面 "Harbor 架构" 段。
 
-参考实现:`docker/kind/deploy.sh`(已更新成新架构,可复用)。
+参考实现:`linux/docker/kind/deploy.sh`(已更新成新架构,可复用)。
 
 ## 子目录优先级 / 当前活跃区域
 

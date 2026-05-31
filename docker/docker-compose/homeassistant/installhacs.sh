@@ -68,7 +68,7 @@ function run() {
         info "Downloading HACS"
         rm -f "$haPath/custom_components/hacs.zip"
         # wget "https://github.com/hacs/integration/releases/latest/download/hacs.zip"
-        wget "https://chfs.sxxpqp.top:8443/chfs/shared/docker/docker-compose/homeassistant/hacs.zip"
+        wget "https://chfs.sxxpqp.top:8443/chfs/shared/linux/docker/docker-compose/homeassistant/hacs.zip"
 
         if [ -d "$haPath/custom_components/hacs" ]; then
             warn "HACS directory already exist, cleaning up..."

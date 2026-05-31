@@ -6,7 +6,7 @@ DOCKER_File="docker-$DOCKER_VERSION.tgz"
 INSTALL_DIR="/usr/local/bin" # Docker 安装目录
 DOCKER_ROOT="/var/lib/docker" # Docker 数据目录
 #DOWNLOAD_URL="https://minio.sxxpqp.top/docker" # 下载 URL
-DOWNLOAD_URL="https://chfs.sxxpqp.top:8443/chfs/shared/docker/armv7" # 下载 URL
+DOWNLOAD_URL="https://chfs.sxxpqp.top:8443/chfs/shared/linux/docker/armv7" # 下载 URL
 function download_file() {
     # 下载文件函数
     local file_url="$1"
