@@ -51,7 +51,8 @@ Linux 运维知识库，涵盖容器编排、云原生、CI/CD、监控、网络
 
 | 目录 | 内容 | 状态 |
 |---|---|---|
-| [mysql/](mysql/README.md) | MySQL 运维（InnoDB Cluster、Router、备份、K8s CronJob） | ✅ 生产验证 |
+| [mysql/](mysql/README.md) | MySQL 运维（InnoDB Cluster、Router、备份、K8s CronJob、[容量规划/性能瓶颈速查](mysql/capacity-planning.md)） | ✅ 生产验证 |
+| [redis/](redis/README.md) | Redis 通用运维 + [容量规划/性能瓶颈速查](redis/capacity-planning.md)（链路、4 资源轴、Sentinel/Cluster 选型、排障命令） | ✅ 生产参考 |
 
 ### 监控
 
