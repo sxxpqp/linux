@@ -9,7 +9,8 @@ Redis **通用运维知识 + 容量规划**。具体部署模板在子目录:
 
 | 文件 | 说明 | 状态 |
 |---|---|---|
-| [capacity-planning.md](capacity-planning.md) | **Redis 容量规划 / 性能瓶颈速查**:完整请求链路 + 4 资源轴 trade-off + 4 种部署模式对比 + 8C16G 推荐配置 + 排障命令速查 + 容器化坑 | ✅ 生产参考 |
+| [capacity-planning.md](capacity-planning.md) | **Redis 容量规划 / 性能瓶颈速查**:完整请求链路 + 4 资源轴 trade-off + 4 种部署模式对比 + 8C16G 推荐配置 + 排障命令速查 + 容器化坑 + 24G fork 60s 真实案例 | ✅ 生产参考 |
+| [fix-prod-fork.sh](fix-prod-fork.sh) | **一键修复脚本**:fork 慢 + 误切换三层加固(OS / Redis / Cluster),幂等,支持 `--dry-run`,集群模式自动遍历所有节点 | ✅ 生产参考 |
 
 ## 快速决策
 
