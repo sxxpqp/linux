@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/redis-cluster/redisinsight-uninstall.sh
 # 卸载 RedisInsight.
 # 用法:
 #   bash redisinsight-uninstall.sh

@@ -1,0 +1,18 @@
+services:
+  db:
+    # image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/linux_arm64_postgres:14-alpine3.21
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/postgres
+    container_name: my_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mydatabase
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+    driver: local

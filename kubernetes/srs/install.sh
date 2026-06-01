@@ -1,4 +1,5 @@
 #!/bash/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/srs/install.sh
 namespace=srs
 
 cat <<EOF | kubectl -n $namespace apply -f -

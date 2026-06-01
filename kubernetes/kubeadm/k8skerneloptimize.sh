@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeadm/k8skerneloptimize.sh
 # ============================================================
 # 许愿狐 (Wishfoxs) K8s 节点内核优化脚本
 # 支持: CentOS 7/8, Rocky Linux 8/9, Ubuntu 20.04/22.04/24.04

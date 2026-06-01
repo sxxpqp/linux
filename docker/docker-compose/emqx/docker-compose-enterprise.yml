@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  emqx-enterprise:
+    image: emqx/emqx-enterprise:5.8.6
+    container_name: emqx-enterprise
+    ports:
+      - "1883:1883"
+      - "8083:8083"
+      - "8084:8084"
+      - "8883:8883"
+      - "18083:18083"
+    volumes:
+      - ./data:/opt/emqx/data
+      - ./log:/opt/emqx/log
+    restart: always  # 可选，设置容器崩溃后自动重启

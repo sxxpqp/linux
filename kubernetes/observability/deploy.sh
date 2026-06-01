@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/observability/deploy.sh
 set -e
 
 NAMESPACE="observability"

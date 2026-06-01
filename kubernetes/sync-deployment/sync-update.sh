@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/sync-deployment/sync-update.sh
 # 修改k8s命名空间deployment的容器的镜像
 #读取多行deployment.name=镜像名
 # namespace=tmc-v2-saas saas线上环境

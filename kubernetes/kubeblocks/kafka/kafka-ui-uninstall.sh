@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/kafka/kafka-ui-uninstall.sh
 # 卸载 Kafka UI (不影响 Kafka Cluster).
 #
 # 用法:

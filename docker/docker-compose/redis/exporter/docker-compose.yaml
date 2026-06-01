@@ -1,0 +1,24 @@
+services:
+  redis-exporter-master:
+    # 老镜像 hub.wishfoxs.com:6443/middleware/redis_exporter 是外部 harbor, 自己环境拉不到
+    # 改走 huball (docker.io 代理), 镜像 = oliver006/redis_exporter
+    image: dockerhub.ihome.sxxpqp.top:8443/oliver006/redis_exporter:latest
+    container_name: redis-exporter-master
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=192.168.100.24:6379
+      - REDIS_PASSWORD=redis123
+    restart: always
+
+  redis-exporter-slave:
+    # 老镜像 hub.wishfoxs.com:6443/middleware/redis_exporter 是外部 harbor, 自己环境拉不到
+    # 改走 huball (docker.io 代理), 镜像 = oliver006/redis_exporter
+    image: dockerhub.ihome.sxxpqp.top:8443/oliver006/redis_exporter:latest
+    container_name: redis-exporter-slave
+    ports:
+      - "9122:9121"
+    environment:
+      - REDIS_ADDR=192.168.100.24:6380
+      - REDIS_PASSWORD=redis123
+    restart: always

@@ -1,0 +1,5 @@
+sudo sed -e 's|^mirrorlist=|#mirrorlist=|g' \
+         -e 's|^#baseurl=http://mirror.centos.org/altarch/|baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/centos/|g' \
+         -e 's|^#baseurl=http://mirror.centos.org/$contentdir/|baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/centos/|g' \
+         -i.bak \
+         /etc/yum.repos.d/CentOS-*.repo

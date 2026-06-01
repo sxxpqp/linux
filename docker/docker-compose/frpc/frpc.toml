@@ -1,0 +1,25 @@
+serverAddr = "frp.freefrp.net"
+serverPort = 7000
+auth.method = "token"
+auth.token = "freefrp.net"
+
+[[proxies]]
+name = "web1_xxxxx"
+type = "http"
+localIP = "192.168.1.2"
+localPort = 5000
+customDomains = ["nas.yourdomain.com"]
+
+[[proxies]]
+name = "web2_xxxxx"
+type = "https"
+localIP = "192.168.1.2"
+localPort = 5001
+customDomains = ["nas.yourdomain.com"]
+
+[[proxies]]
+name = "tcp1_xxxxx"
+type = "tcp"
+localIP = "192.168.1.3"
+localPort = 22
+remotePort = 22222

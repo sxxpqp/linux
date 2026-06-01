@@ -1,0 +1,12 @@
+services:
+  xiaomusic:
+    image: docker.hanxi.cc/hanxi/xiaomusic
+    container_name: xiaomusic
+    restart: unless-stopped
+    ports:
+      - 58090:8090
+    environment:
+      XIAOMUSIC_PUBLIC_PORT: 58090
+    volumes:
+      - /data_s004/data/udata/real/13873797887/音乐/:/app/music
+      - ./conf:/app/conf

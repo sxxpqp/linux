@@ -1,0 +1,1005 @@
+#!/bin/bash
+# ================================================================
+# MongoDB Sharded Cluster 三节点生产部署脚本
+# 架构: 3 Shard + ConfigServer + Mongos，每台机器运行全部组件
+#
+# 每台机器容器清单:
+#   mongos       :27017  ← 应用连接
+#   shard1       :27018
+#   configsvr    :27019
+#   shard2       :27020
+#   shard3       :27021
+#
+# 副本集:
+#   csRs      = configsvr1 + configsvr2 + configsvr3
+#   shard1Rs  = shard1n1   + shard1n2   + shard1n3
+#   shard2Rs  = shard2n1   + shard2n2   + shard2n3
+#   shard3Rs  = shard3n1   + shard3n2   + shard3n3
+#
+# 用法: bash deploy_mongo.sh
+# 参数缓存到 .deploy_mongo_state，下次运行自动跳过
+# ================================================================
+
+set -euo pipefail
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+
+info()    { echo -e "${CYAN}[INFO]${NC}  $*"; }
+success() { echo -e "${GREEN}[OK]${NC}    $*"; }
+warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
+title()   { echo -e "\n${BOLD}${BLUE}══════════════════════════════════════${NC}"
+            echo -e "${BOLD}${BLUE}  $*${NC}"
+            echo -e "${BOLD}${BLUE}══════════════════════════════════════${NC}\n"; }
+
+STATE_FILE="$(cd "$(dirname "$0")" && pwd)/.deploy_mongo_state"
+
+load_state() {
+  if [[ -f "$STATE_FILE" ]]; then
+    source "$STATE_FILE"
+    echo -e "${CYAN}[INFO]${NC}  检测到状态文件: ${STATE_FILE}"
+    echo -e "${CYAN}[INFO]${NC}  已缓存的参数将自动跳过输入\n"
+  fi
+}
+
+save_state() {
+  cat > "$STATE_FILE" << STATEOF
+# MongoDB Sharded Cluster 部署状态 — 自动生成于 $(date '+%Y-%m-%d %H:%M:%S')
+MONGO_VERSION=${MONGO_VERSION:-}
+DATA_DIR=${DATA_DIR:-}
+DEPLOY_DIR=${DEPLOY_DIR:-}
+NODE1_IP=${NODE1_IP:-}
+NODE2_IP=${NODE2_IP:-}
+NODE3_IP=${NODE3_IP:-}
+NODE_ID=${NODE_ID:-}
+CURRENT_IP=${CURRENT_IP:-}
+MONGO_ROOT_USER=${MONGO_ROOT_USER:-}
+MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-}
+MONGO_KEYFILE_PASSWORD=${MONGO_KEYFILE_PASSWORD:-}
+STATEOF
+  chmod 600 "$STATE_FILE"
+}
+
+ask() {
+  local var="$1" prompt="$2" default="${3:-}"
+  local cur="${!var:-}"
+  if [[ -n "$cur" ]]; then
+    echo -e "  ${GREEN}✓ (缓存)${NC} ${prompt}: ${BOLD}${cur}${NC}"; return
+  fi
+  local input
+  if [[ -n "$default" ]]; then
+    read -rp "  ${prompt} [默认: ${default}]: " input
+    printf -v "$var" '%s' "${input:-$default}"
+  else
+    while [[ -z "${input:-}" ]]; do
+      read -rp "  ${prompt}: " input
+      [[ -z "$input" ]] && warn "不能为空，请重新输入"
+    done
+    printf -v "$var" '%s' "$input"
+  fi
+}
+
+ask_password() {
+  local var="$1" prompt="$2"
+  local cur="${!var:-}"
+  if [[ -n "$cur" ]]; then
+    echo -e "  ${GREEN}✓ (缓存)${NC} ${prompt}: ${BOLD}********${NC}"; return
+  fi
+  local input confirm
+  while true; do
+    read -rsp "  ${prompt}: " input; echo
+    read -rsp "  确认 ${prompt}: " confirm; echo
+    [[ "$input" == "$confirm" ]] && break
+    warn "两次输入不一致，请重新输入"
+  done
+  printf -v "$var" '%s' "$input"
+}
+
+validate_ip() {
+  [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || error "IP 格式不正确: $1"
+}
+
+wait_healthy() {
+  local name="$1" max=24
+  for i in $(seq 1 $max); do
+    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$name" 2>/dev/null || echo "starting")
+    if [[ "$STATUS" == "healthy" ]]; then success "$name ✓"; return; fi
+    printf "  [%2d/%d] %-20s 状态: %-12s\r" "$i" "$max" "$name" "$STATUS"
+    sleep 5
+  done
+  echo ""
+  warn "$name 未能在 120 秒内 healthy，请检查日志: docker logs $name"
+}
+
+# ================================================================
+# Banner
+# ================================================================
+clear
+echo -e "${BOLD}${GREEN}"
+cat << 'BANNER'
+  __  __                         ____  ____
+ |  \/  | ___  _ __   __ _  ___|  _ \| __ )
+ | |\/| |/ _ \| '_ \ / _` |/ _ \ | | |  _ \
+ | |  | | (_) | | | | (_| | (_) | |_| | |_) |
+ |_|  |_|\___/|_| |_|\__, |\___||____/|____/
+                      |___/
+   Sharded Cluster (3 Shards) — 三节点生产部署向导
+   每台: Mongos(27017) Shard1(27018) ConfigSvr(27019)
+         Shard2(27020) Shard3(27021)
+BANNER
+echo -e "${NC}"
+
+load_state
+
+# ================================================================
+# 一、收集参数
+# ================================================================
+title "Step 1 / 5  参数配置"
+
+if [[ -n "${MONGO_VERSION:-}" ]]; then
+  echo -e "  ${GREEN}✓ (缓存)${NC} MongoDB 版本: ${BOLD}${MONGO_VERSION}${NC}"
+else
+  echo "    1) 7.0.30 (推荐，与镜像一致)"
+  echo "    2) 7.0"
+  echo "    3) 6.0  (LTS)"
+  echo "    4) 自定义"
+  read -rp "  请选择 [默认: 1]: " _ver
+  case "${_ver:-1}" in
+    1) MONGO_VERSION="7.0.30-ubuntu2204" ;;
+    2) MONGO_VERSION="7.0" ;;
+    3) MONGO_VERSION="6.0" ;;
+    4) read -rp "  版本号: " MONGO_VERSION ;;
+    *) MONGO_VERSION="7.0.30-ubuntu2204" ;;
+  esac
+fi
+
+echo ""
+ask DATA_DIR   "数据根目录"    "/data/mongodb"
+ask DEPLOY_DIR "部署配置目录"  "/opt/mongo-cluster"
+
+echo ""
+info "三台服务器 IP："
+ask NODE1_IP "  Node1 IP"
+ask NODE2_IP "  Node2 IP"
+ask NODE3_IP "  Node3 IP"
+validate_ip "$NODE1_IP"; validate_ip "$NODE2_IP"; validate_ip "$NODE3_IP"
+
+echo ""
+if [[ -n "${NODE_ID:-}" ]]; then
+  echo -e "  ${GREEN}✓ (缓存)${NC} 当前节点: ${BOLD}Node${NODE_ID} (${CURRENT_IP})${NC}"
+else
+  echo "    1) Node1 — ${NODE1_IP}"
+  echo "    2) Node2 — ${NODE2_IP}"
+  echo "    3) Node3 — ${NODE3_IP}"
+  read -rp "  当前在哪台机器 [1/2/3]: " _node
+  case "$_node" in
+    1) CURRENT_IP="$NODE1_IP"; NODE_ID=1 ;;
+    2) CURRENT_IP="$NODE2_IP"; NODE_ID=2 ;;
+    3) CURRENT_IP="$NODE3_IP"; NODE_ID=3 ;;
+    *) error "无效选择" ;;
+  esac
+fi
+
+echo ""
+ask          MONGO_ROOT_USER        "管理员用户名"    "admin"
+ask_password MONGO_ROOT_PASSWORD    "管理员密码"
+ask_password MONGO_KEYFILE_PASSWORD "节点间认证密码(keyfile)"
+
+save_state
+success "所有参数已保存至 ${STATE_FILE}"
+
+echo ""
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BOLD}  部署参数确认${NC}"
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+printf "  %-16s: %s\n" "MongoDB 版本"  "registry.cn-hangzhou.aliyuncs.com/sxxpqp/mongodb-community-server:${MONGO_VERSION}"
+printf "  %-16s: %s\n" "数据目录"      "${DATA_DIR}"
+printf "  %-16s: %s\n" "部署目录"      "${DEPLOY_DIR}"
+printf "  %-16s: %s\n" "Node1 IP"      "${NODE1_IP}"
+printf "  %-16s: %s\n" "Node2 IP"      "${NODE2_IP}"
+printf "  %-16s: %s\n" "Node3 IP"      "${NODE3_IP}"
+printf "  %-16s: %s\n" "当前节点"      "Node${NODE_ID} (${CURRENT_IP})"
+printf "  %-16s: %s\n" "管理员用户"    "${MONGO_ROOT_USER}"
+printf "  %-16s: %s\n" "管理员密码"    "********"
+printf "  %-16s: %s\n" "Keyfile密码"   "********"
+echo ""
+echo -e "  ${BOLD}端口规划（每台机器 5 个容器）:${NC}"
+printf "  %-8s: %-12s  %s\n" "27017" "Mongos"      "← 应用连接此端口"
+printf "  %-8s: %-12s\n"     "27018" "Shard1节点"
+printf "  %-8s: %-12s\n"     "27019" "ConfigServer"
+printf "  %-8s: %-12s\n"     "27020" "Shard2节点"
+printf "  %-8s: %-12s\n"     "27021" "Shard3节点"
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+read -rp "确认以上信息，开始部署？[y/N]: " CONFIRM
+[[ "${CONFIRM,,}" != "y" ]] && { echo -e "${YELLOW}已取消${NC}"; exit 0; }
+
+# ================================================================
+# 二、系统准备
+# ================================================================
+title "Step 2 / 5  系统环境准备"
+
+info "创建目录..."
+for d in configsvr shard1 shard2 shard3; do
+  mkdir -p "${DATA_DIR}/${d}" "${DATA_DIR}/logs/${d}"
+done
+mkdir -p "${DATA_DIR}/logs/mongos" "${DEPLOY_DIR}/conf" "${DEPLOY_DIR}/scripts" "${DEPLOY_DIR}/keyfile"
+chmod -R 777 "${DATA_DIR}"
+success "目录创建完成"
+
+info "设置系统参数..."
+grep -q "fs.file-max"      /etc/sysctl.conf || echo "fs.file-max = 655360"      >> /etc/sysctl.conf
+grep -q "vm.max_map_count" /etc/sysctl.conf || echo "vm.max_map_count = 262144"  >> /etc/sysctl.conf
+grep -q "nofile 65536" /etc/security/limits.conf || {
+  echo "* soft nofile 65536" >> /etc/security/limits.conf
+  echo "* hard nofile 65536" >> /etc/security/limits.conf
+}
+sysctl -p &>/dev/null || true
+success "系统参数设置完成"
+
+info "开放防火墙端口 27017-27021..."
+if command -v firewall-cmd &>/dev/null; then
+  for port in 27017 27018 27019 27020 27021; do
+    firewall-cmd --permanent --add-port=${port}/tcp &>/dev/null || true
+  done
+  firewall-cmd --reload &>/dev/null || true
+  success "firewalld 规则已添加"
+elif command -v ufw &>/dev/null; then
+  for port in 27017 27018 27019 27020 27021; do
+    ufw allow ${port}/tcp &>/dev/null || true
+  done
+  success "ufw 规则已添加"
+else
+  warn "请手动开放 27017-27021 端口"
+fi
+
+# ================================================================
+# 三、生成配置文件
+# ================================================================
+title "Step 3 / 5  生成配置文件"
+
+# ── 强制清理所有可能残留的同名目录 ────────────────────────────
+info "清理旧配置残留..."
+for _f in   "${DEPLOY_DIR}/conf/configsvr.conf"   "${DEPLOY_DIR}/conf/shard1.conf"   "${DEPLOY_DIR}/conf/shard2.conf"   "${DEPLOY_DIR}/conf/shard3.conf"   "${DEPLOY_DIR}/conf/mongos.conf"   "${DEPLOY_DIR}/docker-compose.yml"   "${DEPLOY_DIR}/keyfile/mongo.key"; do
+  [[ -d "$_f" ]] && rm -rf "$_f" && warn "已删除残留目录: $_f"
+  [[ -f "$_f" ]] && rm -f "$_f"
+done
+success "残留清理完成"
+
+# ── Keyfile（三台内容必须完全一致）─────────────────────────────
+KEYFILE="${DEPLOY_DIR}/keyfile/mongo.key"
+info "生成 keyfile..."
+echo -n "${MONGO_KEYFILE_PASSWORD}" | \
+  openssl dgst -sha256 -binary | \
+  openssl base64 | tr -d '\n' | fold -w 80 > "$KEYFILE"
+chmod 400 "$KEYFILE"
+# user: root 模式下无需 chown 999，root 直接可读
+success "keyfile 生成完成"
+
+# ── 生成 mongod 配置的通用函数 ────────────────────────────────
+gen_mongod_conf() {
+  local name="$1" port="$2" rs="$3" role="$4" cache="${5:-1}"
+  local conf_file="${DEPLOY_DIR}/conf/${name}.conf"
+  cat > "$conf_file" << EOF
+systemLog:
+  destination: file
+  path: /var/log/mongodb/${name}/mongod.log
+  logAppend: true
+
+storage:
+  dbPath: /data/${name}
+  wiredTiger:
+    engineConfig:
+      cacheSizeGB: ${cache}
+      journalCompressor: snappy
+    collectionConfig:
+      blockCompressor: snappy
+
+net:
+  port: ${port}
+  bindIp: 0.0.0.0
+
+replication:
+  replSetName: "${rs}"
+
+sharding:
+  clusterRole: ${role}
+
+security:
+  keyFile: /etc/mongo/mongo.key
+
+processManagement:
+  timeZoneInfo: /usr/share/zoneinfo
+
+operationProfiling:
+  slowOpThresholdMs: 100
+EOF
+  success "${name}.conf 生成完成 (port=${port}, rs=${rs})"
+}
+
+# ConfigServer 不需要 wiredTiger cache 大，用 0.5G
+gen_mongod_conf "configsvr" "27019" "csRs"     "configsvr" "0"
+gen_mongod_conf "shard1"    "27018" "shard1Rs" "shardsvr"  "2"
+gen_mongod_conf "shard2"    "27020" "shard2Rs" "shardsvr"  "2"
+gen_mongod_conf "shard3"    "27021" "shard3Rs" "shardsvr"  "2"
+
+# ConfigServer 不支持 wiredTiger cacheSizeGB=0，移除存储引擎配置
+cat > "${DEPLOY_DIR}/conf/configsvr.conf" << EOF
+systemLog:
+  destination: file
+  path: /var/log/mongodb/configsvr/mongod.log
+  logAppend: true
+
+storage:
+  dbPath: /data/configsvr
+
+net:
+  port: 27019
+  bindIp: 0.0.0.0
+
+replication:
+  replSetName: "csRs"
+
+sharding:
+  clusterRole: configsvr
+
+security:
+  keyFile: /etc/mongo/mongo.key
+
+processManagement:
+  timeZoneInfo: /usr/share/zoneinfo
+EOF
+success "configsvr.conf 已覆盖（精简版）"
+
+# ── Mongos 配置 ───────────────────────────────────────────────
+info "生成 conf/mongos.conf ..."
+cat > "${DEPLOY_DIR}/conf/mongos.conf" << EOF
+systemLog:
+  destination: file
+  path: /var/log/mongodb/mongos/mongos.log
+  logAppend: true
+
+net:
+  port: 27017
+  bindIp: 0.0.0.0
+
+sharding:
+  configDB: "csRs/${NODE1_IP}:27019,${NODE2_IP}:27019,${NODE3_IP}:27019"
+
+security:
+  keyFile: /etc/mongo/mongo.key
+
+processManagement:
+  timeZoneInfo: /usr/share/zoneinfo
+EOF
+success "mongos.conf 生成完成"
+
+# ── .env ──────────────────────────────────────────────────────
+cat > "${DEPLOY_DIR}/.env" << EOF
+MONGO_ROOT_USER=${MONGO_ROOT_USER}
+MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+MONGO_KEYFILE_PASSWORD=${MONGO_KEYFILE_PASSWORD}
+EOF
+chmod 600 "${DEPLOY_DIR}/.env"
+success ".env 生成完成"
+
+# ── docker-compose.yml ────────────────────────────────────────
+info "生成 docker-compose.yml ..."
+MONGO_IMAGE="registry.cn-hangzhou.aliyuncs.com/sxxpqp/mongodb-community-server:${MONGO_VERSION}"
+
+cat > "${DEPLOY_DIR}/docker-compose.yml" << EOF
+version: '3.8'
+
+services:
+  # ── ConfigServer ────────────────────────────────────────────
+  # user: root 确保不被 entrypoint 切换用户导致 keyfile 权限失败
+  # command 第一个词是 EXECUTABLE(mongod)，后面是 mongod 参数
+  configsvr:
+    image: ${MONGO_IMAGE}
+    container_name: configsvr${NODE_ID}
+    hostname: ${CURRENT_IP}
+    restart: always
+    network_mode: host
+    user: root
+    entrypoint: ["mongod"]
+    command: >
+      --configsvr
+      --replSet csRs
+      --port 27019
+      --dbpath /data/configsvr
+      --bind_ip_all
+      --keyFile /etc/mongo/mongo.key
+      --logpath /var/log/mongodb/configsvr/mongod.log
+      --logappend
+    volumes:
+      - ${DATA_DIR}/configsvr:/data/configsvr
+      - ${DATA_DIR}/logs/configsvr:/var/log/mongodb/configsvr
+      - ${DEPLOY_DIR}/keyfile/mongo.key:/etc/mongo/mongo.key:ro
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD","mongosh","--port","27019","--quiet","--eval","db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # ── Shard1 ──────────────────────────────────────────────────
+  shard1:
+    image: ${MONGO_IMAGE}
+    container_name: shard1n${NODE_ID}
+    hostname: ${CURRENT_IP}
+    restart: always
+    network_mode: host
+    user: root
+    entrypoint: ["mongod"]
+    command: >
+      --shardsvr
+      --replSet shard1Rs
+      --port 27018
+      --dbpath /data/shard1
+      --bind_ip_all
+      --keyFile /etc/mongo/mongo.key
+      --logpath /var/log/mongodb/shard1/mongod.log
+      --logappend
+      --wiredTigerCacheSizeGB 2
+    volumes:
+      - ${DATA_DIR}/shard1:/data/shard1
+      - ${DATA_DIR}/logs/shard1:/var/log/mongodb/shard1
+      - ${DEPLOY_DIR}/keyfile/mongo.key:/etc/mongo/mongo.key:ro
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD","mongosh","--port","27018","--quiet","--eval","db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # ── Shard2 ──────────────────────────────────────────────────
+  shard2:
+    image: ${MONGO_IMAGE}
+    container_name: shard2n${NODE_ID}
+    hostname: ${CURRENT_IP}
+    restart: always
+    network_mode: host
+    user: root
+    entrypoint: ["mongod"]
+    command: >
+      --shardsvr
+      --replSet shard2Rs
+      --port 27020
+      --dbpath /data/shard2
+      --bind_ip_all
+      --keyFile /etc/mongo/mongo.key
+      --logpath /var/log/mongodb/shard2/mongod.log
+      --logappend
+      --wiredTigerCacheSizeGB 2
+    volumes:
+      - ${DATA_DIR}/shard2:/data/shard2
+      - ${DATA_DIR}/logs/shard2:/var/log/mongodb/shard2
+      - ${DEPLOY_DIR}/keyfile/mongo.key:/etc/mongo/mongo.key:ro
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD","mongosh","--port","27020","--quiet","--eval","db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # ── Shard3 ──────────────────────────────────────────────────
+  shard3:
+    image: ${MONGO_IMAGE}
+    container_name: shard3n${NODE_ID}
+    hostname: ${CURRENT_IP}
+    restart: always
+    network_mode: host
+    user: root
+    entrypoint: ["mongod"]
+    command: >
+      --shardsvr
+      --replSet shard3Rs
+      --port 27021
+      --dbpath /data/shard3
+      --bind_ip_all
+      --keyFile /etc/mongo/mongo.key
+      --logpath /var/log/mongodb/shard3/mongod.log
+      --logappend
+      --wiredTigerCacheSizeGB 2
+    volumes:
+      - ${DATA_DIR}/shard3:/data/shard3
+      - ${DATA_DIR}/logs/shard3:/var/log/mongodb/shard3
+      - ${DEPLOY_DIR}/keyfile/mongo.key:/etc/mongo/mongo.key:ro
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD","mongosh","--port","27021","--quiet","--eval","db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  # ── Mongos ──────────────────────────────────────────────────
+  mongos:
+    image: ${MONGO_IMAGE}
+    container_name: mongos${NODE_ID}
+    hostname: ${CURRENT_IP}
+    restart: always
+    network_mode: host
+    user: root
+    entrypoint: ["mongos"]
+    command: >
+      --configdb csRs/${NODE1_IP}:27019,${NODE2_IP}:27019,${NODE3_IP}:27019
+      --port 27017
+      --bind_ip_all
+      --keyFile /etc/mongo/mongo.key
+      --logpath /var/log/mongodb/mongos/mongos.log
+      --logappend
+    depends_on:
+      configsvr:
+        condition: service_healthy
+    volumes:
+      - ${DATA_DIR}/logs/mongos:/var/log/mongodb/mongos
+      - ${DEPLOY_DIR}/keyfile/mongo.key:/etc/mongo/mongo.key:ro
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD","mongosh","--port","27017","--quiet","--eval","db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+EOF
+success "docker-compose.yml 生成完成"
+
+# ── Node1 专用初始化脚本 ──────────────────────────────────────
+if [[ "$NODE_ID" == "1" ]]; then
+  info "生成 scripts/init_cluster.js ..."
+  cat > "${DEPLOY_DIR}/scripts/init_cluster.js" << 'JSEOF'
+// ================================================================
+// MongoDB 3-Shard Cluster 初始化脚本
+// 密码通过环境变量传入，文件本身不含任何敏感信息
+// 顺序:
+//   1. 初始化 csRs     (ConfigServer :27019)
+//   2. 初始化 shard1Rs (:27018)
+//   3. 初始化 shard2Rs (:27020)
+//   4. 初始化 shard3Rs (:27021)
+//   5. 通过 Mongos(:27017) 添加三个 Shard
+//   6. 创建管理员账号
+// ================================================================
+
+var rootUser = process.env.MONGO_ROOT_USER;
+var rootPass = process.env.MONGO_ROOT_PASSWORD;
+var node1    = process.env.MONGO_NODE1;
+var node2    = process.env.MONGO_NODE2;
+var node3    = process.env.MONGO_NODE3;
+
+if (!rootUser || !rootPass || !node1 || !node2 || !node3) {
+  print("ERROR: 缺少环境变量 MONGO_ROOT_USER/MONGO_ROOT_PASSWORD/MONGO_NODE1/2/3");
+  quit(1);
+}
+
+print("=== 节点信息 ===");
+print("  Node1: " + node1);
+print("  Node2: " + node2);
+print("  Node3: " + node3);
+
+// ── 工具: 等待端口可连接 ──────────────────────────────────────
+function waitForPort(host, port, maxRetry) {
+  maxRetry = maxRetry || 24;
+  for (var i = 0; i < maxRetry; i++) {
+    try {
+      new Mongo(host + ":" + port).getDB("admin").runCommand({ping: 1});
+      print("OK " + host + ":" + port + " ready");
+      return;
+    } catch(e) {
+      print("Waiting [" + (i+1) + "/" + maxRetry + "] " + host + ":" + port + "...");
+      sleep(5000);
+    }
+  }
+  throw new Error("Timeout: " + host + ":" + port);
+}
+
+// ── 工具: 等待 PRIMARY 选举完成 ───────────────────────────────
+function waitForPrimary(host, port, rsName, maxRetry) {
+  maxRetry = maxRetry || 24;
+  for (var i = 0; i < maxRetry; i++) {
+    try {
+      var st = new Mongo(host + ":" + port).getDB("admin").runCommand({replSetGetStatus: 1});
+      if (st.ok === 1) {
+        for (var m = 0; m < st.members.length; m++) {
+          if (st.members[m].stateStr === "PRIMARY") {
+            print("OK " + rsName + " Primary: " + st.members[m].name);
+            return;
+          }
+        }
+      }
+    } catch(e) {}
+    print("Waiting " + rsName + " PRIMARY [" + (i+1) + "/" + maxRetry + "]...");
+    sleep(5000);
+  }
+  throw new Error(rsName + " Primary election timeout");
+}
+
+// ── 工具: 初始化副本集 ────────────────────────────────────────
+function initRS(rsName, port, isConfig) {
+  print("\n=== Init " + rsName + " (port " + port + ") ===");
+  waitForPort(node1, port);
+  waitForPort(node2, port);
+  waitForPort(node3, port);
+
+  var cfg = {
+    _id: rsName,
+    members: [
+      { _id: 0, host: node1 + ":" + port, priority: 2 },
+      { _id: 1, host: node2 + ":" + port, priority: 1 },
+      { _id: 2, host: node3 + ":" + port, priority: 1 },
+    ]
+  };
+  if (isConfig) cfg.configsvr = true;
+
+  try {
+    var r = new Mongo(node1 + ":" + port).getDB("admin").runCommand({replSetInitiate: cfg});
+    print(r.ok === 1 ? "OK " + rsName + " initiated" : "WARN: " + JSON.stringify(r));
+  } catch(e) {
+    if (e.message.indexOf("already") !== -1) {
+      print("SKIP " + rsName + " already initialized");
+    } else { throw e; }
+  }
+  waitForPrimary(node1, port, rsName);
+}
+
+// ── Step 1-4: 初始化所有副本集 ────────────────────────────────
+initRS("csRs",     27019, true);
+initRS("shard1Rs", 27018, false);
+initRS("shard2Rs", 27020, false);
+initRS("shard3Rs", 27021, false);
+
+// ── Step 5: 通过 Mongos 添加 Shard ───────────────────────────
+print("\n=== Step 5: Add shards via Mongos (27017) ===");
+waitForPort(node1, 27017);
+var mongosAdmin = new Mongo(node1 + ":27017").getDB("admin");
+
+var shards = [
+  { name: "shard1", rs: "shard1Rs", port: 27018 },
+  { name: "shard2", rs: "shard2Rs", port: 27020 },
+  { name: "shard3", rs: "shard3Rs", port: 27021 },
+];
+
+for (var s = 0; s < shards.length; s++) {
+  var sh = shards[s];
+  var connStr = sh.rs + "/" + node1 + ":" + sh.port + "," + node2 + ":" + sh.port + "," + node3 + ":" + sh.port;
+  try {
+    var r = mongosAdmin.runCommand({ addShard: connStr, name: sh.name });
+    print(r.ok === 1 ? "OK " + sh.name + " added" : "WARN " + sh.name + ": " + JSON.stringify(r));
+  } catch(e) {
+    if (e.message.indexOf("already") !== -1) {
+      print("SKIP " + sh.name + " already added");
+    } else { throw e; }
+  }
+}
+
+// ── Step 6: 创建管理员账号 ────────────────────────────────────
+print("\n=== Step 6: Create admin user ===");
+try {
+  mongosAdmin.createUser({
+    user: rootUser,
+    pwd:  rootPass,
+    roles: [
+      { role: "root",                 db: "admin" },
+      { role: "clusterAdmin",         db: "admin" },
+      { role: "userAdminAnyDatabase", db: "admin" },
+      { role: "readWriteAnyDatabase", db: "admin" },
+    ]
+  });
+  print("OK admin user '" + rootUser + "' created");
+} catch(e) {
+  if (e.message.indexOf("already exists") !== -1) {
+    print("SKIP user already exists");
+  } else { throw e; }
+}
+
+// ── 输出集群状态 ──────────────────────────────────────────────
+print("\n=== Cluster Status ===");
+var st = mongosAdmin.runCommand({listShards: 1});
+for (var s = 0; s < st.shards.length; s++) {
+  print("  " + st.shards[s]._id + "  " + st.shards[s].host);
+}
+print("\nDone! 应用连接串:");
+print("  mongodb://" + rootUser + ":***@" + node1 + ":27017," + node2 + ":27017," + node3 + ":27017/?authSource=admin");
+JSEOF
+  chmod 600 "${DEPLOY_DIR}/scripts/init_cluster.js"
+  success "init_cluster.js 生成完成（无密码明文）"
+
+  # ── run_init.sh ───────────────────────────────────────────────
+  info "生成 scripts/run_init.sh ..."
+  RFILE="${DEPLOY_DIR}/scripts/run_init.sh"
+  cat > "$RFILE" << RUNEOF
+#!/bin/bash
+# MongoDB Sharded Cluster 初始化入口
+# 正确顺序: 1.初始化csRs  2.初始化shardRs  3.等mongos就绪  4.addShard  5.创建admin
+set -euo pipefail
+
+STATE_FILE="${DEPLOY_DIR}/../.deploy_mongo_state"
+
+if [[ -f "\$STATE_FILE" ]]; then
+  source "\$STATE_FILE"; echo ">>> 从 .deploy_mongo_state 读取配置"
+elif [[ -f "${DEPLOY_DIR}/.env" ]]; then
+  source "${DEPLOY_DIR}/.env"; echo ">>> 从 .env 读取配置"
+else
+  echo "ERROR: 找不到配置文件"; exit 1
+fi
+
+for VAR in MONGO_ROOT_USER MONGO_ROOT_PASSWORD NODE1_IP NODE2_IP NODE3_IP; do
+  [[ -n "\${!VAR:-}" ]] || { echo "ERROR: \$VAR 未设置"; exit 1; }
+done
+
+N1="\${NODE1_IP}"; N2="\${NODE2_IP}"; N3="\${NODE3_IP}"
+echo ">>> 节点: \$N1  \$N2  \$N3"
+
+wait_primary() {
+  local container="\$1" port="\$2" rs="\$3"
+  echo ">>> 等待 \$rs PRIMARY..."
+  for i in \$(seq 1 24); do
+    if docker exec "\$container" mongosh --port "\$port" --quiet --norc \\
+        --eval "rs.status().members.some(m=>m.stateStr==='PRIMARY')" 2>/dev/null | grep -q "true"; then
+      echo ">>> \$rs PRIMARY 就绪"
+      return 0
+    fi
+    echo "    [\$i/24] 等待..."
+    sleep 5
+  done
+  echo "ERROR: \$rs PRIMARY 选举超时"; exit 1
+}
+
+wait_port() {
+  local container="\$1" port="\$2"
+  for i in \$(seq 1 24); do
+    if docker exec "\$container" mongosh --port "\$port" --quiet --norc \\
+        --eval "db.adminCommand('ping').ok" 2>/dev/null | grep -q "1"; then
+      return 0
+    fi
+    sleep 5
+  done
+  echo "ERROR: \$container:\$port 超时"; exit 1
+}
+
+# ── Step 1: 初始化 csRs ───────────────────────────────────────
+echo ""
+echo ">>> Step 1: 初始化 ConfigServer 副本集 (csRs:27019)"
+ALREADY=\$(docker exec configsvr1 mongosh --port 27019 --quiet --norc \\
+  --eval "try{rs.status().set}catch(e){'none'}" 2>/dev/null || echo "none")
+if [[ "\$ALREADY" == "csRs" ]]; then
+  echo ">>> SKIP csRs 已初始化"
+else
+  docker exec configsvr1 mongosh --port 27019 --quiet --norc --eval "
+    rs.initiate({
+      _id: 'csRs', configsvr: true,
+      members: [
+        { _id: 0, host: '\$N1:27019', priority: 2 },
+        { _id: 1, host: '\$N2:27019', priority: 1 },
+        { _id: 2, host: '\$N3:27019', priority: 1 }
+      ]
+    })
+  "
+fi
+wait_primary configsvr1 27019 csRs
+
+# ── Step 2: 初始化 shard1Rs ───────────────────────────────────
+echo ""
+echo ">>> Step 2: 初始化 Shard1 副本集 (shard1Rs:27018)"
+ALREADY=\$(docker exec shard1n1 mongosh --port 27018 --quiet --norc \\
+  --eval "try{rs.status().set}catch(e){'none'}" 2>/dev/null || echo "none")
+if [[ "\$ALREADY" == "shard1Rs" ]]; then
+  echo ">>> SKIP shard1Rs 已初始化"
+else
+  docker exec shard1n1 mongosh --port 27018 --quiet --norc --eval "
+    rs.initiate({
+      _id: 'shard1Rs',
+      members: [
+        { _id: 0, host: '\$N1:27018', priority: 2 },
+        { _id: 1, host: '\$N2:27018', priority: 1 },
+        { _id: 2, host: '\$N3:27018', priority: 1 }
+      ]
+    })
+  "
+fi
+wait_primary shard1n1 27018 shard1Rs
+
+# ── Step 3: 初始化 shard2Rs ───────────────────────────────────
+echo ""
+echo ">>> Step 3: 初始化 Shard2 副本集 (shard2Rs:27020)"
+ALREADY=\$(docker exec shard2n1 mongosh --port 27020 --quiet --norc \\
+  --eval "try{rs.status().set}catch(e){'none'}" 2>/dev/null || echo "none")
+if [[ "\$ALREADY" == "shard2Rs" ]]; then
+  echo ">>> SKIP shard2Rs 已初始化"
+else
+  docker exec shard2n1 mongosh --port 27020 --quiet --norc --eval "
+    rs.initiate({
+      _id: 'shard2Rs',
+      members: [
+        { _id: 0, host: '\$N1:27020', priority: 2 },
+        { _id: 1, host: '\$N2:27020', priority: 1 },
+        { _id: 2, host: '\$N3:27020', priority: 1 }
+      ]
+    })
+  "
+fi
+wait_primary shard2n1 27020 shard2Rs
+
+# ── Step 4: 初始化 shard3Rs ───────────────────────────────────
+echo ""
+echo ">>> Step 4: 初始化 Shard3 副本集 (shard3Rs:27021)"
+ALREADY=\$(docker exec shard3n1 mongosh --port 27021 --quiet --norc \\
+  --eval "try{rs.status().set}catch(e){'none'}" 2>/dev/null || echo "none")
+if [[ "\$ALREADY" == "shard3Rs" ]]; then
+  echo ">>> SKIP shard3Rs 已初始化"
+else
+  docker exec shard3n1 mongosh --port 27021 --quiet --norc --eval "
+    rs.initiate({
+      _id: 'shard3Rs',
+      members: [
+        { _id: 0, host: '\$N1:27021', priority: 2 },
+        { _id: 1, host: '\$N2:27021', priority: 1 },
+        { _id: 2, host: '\$N3:27021', priority: 1 }
+      ]
+    })
+  "
+fi
+wait_primary shard3n1 27021 shard3Rs
+
+# ── Step 5: 等待 mongos 就绪 ──────────────────────────────────
+echo ""
+echo ">>> Step 5: 等待 mongos1 就绪 (27017)..."
+wait_port mongos1 27017
+
+# ── Step 6: 添加 Shard ────────────────────────────────────────
+echo ""
+echo ">>> Step 6: 添加 Shard 到集群..."
+docker exec mongos1 mongosh --port 27017 --quiet --norc --eval "
+  var r1 = db.adminCommand({ addShard: 'shard1Rs/\$N1:27018,\$N2:27018,\$N3:27018', name: 'shard1' });
+  var r2 = db.adminCommand({ addShard: 'shard2Rs/\$N1:27020,\$N2:27020,\$N3:27020', name: 'shard2' });
+  var r3 = db.adminCommand({ addShard: 'shard3Rs/\$N1:27021,\$N2:27021,\$N3:27021', name: 'shard3' });
+  print('shard1:', r1.ok === 1 ? 'OK' : JSON.stringify(r1));
+  print('shard2:', r2.ok === 1 ? 'OK' : JSON.stringify(r2));
+  print('shard3:', r3.ok === 1 ? 'OK' : JSON.stringify(r3));
+"
+
+# ── Step 7: 创建管理员 ────────────────────────────────────────
+echo ""
+echo ">>> Step 7: 创建管理员账号..."
+docker exec mongos1 mongosh --port 27017 --quiet --norc --eval "
+  try {
+    db.getSiblingDB('admin').createUser({
+      user: '\${MONGO_ROOT_USER}',
+      pwd:  '\${MONGO_ROOT_PASSWORD}',
+      roles: [
+        { role: 'root',                 db: 'admin' },
+        { role: 'clusterAdmin',         db: 'admin' },
+        { role: 'userAdminAnyDatabase', db: 'admin' },
+        { role: 'readWriteAnyDatabase', db: 'admin' }
+      ]
+    });
+    print('OK admin user created');
+  } catch(e) {
+    if (e.message.indexOf('already exists') !== -1) print('SKIP user already exists');
+    else throw e;
+  }
+"
+
+# ── Step 8: 验证 ──────────────────────────────────────────────
+echo ""
+echo ">>> Step 8: 验证集群状态..."
+docker exec mongos1 mongosh --port 27017 --quiet --norc \\
+  -u "\${MONGO_ROOT_USER}" -p "\${MONGO_ROOT_PASSWORD}" \\
+  --authenticationDatabase admin \\
+  --eval "sh.status()"
+
+echo ""
+echo ">>> 完成！应用连接串:"
+echo "    mongodb://\${MONGO_ROOT_USER}:***@\$N1:27017,\$N2:27017,\$N3:27017/?authSource=admin"
+RUNEOF
+  chmod 700 "$RFILE"
+  success "run_init.sh 生成完成"
+fi
+
+# ================================================================
+# 四、启动服务
+# ================================================================
+title "Step 4 / 5  启动服务"
+
+cd "${DEPLOY_DIR}"
+info "拉取镜像..."
+docker compose pull
+
+info "启动 ConfigServer + Shard1/2/3..."
+docker compose up -d configsvr shard1 shard2 shard3
+
+info "等待各组件 healthy..."
+for cname in "configsvr${NODE_ID}" "shard1n${NODE_ID}" "shard2n${NODE_ID}" "shard3n${NODE_ID}"; do
+  wait_healthy "$cname"
+done
+echo ""
+
+info "启动 Mongos..."
+docker compose up -d mongos
+info "Mongos 已启动（副本集初始化前 mongos 不会 healthy，属正常现象）"
+echo ""
+STATUS=$(docker inspect --format='{{.State.Status}}' "mongos${NODE_ID}" 2>/dev/null || echo "unknown")
+if [[ "$STATUS" == "running" ]]; then
+  success "mongos${NODE_ID} 容器运行中 ✓"
+else
+  warn "mongos${NODE_ID} 状态: $STATUS，请检查: docker logs mongos${NODE_ID}"
+fi
+
+# ================================================================
+# 五、完成提示
+# ================================================================
+title "Step 5 / 5  部署完成"
+
+success "Node${NODE_ID} (${CURRENT_IP}) 部署成功！"
+echo ""
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BOLD}  容器清单 (本机)${NC}"
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+printf "  %-20s: %-8s  %s\n" "mongos${NODE_ID}"    ":27017" "← 应用连接"
+printf "  %-20s: %-8s  %s\n" "shard1n${NODE_ID}"   ":27018" "Shard1副本集"
+printf "  %-20s: %-8s  %s\n" "configsvr${NODE_ID}" ":27019" "ConfigServer副本集"
+printf "  %-20s: %-8s  %s\n" "shard2n${NODE_ID}"   ":27020" "Shard2副本集"
+printf "  %-20s: %-8s  %s\n" "shard3n${NODE_ID}"   ":27021" "Shard3副本集"
+echo ""
+echo -e "${BOLD}  下一步操作${NC}"
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+if [[ "$NODE_ID" == "1" ]]; then
+  echo -e "  三台机器全部 healthy 后，在 Node1 执行：\n"
+  echo -e "  ${GREEN}bash ${DEPLOY_DIR}/scripts/run_init.sh${NC}\n"
+else
+  echo -e "  ${YELLOW}▶ 三台全部完成后，在 Node1 (${NODE1_IP}) 执行:${NC}"
+  echo -e "  ${GREEN}bash /opt/mongo-cluster/scripts/run_init.sh${NC}"
+fi
+echo ""
+printf "  %-20s: %s\n" "配置目录"  "${DEPLOY_DIR}"
+printf "  %-20s: %s\n" "数据目录"  "${DATA_DIR}"
+printf "  %-20s: %s\n" "状态文件"  "${STATE_FILE}"
+echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+echo -e "${YELLOW}💡 如需修改参数: 编辑 ${STATE_FILE} 删除对应行，重新运行脚本${NC}"
+
+
+

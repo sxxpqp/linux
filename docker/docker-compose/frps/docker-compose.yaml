@@ -1,0 +1,9 @@
+version: '3'
+services:
+  frps:
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/frps
+    container_name: frps
+    restart: always
+    network_mode: host
+    volumes:
+      - ./frps.toml:/frp/frps.toml

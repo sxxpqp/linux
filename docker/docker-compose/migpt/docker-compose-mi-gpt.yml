@@ -1,0 +1,13 @@
+version: '3'
+services:
+  mi-gpt:
+    image: idootop/mi-gpt:latest
+    env_file:
+      - .env
+    volumes:
+      - ./.migpt.js:/app/.migpt.js
+      - ./.mi.json:/app/.mi.json
+    restart: always
+    
+    
+#https://github.com/idootop/mi-gpt/issues/326    

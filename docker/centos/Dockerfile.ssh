@@ -1,0 +1,61 @@
+# 使用官方CentOS 7基础镜像
+FROM centos/systemd
+# 维护者信息
+LABEL maintainer="admin@mail.sxxpqp.top"
+
+# 设置环境变量，避免交互提示
+ENV TZ=Asia/Shanghai \
+    LANG=en_US.UTF-8
+RUN  sed -e "s|^mirrorlist=|#mirrorlist=|g" \
+    -e "s|^#baseurl=http://mirror.centos.org/centos/\$releasever|baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/7.9.2009|g" \
+    -e "s|^#baseurl=http://mirror.centos.org/\$contentdir/\$releasever|baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/7.9.2009|g" \
+    -i.bak \
+    /etc/yum.repos.d/CentOS-*.repo
+# 更新系统并安装必要的软件包
+# 安装必要的软件包
+RUN yum -y update; yum clean all; \
+    yum -y install  openssh-server epel-release net-tools; yum clean all
+# (cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ $i == systemd-tmpfiles-setup.service ] || rm -f $i; done); \
+# rm -f /lib/systemd/system/multi-user.target.wants/*; \
+# rm -f /etc/systemd/system/*.wants/*; \
+# rm -f /lib/systemd/system/local-fs.target.wants/*; \
+# rm -f /lib/systemd/system/sockets.target.wants/*udev*; \
+# rm -f /lib/systemd/system/sockets.target.wants/*initctl*; \
+# rm -f /lib/systemd/system/basic.target.wants/*; \
+# rm -f /lib/systemd/system/anaconda.target.wants/*; \
+# systemctl set-default multi-user.target
+# RUN  yum -y update
+# 生成SSH密钥
+RUN ssh-keygen -q -N "" -t dsa -f /etc/ssh/ssh_host_dsa_key && \
+    ssh-keygen -q -N "" -t rsa -f /etc/ssh/ssh_host_rsa_key && \
+    ssh-keygen -q -N "" -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key && \
+    ssh-keygen -q -N "" -t ed25519 -f /etc/ssh/ssh_host_ed25519_key
+
+# 配置SSH服务
+RUN sed -i 's/#PermitRootLogin yes/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#UseDNS yes/UseDNS no/' /etc/ssh/sshd_config && \
+    sed -i 's/UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
+
+# 设置root密码（示例为"root"，建议构建时通过环境变量设置）
+RUN echo "root:root" | chpasswd
+
+# 创建并配置启动脚本
+# RUN mkdir -p /opt/startup && \
+#     echo '#!/bin/bash' > /opt/startup/start.sh && \
+#     echo '/usr/sbin/sshd -D' >> /opt/startup/start.sh && \
+#     chmod +x /opt/startup/start.sh
+
+# 确保SSH服务正确启用
+RUN systemctl enable  sshd.service
+# ENV SELINUX_DISABLED=true
+# 禁用SELinux（容器环境中通常不需要）
+# 添加健康检查
+# HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+#     CMD systemctl is-active sshd || exit 1
+
+# 暴露SSH端口
+EXPOSE 22
+
+# 启动systemd
+CMD ["/usr/sbin/init"]

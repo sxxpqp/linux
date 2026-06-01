@@ -3,11 +3,11 @@
 export DOWNLOAD_URL="https://mirrors.tuna.tsinghua.edu.cn/docker-ce"
 ```
 ```
-curl -fsSl https://chfs.sxxpqp.top:8443/chfs/shared/docker/install.sh|sh -s docker --mirror Aliyun
+curl -fsSl https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh|sh -s docker --mirror Aliyun
 ```
 有报错请添加--version 20.10
 ```
-curl -fsSl https://chfs.sxxpqp.top:8443/chfs/shared/docker/install.sh|sh -s docker  --mirror Aliyun --version 20.10
+curl -fsSl https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh|sh -s docker  --mirror Aliyun --version 20.10
 ```
 配置加速源 点击链接
 ```

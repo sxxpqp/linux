@@ -1,3 +1,5 @@
+# cluster: tsl-cluster   env: tsl   namespace: tsl-ns   type: java
+# last-updated: 2026-05-30
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -1,6 +1,8 @@
 # MinIO 跨集群同步
 
-基于 mc mirror 的 MinIO 跨集群同步，支持从源集群自动同步到目标集群。
+K8s 内基于 mc mirror 的 MinIO 跨集群同步（CronJob 定时执行）。
+
+> Docker Compose 部署 MinIO 本体见 [minio/](../../minio/)。
 
 ## 文件说明
 

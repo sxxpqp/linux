@@ -1,0 +1,17 @@
+version: '3.7'
+
+services:
+  homeassistant:
+    container_name: homeassistant
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/home-assistant:stable
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai   # 替换成你的时区（例如：Asia/Shanghai）
+    volumes:
+      - ./data:/config  # 替换为你的配置路径
+      - /run/dbus:/run/dbus:ro       # 只读挂载
+    network_mode: host  # 使用主机网络
+    privileged: true    # 启用特权模式
+
+
+    #https://wulu.zone/posts/mi-iot-homekit 

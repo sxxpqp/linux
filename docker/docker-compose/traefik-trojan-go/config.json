@@ -1,0 +1,15 @@
+{
+    "run_type": "server",
+    "local_addr": "0.0.0.0",
+    "local_port": 4443,
+    "remote_addr": "127.0.0.1",
+    "remote_port": 180,
+    "password": [
+        "F2QEsHyeVpCIvy7i1"
+    ],
+    "ssl": {
+        "cert": "/etc/trojan/ssl/clash.sxxpqp.top/cert.pem",
+        "key": "/etc/trojan/ssl/clash.sxxpqp.top/key.pem",
+        "sni": "clash.sxxpqp.top"
+    }
+}

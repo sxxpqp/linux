@@ -1,0 +1,39 @@
+services:
+  # av3a-assistant:
+  #   image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/av3a-assistant:amd64
+  #   container_name: av3a-assistant
+  #   privileged: true
+  #   restart: unless-stopped
+  #   ports:
+  #     - "35442:35442"
+  #   networks:
+  #     - my-network
+
+  allinone:
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/allinone
+    container_name: allinone
+    privileged: true
+    restart: unless-stopped
+    ports:
+      - "35455:35455"
+    networks:
+      - my-network
+
+  allinone_format:
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/allinone_format:latest
+    container_name: allinone_format
+    restart: unless-stopped
+    pull_policy: always
+    networks:
+      - my-network
+    # network_mode: my-network # openwrt 等系统可能需要此参数 host
+    ports:
+      - 35456:35456
+    volumes:
+      - ${choice_allinone_format:-./config}:/app/config
+networks:
+  my-network:
+    driver: bridge
+
+
+### 访问地址 http://ip:35456

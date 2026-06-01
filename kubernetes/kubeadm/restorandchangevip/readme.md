@@ -26,7 +26,7 @@ etcd-restore.sh
 # 解压pki  ca key 只需要根ca key
 tar -zxvf pki.tar.gz  -C /etc/kubernetes/pki
 ## 使用kube-vip 配置负载均衡 172.16.0.190
-wget https://chfs.sxxpqp.top:8443/chfs/shared/k8s/kubeadm/restorandchangevip/kube-vip.yaml
+wget https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeadm/restorandchangevip/kube-vip.yaml
 
 # 初始化
 # kubectl -n kube-system get configmap kubeadm-config -o jsonpath='{.data.ClusterConfiguration}' > kubeadm.yaml

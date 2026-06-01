@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/loki/uninstall.sh
 # 卸载 Loki。
 # 用法:
 #   bash uninstall.sh             # 保留 PVC（历史日志）

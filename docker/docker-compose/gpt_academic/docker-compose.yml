@@ -1,0 +1,29 @@
+version: "3"
+services:
+  gpt_academic_with_audio:
+    image: ghcr.io/binary-husky/gpt_academic_audio_assistant:master
+    environment:
+      # 请查阅 `config.py` 以查看所有的配置信息
+      API_KEY: "    fk195831-IdP0Pb3W6DCMUIbQwVX6MsSiyxwqybyS                        "
+      USE_PROXY: "    False                                                            "
+      proxies: "    None                                                             "
+      LLM_MODEL: "    gpt-3.5-turbo                                                    "
+      AVAIL_LLM_MODELS: '    ["gpt-3.5-turbo", "gpt-4"]                                       '
+      ENABLE_AUDIO: "    True                                                             "
+      LOCAL_MODEL_DEVICE: "    cuda                                                             "
+      DEFAULT_WORKER_NUM: "    20                                                               "
+      WEB_PORT: "    12343                                                            "
+      ADD_WAIFU: "    True                                                             "
+      THEME: "    Chuanhu-Small-and-Beautiful                                      "
+      ALIYUN_APPKEY: "    zz                                            "
+      ALIYUN_TOKEN: "    aa                             "
+      # (无需填写) ALIYUN_ACCESSKEY:         '    a                                        '
+      # (无需填写) ALIYUN_SECRET:            '    ea                                 '
+    # 「WEB_PORT暴露方法1: 适用于Linux」与宿主的网络融合
+    #network_mode: "host"
+    ports:
+      - 12345:12345
+      - 12343:12343
+    # 启动命令
+    command: >
+      bash -c "python3 -u main.py"

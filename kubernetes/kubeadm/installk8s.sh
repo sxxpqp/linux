@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeadm/installk8s.sh
 # ================================================================
 #  K8s 组件安装脚本
 #  作者: sxxpqp 运智运维
@@ -176,7 +177,7 @@ install_containerd() {
         ok "containerd 已安装，跳过"
     else
         info "安装 containerd..."
-        curl -fsSLk https://chfs.sxxpqp.top:8443/chfs/shared/docker/containerd/installcontainerd.sh | bash
+        curl -fsSLk https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/install.sh | bash
         ok "containerd 安装完成"
     fi
 }

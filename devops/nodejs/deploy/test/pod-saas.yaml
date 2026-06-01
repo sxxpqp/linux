@@ -1,3 +1,5 @@
+# cluster: host-cluster   env: test   namespace: tmc-v2-test   type: nodejs
+# last-updated: 2026-05-30
 apiVersion: apps/v1
 kind: Deployment
 metadata:

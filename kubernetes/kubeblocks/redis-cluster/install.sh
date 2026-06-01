@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/redis-cluster/install.sh
 # 部署 KubeBlocks Redis Sharding Cluster (3 shard × 2 副本 = 6 pod).
 # 仅 ClusterIP/Headless 访问 (cluster.yaml 里 NodePort 段已注释).
 #

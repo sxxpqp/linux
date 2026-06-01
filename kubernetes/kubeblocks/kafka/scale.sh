@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/kafka/scale.sh
 # KubeBlocks Kafka Cluster 扩缩容 (改 broker replicas 数).
 #
 # Kafka KRaft combined 模式中 broker 和 controller 是同 pod, 扩容同时增加

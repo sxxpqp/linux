@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:latest  # 使用官方的 nginx 镜像
+    container_name: nginx  # 容器名称
+    environment:
+      - TZ=Asia/Shanghai  # 设置时区（可根据需要修改）
+    restart: unless-stopped  # 保证容器自动重启
+    ports:
+    - 8083:80
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nginx.rule=Host(`nginx.sxxpqp.top`)"  # 使用自定义域名
+      - "traefik.http.routers.nginx.entrypoints=websecure"  # 使用 HTTPS
+      - "traefik.http.routers.nginx.tls.certresolver=myresolver"  # 使用 ACME 证书解析器
+    networks:
+      - chfs_custom_network  # 指定自定义网络
+
+# 自定义网络定义
+networks:
+  chfs_custom_network:
+    external: true 

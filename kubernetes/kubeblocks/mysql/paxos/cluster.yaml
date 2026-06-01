@@ -1,0 +1,87 @@
+# KubeBlocks MySQL — Paxos 模式 (apecloud-mysql / WeSQL, 3 节点多数派)
+#
+# 选型对比 (两个子目录二选一):
+#   semisync (../semisync) 社区 MySQL + 半同步, operator 监控选主, 生态兼容最好
+#   paxos    (本目录)      apecloud-mysql, 节点内 Paxos 自动选主, 多数派强一致
+#
+# 选 paxos 的理由:
+#   - 写入需要多数派 ACK, RPO=0 (semisync 极端情况可能丢最后 1 个事务)
+#   - 选主在节点内部完成 (Consensus), 不依赖 operator 健康探测, 切换更快
+#   - apecloud 维护, 协议层兼容 MySQL 8.0, 业务端 SDK 无感
+#
+# 拓扑: replicas 必须为奇数 (3 / 5 / 7), 1 leader + N follower
+#       2 个节点凑不成多数派, 全集群不可写
+#
+# componentDef:
+#   apecloud-mysql        前缀, 自动选最新 apecloud-mysql-*
+#   apecloud-mysql-8.0.x  精确版本
+#
+# 前置: 需要先启用 apecloud-mysql addon (install.sh 已自动处理)
+#       kbcli addon enable apecloud-mysql
+#
+# 扩缩容: bash scale.sh 5   (必须奇数)
+
+apiVersion: apps.kubeblocks.io/v1
+kind: Cluster
+metadata:
+  name: mysql-paxos
+  namespace: test
+spec:
+  terminationPolicy: Delete
+  # terminationPolicy 说明:
+  #   DoNotTerminate  拒绝删除 (生产推荐)
+  #   Delete          删 K8s 资源 + PVC (数据丢失)
+  #   WipeOut         Delete + 删远程备份
+
+  componentSpecs:
+    - name: mysql
+      componentDef: apecloud-mysql   # WeSQL Paxos
+      serviceVersion: "8.0.30"       # apecloud-mysql 主流版本
+
+      replicas: 3                    # 必须奇数, Paxos 多数派 = (N/2)+1
+
+      # ===== 固定密码 (引用外部 Secret) =====
+      # Secret 必须先于 Cluster 创建 (install.sh 已处理)
+      # 包含 username=root + password 两个 key
+      systemAccounts:
+        - name: root
+          secretRef:
+            name: mysql-paxos-password
+            namespace: test
+
+      resources:
+        limits:
+          cpu: "2"
+          memory: 4Gi
+        requests:
+          cpu: 500m
+          memory: 1Gi
+
+      volumeClaimTemplates:
+        - name: data
+          spec:
+            accessModes: [ ReadWriteOnce ]
+            # storageClassName: longhorn   # 生产建议用 longhorn, 测试留空用默认 SC
+            resources:
+              requests:
+                storage: 50Gi
+
+  # 反亲和: Paxos 多数派强依赖跨节点容灾
+  # 默认 preferred (软): 单节点/测试集群也能起得来
+  # 生产 ≥3 worker 时建议换成 requiredDuringSchedulingIgnoredDuringExecution (硬):
+  #   把下面 preferredDuringSchedulingIgnoredDuringExecution: 整段换成
+  #   requiredDuringSchedulingIgnoredDuringExecution:
+  #     - topologyKey: kubernetes.io/hostname
+  #       labelSelector:
+  #         matchLabels:
+  #           app.kubernetes.io/instance: mysql-paxos
+  schedulingPolicy:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: mysql-paxos

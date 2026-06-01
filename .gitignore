@@ -3,3 +3,22 @@ mc
 
 # macOS
 .DS_Store
+
+# 私钥 / 证书 / 凭据（绝对不入库）
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+*.kubeconfig
+kubeconfig
+
+# 环境变量文件
+.env
+.env.*
+*.secret

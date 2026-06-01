@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/observability/tempo-update.sh
 # 更新 Tempo Helm release，读取本目录下的 tempo-values.yaml。
 # 用法：bash tempo-update.sh
 set -euo pipefail

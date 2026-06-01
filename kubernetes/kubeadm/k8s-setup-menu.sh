@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeadm/k8s-setup-menu.sh
 # ================================================================
 #  K8s 集群一键安装菜单
 #  作者: sxxpqp 运智运维
@@ -10,7 +11,7 @@ set -uo pipefail
 # 所有 read 命令通过 TTY 变量显式指定输入源
 TTY_INPUT=/dev/tty
 
-BASE="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/main/kubernetes"
+BASE="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes"
 URL_KERNEL="${BASE}/kubeadm/k8skerneloptimize.sh"
 URL_K8S="${BASE}/kubeadm/installk8s.sh"
 URL_HELM="${BASE}/helm/install-helm.sh"
@@ -20,7 +21,7 @@ URL_HELM="${BASE}/helm/install-helm.sh"
 # ================================================================
 
 # ---- 私有镜像仓库 ----
-REGISTRY="huball.ihome.sxxpqp.top:8443"
+REGISTRY="dockerhub.ihome.sxxpqp.top:8443"
 NEXUS_HELM="https://nexus.ihome.sxxpqp.top:8443/repository"
 NEXUS_LONGHORN="https://nexus.ihome.sxxpqp.top:8443/repository/hwlm-longhorn"
 NEXUS_INGRESS_NGINX="https://nexus.ihome.sxxpqp.top:8443/repository/helmingress-nginx"

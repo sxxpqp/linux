@@ -1,0 +1,55 @@
+services:
+  redis-1:
+    image: redis:8.4.0-alpine3.22
+    container_name: redis-1
+    network_mode: "host" # 使用 host 网络
+    volumes:
+      - ./config/redis-1/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./data/redis-1:/data
+    # 必须显式指定配置文件路径
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+  redis-2:
+    image: redis:8.4.0-alpine3.22
+    container_name: redis-2
+    network_mode: "host" # 使用 host 网络
+    volumes:
+      - ./config/redis-2/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./data/redis-2:/data
+    # 必须显式指定配置文件路径
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+  redis-3:
+    image: redis:8.4.0-alpine3.22
+    container_name: redis-3
+    network_mode: "host" # 使用 host 网络
+    volumes:
+      - ./config/redis-3/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./data/redis-3:/data
+    # 必须显式指定配置文件路径
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+  redis-4:
+    image: redis:8.4.0-alpine3.22
+    container_name: redis-4
+    network_mode: "host" # 使用 host 网络
+    volumes:
+      - ./config/redis-4/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./data/redis-4:/data
+    # 必须显式指定配置文件路径
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+  redis-5:
+    image: redis:8.4.0-alpine3.22
+    container_name: redis-5
+    network_mode: "host" # 使用 host 网络
+    volumes:
+      - ./config/redis-5/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./data/redis-5:/data
+    # 必须显式指定配置文件路径
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+  redis-6:
+    image: redis:8.4.0-alpine3.22
+    container_name: redis-6
+    network_mode: "host" # 使用 host 网络
+    volumes:
+      - ./config/redis-6/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./data/redis-6:/data
+    # 必须显式指定配置文件路径
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]

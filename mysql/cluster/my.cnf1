@@ -1,0 +1,26 @@
+[mysqld]
+report_host = 172.16.150.129
+user=mysql
+port=3306
+server-id=1  # 25号机设为2，26号机设为3
+bind-address=0.0.0.0
+# 解决 0000-00-00 问题：剔除 NO_ZERO_DATE
+sql_mode=STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+
+# MGR 基础配置
+gtid_mode=ON
+enforce_gtid_consistency=ON
+binlog_format=ROW
+log_slave_updates=ON
+transaction_write_set_extraction=XXHASH64
+binlog_transaction_dependency_tracking = WRITESET
+# MGR 组配置
+plugin-load-add = group_replication.so
+loose-group_replication_group_name="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+loose-group_replication_start_on_boot=OFF
+loose-group_replication_single_primary_mode=ON
+loose-group_replication_enforce_update_everywhere_checks=OFF
+
+# 关键：由于在容器内，地址需指向宿主机 IP 以便跨主机通信
+loose-group_replication_local_address="172.16.150.129:33061"
+loose-group_replication_group_seeds="172.16.150.129:33061,172.16.150.130:33061,172.16.150.131:33061"

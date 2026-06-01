@@ -1,0 +1,23 @@
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml  # 挂载 Prometheus 配置文件
+    ports:
+      - "9090:9090"  # 映射 Prometheus 的端口
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"  # 映射 Grafana 的端口
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin  # Grafana 默认管理员密码
+    volumes:
+      - grafana-storage:/var/lib/grafana  # 持久化 Grafana 的数据
+
+volumes:
+  grafana-storage:

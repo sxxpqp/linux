@@ -1,0 +1,39 @@
+services:
+  namesrv:
+    image: apache/rocketmq:5.3.2
+    container_name: rmqnamesrv
+    restart: always
+    network_mode: host
+    environment:
+      - JAVA_OPT=-Xms512m -Xmx512m # 生产建议根据内存调整
+    volumes:
+      - /data/rocketmq/logs/namesrv:/home/rocketmq/logs
+    command: sh mqnamesrv
+
+  broker:
+    image: apache/rocketmq:5.3.2
+    container_name: rmqbroker
+    restart: always
+    network_mode: host
+    depends_on:
+      - namesrv
+    environment:
+      # 填写所有节点的 NameServer 地址
+      - NAMESRV_ADDR=172.16.150.129:9876;172.16.150.130:9876;172.16.150.150.131:9876
+      - JAVA_OPT=-Xms2g -Xmx2g
+    volumes:
+      - /data/rocketmq/logs/broker:/home/rocketmq/logs
+      - /data/rocketmq/store:/home/rocketmq/store
+      - /data/rocketmq/conf/broker.conf:/home/rocketmq/rocketmq-5.3.2/conf/broker.conf
+    command: sh mqbroker -c /home/rocketmq/rocketmq-5.3.2/conf/broker.conf
+
+  proxy:
+    image: apache/rocketmq:5.3.2
+    container_name: rmqproxy
+    restart: always
+    network_mode: host
+    depends_on:
+      - broker
+    environment:
+      - NAMESRV_ADD=172.16.150.129:9876;172.16.150.130:9876;172.16.150.150.131:9876
+    command: sh mqproxy -n 172.16.150.129:9876;172.16.150.130:9876;172.16.150.131:9876

@@ -1,0 +1,31 @@
+version: '3.8'
+services:
+  node-exporter:
+    # 生产环境必须锁定具体版本（避免镜像更新导致兼容问题），优先选LTS版本hub.wishfoxs.com:6443hub.wishfoxs.com:6443
+    image: hub.wishfoxs.com:6443/prometheus/node-exporter:v1.8.2
+    container_name: node-exporter
+    restart: always  # 极端场景（主机重启/容器OOM）也能自动恢复
+    privileged: true  # 仅必要权限，非必须不放开（若主机开启SELinux需此配置）
+    user: root  # 保证采集主机指标的权限，生产环境不建议降权（降权易导致指标缺失）
+    network_mode: host  # 生产环境采集主机网络指标必须用host模式
+    # 生产环境核心：限制资源，避免node-exporter抢占业务资源
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'  # 限制CPU使用率≤10%（node-exporter本身资源消耗极低）
+          memory: 64M  # 限制内存≤64MB，防止内存泄漏
+        reservations:  # 预留基础资源，避免资源竞争被Kill
+          cpus: '0.05'
+          memory: 32M
+    # 挂载主机目录（只读，最大化安全）
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+      - /etc/hostname:/etc/hostname:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # 可选：采集容器相关指标
+    # 标签规范：便于批量管理/监控筛选
+    labels:
+      - "app=node-exporter"
+      - "env=production"
+      - "monitoring=true"

@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/longhorn/install-prerequisites.sh
 # 1. 安装 NFS 客户端
 apt-get update && apt-get install -y nfs-common
 

@@ -1,0 +1,24 @@
+services:
+  1panel:
+    container_name: 1panel  # 容器名
+    restart: always  # 容器崩溃后自动重启
+    network_mode: "host"  # 使用主机网络模式
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # 允许容器访问 Docker 套接字
+      - ./volumes:/var/lib/docker/volumes  # 持久化存储卷
+      - /volume1/docker/1panel/opt:/volume1/docker/1panel/opt  # 应用安装路径
+      - ./root:/root  # 可选的文件存储映射
+      - /volume1:/volume1 #映射存储空间1
+      #- /volume2:/volume2 #映射存储空间2，需要映射的话就删了
+      #- /volume3:/volume3 #映射存储空间3
+    environment:
+      - TZ=Asia/Shanghai  # 时区设置
+      - PANEL_BASE_DIR=/volume1/docker/1panel/opt  # 应用安装路径与上面保持一致
+      - PANEL_PORT=10088  # 访问端口可配置
+      - PANEL_ENTRANCE=XXXXX  # 自定义的访问安全入口，不配置默认为entrance
+      - PANEL_USERNAME=XXXXX  # 自定义的登录用户名，不配置默认为1panel
+      - PANEL_PASSWORD=XXXXX  # 自定义的登录密码，不配置默认为1panel_password
+    image: docker.eee.ink/koryking/1panel:latest  # 使用的镜像
+    labels:
+      createdBy: "Apps"  # 创建者标签
+ 

@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # 配置服务器 - 存储集群元数据
+  configsvr:
+    image: mongo:7.0
+    container_name: mongo-config
+    command: >
+      mongod --configsvr --replSet configReplSet  --port 27019 --bind_ip_all --wiredTigerCacheSizeGB 1 
+      --keyFile /data/configdb/mongo.key
+    volumes:
+      - /data/mongodb/config:/data/db
+      - /data/mongodb/key/mongo.key:/data/configdb/mongo.key
+    ports:
+      - "27019:27019"
+    healthcheck:
+      test: ["CMD", "mongosh", "--port", "27019", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+    restart: always
+
+  # 分片 1 - 数据存储节点 A
+  shard1:
+    image: mongo:7.0
+    container_name: mongo-shard1
+    command: >
+      mongod --shardsvr --replSet shard1RS
+      --port 27018
+      --bind_ip_all --wiredTigerCacheSizeGB ${SHARD_CACHE_SIZE}
+      --keyFile /data/configdb/mongo.key
+    volumes:
+      - /data/mongodb/shard1:/data/db
+      - /data/mongodb/key/mongo.key:/data/configdb/mongo.key
+    ports:
+      - "27018:27018"
+    restart: always
+
+  # 分片 2 - 数据存储节点 B
+  shard2:
+    image: mongo:7.0
+    container_name: mongo-shard2
+    command: >
+      mongod --shardsvr --replSet shard2RS
+      --port 27011
+      --bind_ip_all --wiredTigerCacheSizeGB ${SHARD_CACHE_SIZE}
+      --keyFile /data/configdb/mongo.key
+    volumes:
+      - /data/mongodb/shard2:/data/db
+      - /data/mongodb/key/mongo.key:/data/configdb/mongo.key
+    ports:
+      - "27011:27011"
+    restart: always
+
+  # 路由服务器 - 业务唯一入口
+  mongos:
+    image: mongo:7.0
+    container_name: mongo-mongos
+    depends_on:
+      - configsvr
+    command: >
+      mongos --configdb configReplSet/${NODE1_IP}:27019,${NODE2_IP}:27019,${NODE3_IP}:27019
+      --port 27017  --bind_ip_all 
+      --keyFile /data/configdb/mongo.key
+    ports:
+      - "27017:27017"
+    restart: always

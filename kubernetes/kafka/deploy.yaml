@@ -1,0 +1,117 @@
+# 1. 持久化存储声明模板（供 StatefulSet 使用）
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kafka-pvc
+  namespace: kafka
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi # 根据需求调整存储大小
+  storageClassName: standard # 需匹配集群中的存储类
+---
+# 2. Headless Service（供 StatefulSet 内部通信和稳定 DNS）
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-headless
+  namespace: kafka
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: plaintext # 必须添加端口名称（自定义，保持唯一即可）
+      port: 9092
+      targetPort: 9092
+---
+# 3. Kafka StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: kafka
+spec:
+  serviceName: "kafka-headless" # 关联 Headless Service，用于生成稳定 DNS
+  replicas: 1 # 单节点，生产环境可扩展为多节点（需调整 KRaft 配置）
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: docker.io/bitnami/kafka:4.0
+          ports:
+            - containerPort: 9092 # 内部访问端口（集群内通过 Headless Service 访问）
+            - containerPort: 9094 # 外部访问端口
+            - containerPort: 9093 # KRaft 控制器端口
+          env:
+            # KRaft 配置（单节点）
+            - name: KAFKA_CFG_NODE_ID
+              value: "0" # 多节点时需为每个节点分配唯一 ID（如 0,1,2）
+            - name: KAFKA_CFG_PROCESS_ROLES
+              value: "controller,broker"
+            - name: KAFKA_CFG_CONTROLLER_QUORUM_VOTERS
+              value: "0@kafka-0.kafka-headless.kafka.svc.cluster.local:9093" # 使用 StatefulSet 稳定 DNS（格式：[pod名称].[headless服务名].[命名空间].svc.cluster.local）
+            # 监听器配置（关键）
+            - name: KAFKA_CFG_LISTENERS
+              value: "PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094"
+            - name: KAFKA_CFG_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka-0.kafka-headless.kafka.svc.cluster.local:9092,EXTERNAL://47.84.76.253:9094" # 内部用 Headless DNS，外部用负载均衡公网 IP
+            - name: KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT"
+            - name: KAFKA_CFG_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_CFG_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /bitnami/kafka
+      volumes:
+        - name: kafka-data # 关联现有 PVC
+          persistentVolumeClaim:
+            claimName: kafka-pvc # 使用已存在的 PVC 名称
+  # volumeClaimTemplates: # StatefulSet 自动创建 PVC 的模板（单节点时与上面的 PVC 二选一，推荐用模板）
+  #   - metadata:
+  #       name: kafka-data
+  #     spec:
+  #       accessModes: ["ReadWriteOnce"]
+  #       resources:
+  #         requests:
+  #           storage: 10Gi
+  #       storageClassName: "standard"
+---
+# 4. 内部访问 Service（可选，如需简化集群内访问地址）
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: kafka
+spec:
+  selector:
+    app: kafka
+  ports:
+    - port: 9092
+      targetPort: 9092
+  type: ClusterIP # 提供简化的访问地址（kafka:9092），替代 Headless DNS
+---
+# 5. 外部访问 Service（LoadBalancer）
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-external
+  namespace: kafka # 修正原配置中的空格错误
+spec:
+  selector:
+    app: kafka
+  ports:
+    - port: 9094
+      targetPort: 9094
+  type: LoadBalancer
+# kubectl exec -it -n kafka kafka-0 -- /bin/bash
+# kafka-topics.sh --bootstrap-server localhost:9092 --create --topic test --partitions 1 --replication-factor 1

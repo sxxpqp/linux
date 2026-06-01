@@ -1,3 +1,4 @@
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/mysql/delete_data.sh
 # mysql 上亿条数据批量删除
 # 2018-04-26 
 1.创建临时表备份数据

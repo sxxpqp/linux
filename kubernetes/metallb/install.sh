@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/metallb/install.sh
 # 安装 MetalLB (生产推荐的 Service LoadBalancer 实现).
 #
 # 默认 L2 (ARP) 模式. BGP 模式要交换机配合, 用 bgp.yaml 替代 pool.yaml 即可.
@@ -36,7 +37,7 @@ done
 #   2. --manifest <path|url> 显式指定
 #   3. Nexus raw 代理 (在线兜底)
 NATIVE_LOCAL="${DIR}/metallb-native.yaml"
-NATIVE_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/metallb/metallb/${VERSION}/config/manifests/metallb-native.yaml"
+NATIVE_URL="https://nexus.ihome.sxxpqp.top:8443/metallb/metallb/${VERSION}/config/manifests/metallb-native.yaml"
 
 if [ -f "${NATIVE_LOCAL}" ]; then
   NATIVE_SRC="${NATIVE_LOCAL}"

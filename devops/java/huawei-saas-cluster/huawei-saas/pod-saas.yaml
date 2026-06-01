@@ -1,3 +1,5 @@
+# cluster: huawei-saas   env: huawei-saas   namespace: tmc-v2-saas   type: java
+# last-updated: 2026-05-30
 apiVersion: apps/v1
 kind: Deployment
 metadata:

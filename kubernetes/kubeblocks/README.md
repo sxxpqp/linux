@@ -22,20 +22,25 @@ kubeblocks/
 ├── install.sh               装 KubeBlocks operator (v1.0.2, bundled addon 自动启用)
 ├── uninstall.sh             卸载 operator
 ├── install-snapshotter.sh   装 VolumeSnapshot CRD + controller (备份依赖)
-└── redis-cluster/
-    ├── cluster.yaml                 Cluster CR (Redis 7.2.4, sharding 3×2, 默认无 NodePort)
-    ├── stable-service.yaml          ⭐ 跨 shard 稳定 Service (业务代码连这个, 不受 shard 后缀变化影响)
-    ├── install.sh                   apply CR + stable Service + 同步密码 + 显示连接信息
-    ├── scale.sh                     扩缩 shards (OpsRequest, operator 自动 reshard 槽位)
-    ├── uninstall.sh                 删 Cluster (--keep-data / --purge / --force)
-    ├── redisinsight.yaml            RedisInsight (Redis 官方 GUI) Deployment + Service
-    ├── redisinsight-install.sh      装 RedisInsight (浏览器 Web UI, 原生支持 Cluster)
-    └── redisinsight-uninstall.sh    卸 RedisInsight (不影响 Cluster)
-    └── kafka/
-        ├── cluster.yaml                 Cluster CR (Kafka 3.3.2, combined_monitor, KRaft 3 副本)
-        ├── install.sh                   apply CR + 等 Running + 显示连接信息
-        ├── scale.sh                     扩缩 replicas (OpsRequest HorizontalScaling)
-        └── uninstall.sh                 删 Cluster (--keep-data / --force)
+├── redis-cluster/
+│   ├── cluster.yaml                 Cluster CR (Redis 7.2.4, sharding 3×2, 默认无 NodePort)
+│   ├── stable-service.yaml          ⭐ 跨 shard 稳定 Service (业务代码连这个)
+│   ├── install.sh                   apply CR + stable Service + 同步密码 + 显示连接信息
+│   ├── scale.sh                     扩缩 shards (OpsRequest, operator 自动 reshard)
+│   ├── uninstall.sh                 删 Cluster (--keep-data / --purge / --force)
+│   ├── redisinsight.yaml            RedisInsight (Redis 官方 GUI) Deployment + Service
+│   ├── redisinsight-install.sh      装 RedisInsight (浏览器 Web UI)
+│   └── redisinsight-uninstall.sh    卸 RedisInsight
+├── mysql/
+│   ├── cluster.yaml                 Cluster CR (MySQL 8.0.33, 1 主 + 2 从, replicas=3)
+│   ├── install.sh                   apply CR + 预建 Secret + 显示连接信息
+│   ├── scale.sh                     扩缩 replicas (OpsRequest HorizontalScaling)
+│   └── uninstall.sh                 删 Cluster (--delete-pvc / --keep-data / --force)
+└── kafka/
+    ├── cluster.yaml                 Cluster CR (Kafka 3.3.2, combined_monitor, KRaft 3 副本)
+    ├── install.sh                   apply CR + 等 Running + 显示连接信息
+    ├── scale.sh                     扩缩 replicas (OpsRequest HorizontalScaling)
+    └── uninstall.sh                 删 Cluster (--keep-data / --force)
 ```
 
 ## 完整操作矩阵
@@ -53,6 +58,11 @@ kubeblocks/
 | **删 Redis Cluster** | `cd redis-cluster && bash uninstall.sh` |
 | **保留数据删 Cluster** | `cd redis-cluster && bash uninstall.sh --keep-data` |
 | **卡死强清** | `cd redis-cluster && bash uninstall.sh --force` |
+| **建 MySQL Cluster** | `cd mysql && bash install.sh --wait` |
+| **MySQL 扩容 3→5 节点** | `cd mysql && bash scale.sh 5 --wait` |
+| **取 MySQL 密码** | `kubectl get secret mysql-cluster-password -n test -o jsonpath='{.data.password}' \| base64 -d; echo` |
+| **删 MySQL Cluster** | `cd mysql && bash uninstall.sh` |
+| **删 MySQL 含 PVC** | `cd mysql && bash uninstall.sh --delete-pvc` |
 | **建 Kafka Cluster** | `cd kafka && bash install.sh --wait` |
 | **Kafka 扩容 3→5 broker** | `cd kafka && bash scale.sh 5 --wait` |
 | **删 Kafka Cluster** | `cd kafka && bash uninstall.sh` |

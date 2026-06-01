@@ -1,0 +1,49 @@
+version: '3.8'
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-mgr
+    restart: always
+    network_mode: host
+    environment:
+      MYSQL_ROOT_PASSWORD: YourRootPassword
+    volumes:
+      - ./conf/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./data:/var/lib/mysql
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+
+  # 路由层：自动识别 MGR 主从状态
+  mysql-router:
+    image: mysql/mysql-router:8.0
+    container_name: mysql-router
+    restart: always
+    network_mode: host
+    volumes:
+      - ./router_data:/var/lib/mysqlrouter  
+    depends_on:
+      - mysql
+    environment:
+      # 这里的连接地址指向当前节点的宿主机IP，Router会自动发现整个集群
+      MYSQL_HOST: 172.16.150.129
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: YourRootPassword
+      ROUTER_BOOTSTRAP_EXTRA_OPTIONS: >
+        --host=172.16.150.129,172.16.150.130,172.16.150.131
+        --allow-public-key-retrieval
+        --conf-use-gr-notifications
+        --account=router_user
+        --account-password=RouterPassword  
+      # 首次启动时的引导命令
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pYourRootPassword"]
+      interval: 10s
+      retries: 5

@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/redis-cluster/uninstall.sh
 # 卸载 KubeBlocks Redis Cluster 实例。
 # 用法:
 #   bash uninstall.sh                 # 标准删除 (按 terminationPolicy 决定 PVC 命运)

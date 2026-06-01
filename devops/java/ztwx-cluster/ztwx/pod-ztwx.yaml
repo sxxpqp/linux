@@ -1,3 +1,5 @@
+# cluster: ztwx-cluster   env: ztwx   namespace: ztwx   type: java
+# last-updated: 2026-05-30
 apiVersion: apps/v1
 kind: Deployment
 metadata:

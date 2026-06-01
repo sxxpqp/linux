@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/opentelemetry/replace-docker-image.sh
 # 替换无法拉取镜像 
 # $1为需修改的文件 
 #ghcr.io/修改ghcr.dockerproxy.com

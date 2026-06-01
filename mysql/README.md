@@ -1,6 +1,8 @@
 # MySQL 运维
 
-MySQL 运维配置，生产推荐 InnoDB Cluster（mysqlsh + Group Replication）。包含集群部署、Router 连接池、备份恢复。
+MySQL **裸机/VM 运维**配置，生产推荐 InnoDB Cluster（mysqlsh + Group Replication）。包含集群部署、Router 连接池、备份恢复。
+
+> K8s 上部署 MySQL（Deployment + 备份 CronJob）见 [kubernetes/mysql/](../kubernetes/mysql/)。
 
 ## 文件说明
 

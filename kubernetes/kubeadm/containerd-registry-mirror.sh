@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeadm/containerd-registry-mirror.sh
 # containerd 镜像加速配置（国内必需）
 # 用法: bash containerd-registry-mirror.sh
 
@@ -19,7 +20,7 @@ if ! grep -q 'config_path = "/etc/containerd/certs.d"' "${CONTAINERD_CONF}" 2>/d
 fi
 
 declare -A MIRRORS=(
-  ["docker.io"]="https://0523dw.ihome.sxxpqp.top:8443"
+  ["docker.io"]="https://dockerhub.ihome.sxxpqp.top:8443"
   ["ghcr.io"]="https://ghcr.ihome.sxxpqp.top:8443"
   ["registry.k8s.io"]="https://k8s.ihome.sxxpqp.top:8443"
   ["quay.io"]="https://quay.ihome.sxxpqp.top:8443"

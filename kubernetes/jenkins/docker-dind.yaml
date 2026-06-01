@@ -35,7 +35,7 @@ spec:
           imagePullPolicy: Always
           name: docker-dind
           args:
-            - --registry-mirror=https://huball.ihome.sxxpqp.top:8443/ # 指定一个镜像加速器地址
+            - --registry-mirror=https://dockerhub.ihome.sxxpqp.top:8443/ # 指定一个镜像加速器地址
           env:
             - name: DOCKER_DRIVER
               value: overlay2

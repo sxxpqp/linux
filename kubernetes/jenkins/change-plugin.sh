@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/jenkins/change-plugin.sh
 # Jenkins 国内镜像源自动配置脚本 - K8s 环境专用修复版
 
 declare -A dict

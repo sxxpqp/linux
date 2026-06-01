@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/install-snapshotter.sh
 # 安装 Kubernetes external-snapshotter (VolumeSnapshot CRD + controller).
 # KubeBlocks dataprotection 控制器依赖这个做基于 PVC 快照的备份.
 # 不装不影响 Cluster 创建, 但 BackupSchedule 不能用 snapshot 类型,
@@ -14,10 +15,10 @@ VERSION="v8.0.1"
 USE_ONLINE=false
 
 # 内网整合包 (CRD + controller + RBAC 一个 yaml 搞定)
-INTERNAL_URL="https://chfs.sxxpqp.top:8443/chfs/shared/k8s/kubeblocks/snapshot.storage.k8s.yaml"
+INTERNAL_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/snapshot.storage.k8s.yaml"
 
 # Nexus raw 代理 (按版本分多个文件)
-PUBLIC_BASE="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/kubernetes-csi/external-snapshotter"
+PUBLIC_BASE="https://nexus.ihome.sxxpqp.top:8443/kubernetes-csi/external-snapshotter"
 
 for ((i=1; i<=$#; i++)); do
   case "${!i}" in

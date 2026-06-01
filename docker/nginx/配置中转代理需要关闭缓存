@@ -1,0 +1,6 @@
+
+# 代理服务设置没有缓存就行了吧
+proxy_cache off;
+add_header Cache-Control no-cache;
+
+

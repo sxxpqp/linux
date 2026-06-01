@@ -8,9 +8,9 @@ https://storage.googleapis.com/kubernetes-release/release/${RELEASE}/bin/linux/$
 
 ```
 #RELEASE_VERSION="v0.4.0"
-curl -sSL "https://raw.githubusercontent.com/kubernetes/release/v0.4.0/cmd/kubepkg/templates/latest/deb/kubelet/lib/systemd/system/kubelet.service" |  tee /etc/systemd/system/kubelet.service
+curl -sSL "https://nexus.ihome.sxxpqp.top:8443/kubernetes/release/v0.4.0/cmd/kubepkg/templates/latest/deb/kubelet/lib/systemd/system/kubelet.service" |  tee /etc/systemd/system/kubelet.service
 mkdir -p /etc/systemd/system/kubelet.service.d
-curl -sSL "https://raw.githubusercontent.com/kubernetes/release/v0.4.0/cmd/kubepkg/templates/latest/deb/kubeadm/10-kubeadm.conf" | tee /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+curl -sSL "https://nexus.ihome.sxxpqp.top:8443/kubernetes/release/v0.4.0/cmd/kubepkg/templates/latest/deb/kubeadm/10-kubeadm.conf" | tee /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
 
 ```
 ### 配置kubelet systemd

@@ -156,27 +156,27 @@ rule-anchor:
   domain: &domain {type: http, interval: 86400, behavior: domain, format: mrs}
   class: &class {type: http, interval: 86400, behavior: classical, format: text}
 rule-providers: 
-  fakeipfilter_domain: {<<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/wwqgtxx/clash-rules/release/fakeip-filter.mrs"}
-  private_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
-  proxylite: { <<: *class, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/qichiyuhub/rule/refs/heads/main/rules/proxy.list"}
-  ai: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs" }
-  youtube_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs"}
-  google_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/google.mrs"}
-  github_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/github.mrs"}
-  telegram_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"}
-  netflix_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.mrs"}
-  paypal_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/paypal.mrs"}
-  onedrive_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/onedrive.mrs"}
-  microsoft_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/microsoft.mrs"}
-  apple_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/apple.mrs"}
-  speedtest_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/ookla-speedtest.mrs"}
-  tiktok_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/tiktok.mrs"}
-  geolocation-!cn: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"}
-  cn_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"}
+  fakeipfilter_domain: {<<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/wwqgtxx/clash-rules/release/fakeip-filter.mrs"}
+  private_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
+  proxylite: { <<: *class, url: "https://nexus.ihome.sxxpqp.top:8443/qichiyuhub/rule/refs/heads/main/rules/proxy.list"}
+  ai: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs" }
+  youtube_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs"}
+  google_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/google.mrs"}
+  github_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/github.mrs"}
+  telegram_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"}
+  netflix_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.mrs"}
+  paypal_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/paypal.mrs"}
+  onedrive_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/onedrive.mrs"}
+  microsoft_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/microsoft.mrs"}
+  apple_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/apple.mrs"}
+  speedtest_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/ookla-speedtest.mrs"}
+  tiktok_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/tiktok.mrs"}
+  geolocation-!cn: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"}
+  cn_domain: { <<: *domain, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"}
   
-  private_ip: {<<: *ip, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geoip/private.mrs"}
-  cn_ip: { <<: *ip, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"}
-  google_ip: { <<: *ip, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geoip/google.mrs"}
-  telegram_ip: { <<: *ip, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geoip/telegram.mrs"}
-  netflix_ip: { <<: *ip, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo/geoip/netflix.mrs"}
-  apple_ip: {<<: *ip, url: "https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/MetaCubeX/meta-rules-dat/meta/geo-lite/geoip/apple.mrs"}
+  private_ip: {<<: *ip, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geoip/private.mrs"}
+  cn_ip: { <<: *ip, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"}
+  google_ip: { <<: *ip, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geoip/google.mrs"}
+  telegram_ip: { <<: *ip, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geoip/telegram.mrs"}
+  netflix_ip: { <<: *ip, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo/geoip/netflix.mrs"}
+  apple_ip: {<<: *ip, url: "https://nexus.ihome.sxxpqp.top:8443/MetaCubeX/meta-rules-dat/meta/geo-lite/geoip/apple.mrs"}

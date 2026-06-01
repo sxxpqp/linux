@@ -15,7 +15,7 @@ kubeadm init --apiserver-advertise-address $(hostname -i) --pod-network-cidr 10.
 ### 安装网络插件
 
 ```
-kubectl apply -f https://raw.githubusercontent.com/cloudnativelabs/kube-router/master/daemonset/kubeadm-kuberouter.yaml
+kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/cloudnativelabs/kube-router/master/daemonset/kubeadm-kuberouter.yaml
 ```
 
 ### 部署负载均衡 实现 kube-apiserver 高可用
@@ -61,7 +61,7 @@ spec:
       value: "1"
     - name: address
       value: 172.16.0.51
-    image: iharbor.sxxpqp.top/library/kube-vip:v0.4.0
+    image: docker.io/plndr/kube-vip:v0.4.0
     name: kube-vip
     resources: {}
     securityContext:

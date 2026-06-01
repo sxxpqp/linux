@@ -1,0 +1,102 @@
+version: '3.8'
+# canal-server没有连接上需要再restart一下
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: canal-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: Root@Canal2026
+      MYSQL_DATABASE: canal_manager
+      MYSQL_USER: canal_manager
+      MYSQL_PASSWORD: Manager@Canal2026
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./canal-mysql-data:/var/lib/mysql
+      # 首次启动自动执行 canal_manager.sql 初始化
+      - ./init-sql:/docker-entrypoint-initdb.d
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --binlog-row-image=FULL
+      - --expire-logs-days=7
+      - --max-binlog-size=512M
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+      - --default-time-zone=+08:00
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pRoot@Canal2026"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    networks:
+      - canal-net
+
+  canal-admin:
+    image: canal/canal-admin:v1.1.8
+    container_name: canal-admin
+    restart: always
+    ports:
+      - "8089:8089"
+    environment:
+      - server.port=8089
+      - canal.adminUser=admin
+      - canal.adminPasswd=admin
+      - spring.datasource.address=mysql:3306
+      - spring.datasource.database=canal_manager
+      - spring.datasource.username=canal_manager
+      - spring.datasource.password=Manager@Canal2026
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./canal-admin-logs:/home/admin/canal-admin/logs
+    mem_limit: 1g
+    # ⭐ 关键:admin 自身的 healthcheck,8089 真正能访问才算 healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8089/ > /dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - canal-net
+
+  canal-server:
+    image: canal/canal-server:v1.1.8
+    container_name: canal-server
+    restart: always
+    # ⭐ 关键:等 admin healthy 再启,而不是仅仅等它 started
+    depends_on:
+      canal-admin:
+        condition: service_healthy
+    ports:
+      - "11110:11110"
+      - "11111:11111"
+      - "11112:11112"
+      - "9100:9100"
+    environment:
+      - canal.admin.manager=canal-admin:8089
+      - canal.admin.port=11110
+      - canal.admin.user=admin
+      - canal.admin.passwd=4ACFE3202A5FF5CF467898FC58AAB1D615029441
+      - canal.admin.register.auto=true
+      - canal.admin.register.cluster=
+      - canal.admin.register.name=canal-server-1
+      - canal.register.ip=canal-server
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./canal-server-logs:/home/admin/canal-server/logs
+    mem_limit: 4g
+    networks:
+      - canal-net
+
+networks:
+  canal-net:
+    driver: bridge

@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeblocks/uninstall.sh
 # 卸载 KubeBlocks operator。
 # 用法:
 #   bash uninstall.sh                # 保留 CRD 和现有 Cluster CR

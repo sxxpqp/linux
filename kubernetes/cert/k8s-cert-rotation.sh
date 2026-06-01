@@ -1,3 +1,4 @@
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/cert/k8s-cert-rotation.sh
 # ============ 前置检查 ============
 # 1. 查看证书当前过期时间
 kubeadm certs check-expiration

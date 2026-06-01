@@ -1,6 +1,8 @@
 # etcd 运维
 
-etcd 集群备份恢复脚本与 CronJob 配置。
+K8s 集群内 etcd 备份恢复脚本与 CronJob 配置。
+
+> Docker Compose 部署独立 etcd 集群见 [etcd/](../../etcd/)。
 
 ## 文件说明
 

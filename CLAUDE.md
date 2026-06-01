@@ -22,7 +22,7 @@
 
 | 项 | 值 | 备注 |
 |---|---|---|
-| **镜像拉取入口(Harbor)** | `huball.ihome.sxxpqp.top:8443` | **纯代理(pull-through cache),不接受 push**。所有镜像从这里拉,项目划分见下表 |
+| **镜像拉取入口(Harbor)** | `dockerhub.ihome.sxxpqp.top:8443` | **纯代理(pull-through cache),不接受 push**。所有镜像从这里拉,项目划分见下表 |
 | **镜像推送目标(阿里 ACR)** | `registry.cn-hangzhou.aliyuncs.com/sxxpqp/` | 自己构建的镜像统一推这里(用户名 `sxxpqp`,杭州区) |
 | MinIO S3 API endpoint | `https://ihome.sxxpqp.top:8443` | S3 客户端 / SDK 用这个,bucket 操作走 API |
 | MinIO 控制台 UI | `https://console.ihome.sxxpqp.top:8443` | 管理界面(看 bucket / 用户 / 策略),不是 S3 API |
@@ -35,7 +35,7 @@
 
 | 类型 | 存放位置 | 拉取方式 |
 |---|---|---|
-| **脚本**(`.sh` / `.yaml` / `.conf` / 配置模板) | **git 仓库**(本仓库,公开 repo) | Nexus raw-githubusercontent 代理 GitHub,URL 形如 `<nexus>/repository/raw-githubusercontent/sxxpqp/linux/main/<path>` |
+| **脚本**(`.sh` / `.yaml` / `.conf` / 配置模板) | **git 仓库**(本仓库,公开 repo) | Nexus raw-githubusercontent 代理 GitHub,URL 形如 `<nexus>/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/<path>` |
 | **大文件**(离线包、ISO、压缩包、二进制) | **chfs 或 MinIO** | chfs 走 HTTP 直拉;MinIO 走 S3 API |
 | **镜像** | **Harbor**(代理) / 阿里 ACR(推送) | 见上面 "Harbor 架构" |
 | **Helm chart** / GitHub release 二进制 | Nexus 代理 | 见下面 "Nexus 仓库映射" |
@@ -44,17 +44,70 @@
 
 **反面案例**:不要把脚本同时维护两份(git + chfs),否则不知不觉就漂移了。
 
+**脚本首行注释约定**:每个 `.sh` 文件必须在其**首行注释块**中包含以下三个标记:
+
+```bash
+# 系统: <OS 兼容性>           # 一:目标系统
+# 下载: <Nexus raw URL>        # 二:Nexus 下载链接
+# 用法: curl -sL <URL> \| bash # 三:一行式执行命令
+```
+
+**系统标记(`# 系统:`)** — 说明脚本在什么 OS 上跑:
+
+| 标记值 | 含义 | 例子 |
+|---|---|---|
+| `CentOS 7+` | CentOS 7 / Rocky Linux / AlmaLinux / RHEL 7+ | yum / dnf 系的脚本 |
+| `Ubuntu 20.04+` | Ubuntu 20.04 / 22.04 / 24.04+ | apt 系的脚本 |
+| `Debian 11+` | Debian 11 / 12+ | — |
+| `Ubuntu \| CentOS` | 脚本内部有 OS 检测,两个都支持 | 安装 Docker 等通用工具 |
+| `Linux (systemd)` | 纯 systemd + shell,不挑发行版 | sysctl / 配置模板 |
+| `Docker (cross-platform)` | docker-compose / Dockerfile 类,主机 OS 不重要 | 跑容器即可 |
+| `Kubernetes (K8s)` | 纯 kubectl / helm 操作,只在 K8s 上跑 | 部署 yaml、helm install |
+
+**判定顺序**:先看脚本内容有无 OS 检测逻辑(`ID=ubuntu` / `os-release` / `yum` / `apt`);没有则从文件路径或文件名推断。
+
+**文件名约定**:
+
+```
+<动作>-<目标>[-<OS>][-<架构>][-<方式>].sh
+```
+
+| 段 | 可选? | 常见值 |
+|---|---|---|
+| **动作** | 必填 | `install` / `deploy` / `uninstall` / `backup` / `restore` / `config` / `scale` / `init` |
+| **目标** | 必填 | 软件名:docker / nginx / k8s / nvidia-driver / kafka 等 |
+| **OS** | 可选 | OS 或平台:centos / ubuntu / wsl-ubuntu / qh(青云) |
+| **架构** | 可选 | aarch64 / armv7 / x86_64 |
+| **方式** | 可选 | offline / online / binary / source |
+
+**示例**:
+- `install-docker-offline.sh` ✅ — 动作+目标+方式
+- `install-docker-wsl-ubuntu.sh` ✅ — 动作+目标+平台
+- `deploy.sh` ⚠️ — 缺少目标,只在 docker-compose/ 子目录下可接受(目录名补齐了上下文)
+- `changplugin.sh` ❌ — 拼写错误,建议改
+
+> **宽松原则**:现有文件保持原名不改。新脚本按此约定命名。不在目录或文件名下划线数量上做死板限制,能让人扫一眼就明白"干什么、在哪跑"即可。
+
+**下载链接约定**:每个 `.sh` 文件必须在首行注释块中包含通过 Nexus 下载的 URL:
+
+```bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/<path>
+# 用法: curl -sL <URL> | bash
+```
+
+这样在 GitHub 不通的环境下,直接 `curl -sL <Nexus URL> | bash` 就能执行,**无需 git clone**,也无需再记路径。
+
 ### Harbor 架构(关键)
 
 Harbor 后端是同一个,但前面挂了 **1Panel/nginx 多前端域名**,**每个域名内部已经做了路径重写**,所以客户端只需要按上游选对应的域名,不用关心 Harbor 内部的项目前缀。
 
 | 上游 | 对应前端域名(1Panel/nginx) | 后端 Harbor 项目 | nginx 内部 rewrite |
 |---|---|---|---|
-| `docker.io` | `huball.ihome.sxxpqp.top:8443` | `dockerhub` | `/v2/*` → `/v2/dockerhub/*` |
+| `docker.io` | `dockerhub.ihome.sxxpqp.top:8443` | `dockerhub` | `/v2/*` → `/v2/dockerhub/*` |
 | `ghcr.io` | `ghcr.ihome.sxxpqp.top:8443` | `ghcr` | `/v2/*` → `/v2/ghcr/*` |
 | `quay.io` | `quay.ihome.sxxpqp.top:8443` | `quay` | `/v2/*` → `/v2/quay/*` |
 | `registry.k8s.io` / `k8s.gcr.io` | `k8s.ihome.sxxpqp.top:8443` | `google_containers` | `/v2/*` → `/v2/google_containers/*` |
-| `docker.io`(老别名) | `0523dw.ihome.sxxpqp.top:8443` | `dockerhub` | 同 huball |
+| `docker.io`(历史别名) | `dockerhub.ihome.sxxpqp.top:8443` | `dockerhub` | 已弃用, 统一用 `dockerhub` |
 
 ### Harbor 项目(直接 pull 时备用)
 
@@ -97,12 +150,15 @@ docker push      registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 |---|---|---|
 | **raw (GitHub raw 文件)** | `/repository/raw-githubusercontent/` | 把 `raw.githubusercontent.com/<x>` → `<base>/<前缀><x>` |
 | **raw (GitHub release / 源码 zip)** | `/repository/raw-github/` | 把 `github.com/<x>` → `<base>/<前缀><x>`;Nexus 自动跟随 302 到 codeload / objects 子域 |
+| **raw (GitHub API)** | `/repository/raw-github-api/` | 代理 `api.github.com`,用于脚本中获取最新 release 版本号;Dify 脚本用到 |
+| **raw (nvidia GitHub Pages)** | `/repository/raw-nvidia/` | 代理 `nvidia.github.io`,用于 nvidia-container-toolkit 的 apt repo + gpgkey;脚本见 `ai/nvidia-container-toolkit/install.sh` |
 | **Helm: Grafana** | `/repository/grafana/` | `helm repo add grafana <base>/repository/grafana/` (loki / grafana / mimir / tempo / promtail) |
 | **Helm: Prometheus** | `/repository/prometheus-community/` | `helm repo add prometheus-community <base>/repository/prometheus-community/` |
 | **Helm: Longhorn** | `/repository/hwlm-longhorn/` | `helm repo add longhorn <base>/repository/hwlm-longhorn/` |
 | **Helm: ingress-nginx** | `/repository/helmingress-nginx/` | `helm repo add ingress-nginx <base>/repository/helmingress-nginx/` |
 | **Helm: KubeBlocks/apecloud** | `/repository/helm-apecloud/` | `helm repo add kubeblocks <base>/repository/helm-apecloud/` |
 | **Jenkins 更新源** | `/repository/jenkins/` | 替换 `updates.jenkins.io/download/` |
+| **Claude Code 发布包** | `/repository/claude-code/` | 代理 `downloads.claude.ai/claude-code-releases`,路径不带重复;入口见 `ai/claude-code/bootstrap.cmd` |
 | **K8s 二进制** | `/repository/kubernetes-binaries` | `minikube --binary-mirror=<base>/repository/kubernetes-binaries` |
 
 通用模板(其它 helm chart 大多走 Nexus proxy 仓库,名字一般沿用上游 chart 名):
@@ -122,9 +178,9 @@ helm repo update
 ```json
 {
   "exec-opts": ["native.cgroupdriver=systemd"],
-  "registry-mirrors": ["https://huball.ihome.sxxpqp.top:8443"],
+  "registry-mirrors": ["https://dockerhub.ihome.sxxpqp.top:8443"],
   "insecure-registries": [
-    "huball.ihome.sxxpqp.top:8443",
+    "dockerhub.ihome.sxxpqp.top:8443",
     "ghcr.ihome.sxxpqp.top:8443",
     "quay.ihome.sxxpqp.top:8443",
     "k8s.ihome.sxxpqp.top:8443"
@@ -144,16 +200,16 @@ helm repo update
 ```toml
 # /etc/containerd/certs.d/docker.io/hosts.toml
 server = "https://registry-1.docker.io"
-[host."https://huball.ihome.sxxpqp.top:8443"]
+[host."https://dockerhub.ihome.sxxpqp.top:8443"]
   capabilities = ["pull", "resolve"]
   skip_verify = true
 ```
 
-完整的 5 个文件模板见 `docker/kind/deploy.sh`(里面有可复用的循环写法,新机器也能跑)。
+完整的 5 个文件模板见 `linux/docker/kind/deploy.sh`(里面有可复用的循环写法,新机器也能跑)。
 
 | 目录 | upstream server | mirror host |
 |---|---|---|
-| `docker.io/` | `https://registry-1.docker.io` | `huball.ihome.sxxpqp.top:8443` |
+| `docker.io/` | `https://registry-1.docker.io` | `dockerhub.ihome.sxxpqp.top:8443` |
 | `ghcr.io/` | `https://ghcr.io` | `ghcr.ihome.sxxpqp.top:8443` |
 | `quay.io/` | `https://quay.io` | `quay.ihome.sxxpqp.top:8443` |
 | `registry.k8s.io/` | `https://registry.k8s.io` | `k8s.ihome.sxxpqp.top:8443` |
@@ -174,6 +230,7 @@ Harbor 前端是自签 / 内网证书,需要:
 | 源类型 | 阿里云 | 清华 TUNA |
 |---|---|---|
 | Docker Hub 镜像加速 | `https://<id>.mirror.aliyuncs.com`(账号专属,需登录控制台获取) | — |
+| **Docker CE 安装** | `curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/install.sh \| bash -s docker --mirror Aliyun` | — |
 | **个人 ACR 命名空间** | `registry.cn-hangzhou.aliyuncs.com/sxxpqp/<image>`(杭州区,用户自己推的镜像放这里) | — |
 | 阿里 ACR(其它命名空间,只读引用) | 见下表 | — |
 | CentOS / RHEL / EPEL yum | `https://mirrors.aliyun.com/centos/` / `epel/` | `https://mirrors.tuna.tsinghua.edu.cn/centos/` |
@@ -228,16 +285,15 @@ docker push registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 
 | 地址 | 原用途 | 现在状态 |
 |---|---|---|
-| `dockerhub.ihome.sxxpqp.top:8443` | 早期 Nexus 镜像 group | 已弃用,改用上面 Harbor 多前端域名 |
+| `dockerhub.sxxpqp.top` / `iharbor.sxxpqp.top` | 更早一代镜像加速 | 已弃用,改用 Harbor 多前端域名 |
 | `harbor.iot.store:8085` | 旧业务 Harbor(`turing-kubesphere/*` 系列) | 业务镜像仍在用,但**新镜像推阿里 ACR**;helm chart 在 `kubernetes/harbor/values.yaml` |
 | `core.harbor.iot.store` | 旧业务 Harbor UI | 见上 |
-| `dockerhub.sxxpqp.top` / `iharbor.sxxpqp.top` | 更早一代镜像加速 | 已弃用,改用 Harbor 多前端域名 |
 | `020300.ihome.sxxpqp.top:8443` | Tekton 镜像源 | **未确认**,可能是 Harbor 的另一个 nginx 别名;遇到 tekton 部署时再确认 |
 | `mirror.ghproxy.com` | GitHub 加速 | 已不可用,改走 Nexus `raw-github` |
 
-注:`ghcr.ihome.sxxpqp.top:8443` / `quay.ihome.sxxpqp.top:8443` / `k8s.ihome.sxxpqp.top:8443` / `0523dw.ihome.sxxpqp.top:8443` 等 **没有列在"弃用"里** —— 它们是 **Harbor 的现役 nginx 多前端别名**,继续使用,见上面 "Harbor 架构" 段。
+注:`ghcr.ihome.sxxpqp.top:8443` / `quay.ihome.sxxpqp.top:8443` / `k8s.ihome.sxxpqp.top:8443` / `dockerhub.ihome.sxxpqp.top:8443` / `dockerhub.ihome.sxxpqp.top:8443` 等 **没有列在"弃用"里** —— 它们是 **Harbor 的现役 nginx 多前端别名**,继续使用,见上面 "Harbor 架构" 段。
 
-参考实现:`docker/kind/deploy.sh`(已更新成新架构,可复用)。
+参考实现:`linux/docker/kind/deploy.sh`(已更新成新架构,可复用)。
 
 ## 子目录优先级 / 当前活跃区域
 
@@ -267,6 +323,7 @@ docker push registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 - 用户喜欢 **表格 + 代码块 + 分点** 的结构,排版清晰比文字密度更重要。
 - 用户会贴 `journalctl` / `ip route` / `systemctl status` 的原始输出 —— 直接基于输出回答,不要让用户"再跑一遍 X 命令"除非真的缺信息。
 - 修改配置文件时:**优先用 Edit 工具改本地文件**,然后告诉用户 `scp` / `git push` 推到服务器的命令,不要只在回复里贴 diff。
+- **每次修改文件后,主动询问是否 git push**,并给出建议的 commit message(格式:`bash gitpush.sh "<message>"`)。
 
 ## 已知踩坑(跨项目通用)
 

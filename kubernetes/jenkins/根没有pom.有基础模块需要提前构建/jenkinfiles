@@ -1,0 +1,297 @@
+pipeline {
+    agent {
+        kubernetes {
+            label 'containerd'
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: jnlp
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/inbound-agent:latest
+    volumeMounts:
+      - name: workspace-volume
+        mountPath: /home/jenkins/agent/workspace
+  - name: maven
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/maven:3.8.6-openjdk-11
+    imagePullPolicy: Always
+    command: ["cat"]
+    tty: true
+    volumeMounts:
+      - name: workspace-volume
+        mountPath: /home/jenkins/agent/workspace
+      - name: m2-cache           # [新增] 挂载本地仓库
+        mountPath: /root/.m2
+  - name: sonar
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/maven:3.9.6-eclipse-temurin-17
+    imagePullPolicy: Always
+    command: ["cat"]
+    tty: true
+    volumeMounts:
+      - name: workspace-volume
+        mountPath: /home/jenkins/agent/workspace
+      - name: m2-cache           # [新增] 共享本地仓库
+        mountPath: /root/.m2
+  - name: kaniko
+    image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/executor:debug
+    imagePullPolicy: Always
+    command: ["cat"]
+    tty: true
+    volumeMounts:
+      - name: workspace-volume
+        mountPath: /home/jenkins/agent/workspace
+  volumes:
+    - name: workspace-volume
+      emptyDir: {}
+    - name: m2-cache             # [新增] 定义共享仓库卷
+      emptyDir: {}
+            '''
+        }
+    }
+
+    parameters {
+        string(name: 'IMAGE_TAG', defaultValue: 'v1.0.0', description: 'Docker 镜像版本标签')
+        choice(
+            name: 'BUILD_MODULE',
+            choices: ['all', 'dsp-account', 'dsp-ad', 'dsp-order', 'dsp-system', 'dsp-gen', 'dsp-auth', 'dsp-gateway'],
+            description: '选择要构建的模块（all 表示构建全部模块）'
+        )
+        booleanParam(name: 'REBUILD_BASE_LIBS', defaultValue: true, description: '构建基础依赖库 (dsp-dependencies/common/api/third-sdk)')
+        booleanParam(name: 'DEPLOY_TO_K8S', defaultValue: false, description: '是否部署到 K8S')
+        booleanParam(name: 'SKIP_CODE_SCAN', defaultValue: true, description: '是否跳过代码扫描')
+    }
+
+    environment {
+        GIT_REPO = 'https://gitee.com/weikekuajing/dsp-server.git'
+        GIT_BRANCH = 'release'
+        HARBOR_REGISTRY = 'hub.wishfoxs.com:6443'
+        HARBOR_PROJECT = 'library'
+        HARBOR_USERNAME = 'yangbin_tb2008'
+        HARBOR_PASSWORD = 'Sohuglobal123'
+    }
+
+    stages {
+        stage('拉取代码') {
+            steps {
+                container('maven') {
+                    echo '正在拉取代码...'
+                    checkout scmGit(
+                        branches: [[name: "*/${GIT_BRANCH}"]],
+                        extensions: [],
+                        userRemoteConfigs: [[
+                            url: "${GIT_REPO}",
+                            credentialsId: '10539f36-b4dd-4546-b6ee-a17cc59c7682'
+                        ]]
+                    )
+                }
+            }
+        }
+
+        stage('构建基础依赖') {
+            when {
+                expression { return params.REBUILD_BASE_LIBS }
+            }
+            steps {
+                container('maven') {
+                    echo "--- 正在构建基础依赖库 ---"
+                    sh """
+                        # 构建依赖管理
+                        mvn clean install -DskipTests -f dsp-dependencies/pom.xml
+                        
+                        # 构建 Common (父 POM + 子模块)
+                        mvn clean install -DskipTests -N -f dsp-common/pom.xml
+                        mvn clean install -DskipTests -U -f dsp-common/dsp-common-api/pom.xml
+                        mvn clean install -DskipTests -U -f dsp-common/dsp-common-core/pom.xml
+                        # 构建 API 和 SDK
+                        mvn clean install -DskipTests -U -f dsp-api/pom.xml
+                        mvn clean install -DskipTests -U -f dsp-third-sdk/pom.xml
+
+                       # 构建 Common 
+                       #  mvn clean install -DskipTests -N -f dsp-common/pom.xml
+                        mvn clean install -DskipTests -U -f dsp-common/pom.xml
+                    """
+                }
+            }
+        }
+
+
+        stage('构建 JAR 包') {
+            steps {
+                container('maven') {
+                    script {
+                        def modules = []
+                        if (params.BUILD_MODULE == 'all') {
+                            modules = ['account', 'ad', 'order', 'system', 'gen', 'auth', 'gateway']
+                        } else {
+                            modules = [params.BUILD_MODULE.replace('dsp-', '')]
+                        }
+
+                        echo "准备构建模块列表：${modules}"
+
+                        def builds = [:]
+                        modules.each { module ->
+                            builds["dsp-${module}"] = {
+                                dir("dsp-${module}") {
+                                    echo "[dsp-${module}] 开始打包..."
+                                    sh "mvn clean package -DskipTests"
+                                    echo "[dsp-${module}] 打包完成"
+                                }
+                            }
+                        }
+
+                        if (builds.size() > 1) {
+                            parallel builds
+                        } else if (builds.size() == 1) {
+                            builds.values().first()()
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('代码扫描') {
+            when {
+                expression { return !params.SKIP_CODE_SCAN }
+            }
+            steps {
+                // 使用有 JDK 17 环境的 sonar 容器
+                container('sonar') {
+                    script {
+                        def scanList = []
+                        if (params.BUILD_MODULE == 'all') {
+                            // 全量构建时，扫描所有核心业务模块
+                            scanList = ['dsp-account', 'dsp-ad', 'dsp-order', 'dsp-system', 'dsp-gen', 'dsp-auth', 'dsp-gateway']
+                        } else {
+                            // 单模块构建时，只扫描选中的那个模块
+                            scanList = [params.BUILD_MODULE]
+                        }
+
+                        echo ">>> 本次扫描计划：${scanList}"
+
+                        withSonarQubeEnv('sonarqube') {
+                            scanList.each { module ->
+                                // 容错检查：确保目录存在
+                                if (fileExists("${module}/pom.xml")) {
+                                    echo "--- 正在扫描模块: ${module} ---"
+                                    dir(module) {
+                                        // 提示：得益于 m2-cache 共享卷，这里能直接识别 dsp-common 等依赖
+                                        sh """
+                                            mvn sonar:sonar \
+                                                -Dsonar.projectKey=dsp-server-${module} \
+                                                -Dsonar.projectName="DSP-${module}" \
+                                                -Dsonar.sourceEncoding=UTF-8 \
+                                                -Dsonar.java.binaries=target/classes
+                                        """
+                                    }
+                                } else {
+                                    echo "[警告] 跳过扫描：未找到目录或 POM -> ${module}"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('配置镜像仓库认证') {
+            steps {
+                container('kaniko') {
+                    script {
+                        echo '配置 Kaniko 认证...'
+                        sh """
+                            mkdir -p /kaniko/.docker
+                            cat > /kaniko/.docker/config.json << EOF
+                            {
+                              "auths": {
+                                "${HARBOR_REGISTRY}": {
+                                  "username": "${HARBOR_USERNAME}",
+                                  "password": "${HARBOR_PASSWORD}"
+                                }
+                              }
+                            }
+                            EOF
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('构建 Docker 镜像') {
+            steps {
+                container('kaniko') {
+                    script {
+                        def modules = []
+                        if (params.BUILD_MODULE == 'all') {
+                            modules = ['account', 'ad', 'order', 'system', 'gen', 'auth', 'gateway']
+                        } else {
+                            modules = [params.BUILD_MODULE.replace('dsp-', '')]
+                        }
+
+                        echo "准备构建镜像模块列表：${modules}"
+
+                        // 顺序构建（不使用 parallel）
+                        modules.each { module ->
+                            def fullModuleName = "dsp-${module}"
+                            def imageName = "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${fullModuleName}:${params.IMAGE_TAG}"
+
+                            echo "[${fullModuleName}] 启动顺序构建..."
+                            sh """
+                                /kaniko/executor \\
+                                    --context=${WORKSPACE}/${fullModuleName} \\
+                                    --dockerfile=${WORKSPACE}/${fullModuleName}/Dockerfile \\
+                                    --destination=${imageName} \\
+                                    --cache=false \\
+                                    --cache-dir=/tmp/kaniko-cache \\
+                                    --snapshot-mode=redo \\
+                                    --skip-tls-verify \\
+                                    --verbosity=info
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+
+        stage('部署到 K8S') {
+            when {
+                expression { return params.DEPLOY_TO_K8S }
+            }
+            steps {
+                container('maven') {
+                    script {
+                        def modules = []
+                        if (params.BUILD_MODULE == 'all') {
+                            modules = ['account', 'ad', 'order', 'system', 'gen', 'auth', 'gateway']
+                        } else {
+                            modules = [params.BUILD_MODULE.replace('dsp-', '')]
+                        }
+
+                        modules.each { module ->
+                            echo "[dsp-${module}] 触发 K8s 部署..."
+                            sh """
+                                curl -X PUT \\
+                                    -H "Content-Type: application/yaml" \\
+                                    -H "Cookie: KuboardUsername=admin; KuboardAccessKey=hypy8iyr3zfz.8ndhf86cedzfhwaa2ci6dirzhmzesxrz" \\
+                                    -d '{"kind":"deployments","namespace":"dsp-test","name":"dsp-${module}"}' \\
+                                    "http://192.168.150.240:90/kuboard-api/cluster/k8s/kind/CICDApi/admin/resource/restartWorkload"
+                            """
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline 执行完成'
+        }
+        success {
+            echo "构建成功！镜像版本：${IMAGE_TAG}"
+        }
+        failure {
+            echo '构建失败，请检查日志！'
+        }
+    }
+}

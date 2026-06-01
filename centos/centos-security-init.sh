@@ -1,4 +1,5 @@
 #!/bin/bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/centos/centos-security-init.sh
 ##Filename:     OS-centOS-Protective_v0.1.sh
 ##Author:	Browser
 ##Date:         2019-02-24
