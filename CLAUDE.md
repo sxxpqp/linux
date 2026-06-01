@@ -376,6 +376,10 @@ docker push registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 - **批量动作前先盘点**:涉及 ≥3 个文件先列清单,给用户刹车的机会
 - **commit message 描述"为什么"**:不是 `update xxx`,是 `fix(scope): rationale`
 - **错误不要藏**:做错了直接说"我加错了 X 行",分析根因,**不要悄悄打补丁**
+- **🆕 画出完整链路**:用户问"X 连不通"/"Y 报错",先画完整请求链(`client → ingress → svc → pod → upstream`),标出每层可能故障点 + 对应排查命令,**不要只盯一个症状**
+- **🆕 选型必须 trade-off**:推荐方案 A 时,**必须**用对比表列出 B / C 备选 + 给出"为什么不是 B"的具体理由(性能 / 兼容 / 复杂度 / 生态),不能只说"用 A 就行"
+- **🆕 根因不止症状**:报错日志只是表象,要追到底层(网络? DNS? 权限? 配置漂移? 内核参数?)。根因没找到不算解决,补丁只是缓解
+- **🆕 产出要可复用**:同样的问题第二次出现要能直接抄 —— 把检查/修复步骤封装成函数/脚本/Makefile target,沉淀到对应子目录,不要让排查路径只活在某次对话里
 
 ### 反面案例(本仓库踩过的)
 
@@ -386,6 +390,87 @@ docker push registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 | `git add .`(macOS)误以为会带上所有 modified | macOS case-insensitive 下大小写双跟踪文件 `git add` 静默失败,用 `git update-index --add` |
 | 改 README 状态字段后没改图例 | 加新状态(🟡 已弃用)同步更新图例段 |
 | 顶层目录改名后 README 索引不更新 | 改完目录立刻 grep 一遍 README 看死链 |
+
+### 排障案例范式 — 完整 8 步流程
+
+> 用户问任何 "X 报错/不通/卡住",按下面 8 步走,**全部走完才算解决**。下面用真实案例(本仓库 commit `cd28fdb`)示范。
+
+**案例**:`ai/dify/deploy.sh` 跑到 docker install 时报 `curl: (23) Failed writing body (0 != 13969)`
+
+#### ① 现象 — 贴用户原始输出,不脑补
+
+```
+[INFO] 正在安装 Docker CE...
+Loaded plugins: fastestmirror
+Cleaning repos: base docker-ce-stable extras kubernetes updates
+Cleaning up list of fastest mirrors
+curl: (23) Failed writing body (0 != 13969)
+```
+
+#### ② 解读错误码 — 查文档,不猜
+
+- `curl exit 23` = `CURLE_WRITE_ERROR`,curl 写 stdout 时被 pipe 关闭
+- `(0 != 13969)` = curl 期望写 13969 字节,实际写 0 → **下游进程提前关闭 pipe**
+
+#### ③ 画出完整链路 — 标明 stdin/stdout 流向
+
+```
+curl ... | bash -s docker --mirror Aliyun </dev/null 2>&1 | grep ...
+  ↓          ↓                              ↓                  ↓
+fd 1     bash fd 0(stdin)                redirect          grep stdin
+         期望从 pipe 收脚本               改成 /dev/null     收 bash 输出
+```
+
+故障定位:`</dev/null` 把 bash 的 stdin 改成 /dev/null → bash 读 EOF → exit 0 → pipe 关闭 → curl SIGPIPE → exit 23
+
+#### ④ 根因分析 — shell 语义层面
+
+不是 docker / curl / yum 任何一个工具的 bug,**根因是 shell 解析顺序**:
+
+```
+cmd1 | cmd2 < file     # cmd2 的 stdin 是 file,不是 pipe
+```
+
+`bash -s` 模式要从 stdin 读脚本源,但 `</dev/null` redirect **优先级高于** pipe,bash 收不到脚本,所以提前退出。
+
+#### ⑤ 方案对比 — 给出 trade-off,说"为什么不是 B"
+
+| 方案 | 优 | 劣 | 选择 |
+|---|---|---|---|
+| 直接删 `</dev/null` | 改 1 字符 | systemctl pager 会回来卡住 | ✗ 治标 |
+| `setsid curl \| bash` | 不动 stdin,切 session | 老 CentOS 7 setsid 行为差异大 | ✗ 兼容性差 |
+| `script -qc '...' /dev/null` 伪 tty 包一层 | 兜底有效 | 输出格式乱 + 跑两层 shell + 调试痛苦 | ✗ 复杂 |
+| **`mktemp + curl -o + bash <file> </dev/null`** | stdin 跟脚本源彻底分开,两个 redirect 互不影响 | 多 3 行 + 清理 tmp | ✅ |
+
+#### ⑥ 修复 — 给完整 diff,不是片段
+
+```diff
+-            curl -fsSL <url> | bash -s docker --mirror Aliyun </dev/null 2>&1 | grep -v ...
++            local docker_install_sh
++            docker_install_sh=$(mktemp /tmp/docker-install.XXXXXX.sh)
++            curl -fsSL <url> -o "$docker_install_sh"
++            bash "$docker_install_sh" docker --mirror Aliyun </dev/null 2>&1 | grep -v ...
++            rm -f "$docker_install_sh"
+```
+
+#### ⑦ 验证 — 跑一遍 + 给预期输出
+
+```bash
+bash /tmp/dify-deploy.sh 1.14.2 /opt/dify
+# 期望: 不再出现 curl: (23),docker install 完整跑完,出现 "Client: Docker Engine - Community"
+docker info >/dev/null && echo "✓ docker OK"
+```
+
+#### ⑧ 沉淀 — 让下次不再撞
+
+| 沉淀点 | 内容 |
+|---|---|
+| 本文档"已知踩坑"段 | 加第 7 条:`curl \| bash -s ... </dev/null` 死锁 |
+| 本文档"反面案例"表 | 加 `mktemp + curl -o + bash` 的正确模式 |
+| 本文档"脚本"标准 | 加"pipe / stdin 不抢占"一条 |
+| commit message | 写 `fix(scope): rationale`,**不写 update**,以后 git log 能搜到 |
+
+→ 三个月后另一个脚本同样问题,直接 grep CLAUDE.md "curl.*bash.*stdin" 就能找到全套解法,无需再排一遍。
 
 ## 已知踩坑(跨项目通用)
 
