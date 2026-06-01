@@ -85,29 +85,37 @@ kubeadm certs check-expiration > /root/cert-rotate-$(date +%F)/before-$(hostname
 
 **3 台 master 都做**:
 
-```bash
-TS=$(date +%Y%m%d-%H%M)
-# 1) 整个 pki 目录
-cp -a /etc/kubernetes/pki /etc/kubernetes/pki.bak.${TS}
-# 2) 控制面 kubeconfig
-mkdir -p /etc/kubernetes/backup-${TS}
-cp /etc/kubernetes/*.conf /etc/kubernetes/backup-${TS}/
-# 3) static pod manifests
-cp -a /etc/kubernetes/manifests /etc/kubernetes/manifests.bak.${TS}
-# 4) /root/.kube/config(管理员 kubeconfig)
-cp /root/.kube/config /root/.kube/config.bak.${TS} 2>/dev/null || true
+**推荐:整目录备份 + etcd 快照,一把梭,漏不掉东西**
 
-# 5) etcd 快照(可选但强烈推荐,见 ../etcd/etcd-backup.sh)
-ETCDCTL_API=3 etcdctl \
-  --endpoints=https://127.0.0.1:2379 \
+```bash
+TS=$(date +%F-%H%M)
+BAK=/root/cert-rotate-${TS}
+mkdir -p ${BAK}
+
+# 1) 整个 /etc/kubernetes(pki/ + manifests/ + 所有 *.conf 全在里面)
+cp -a /etc/kubernetes ${BAK}/etc-kubernetes
+ls ${BAK}/etc-kubernetes/       # 应看到 pki/ manifests/ admin.conf 等
+
+# 2) /root/.kube/config(管理员 kubeconfig,跟 admin.conf 一份内容,留个底)
+cp /root/.kube/config ${BAK}/root-kube-config 2>/dev/null || true
+
+# 3) etcd 快照(stacked etcd 在每台 master 都跑;external etcd 在 etcd 节点跑)
+export ETCDCTL_API=3
+etcdctl --endpoints=https://127.0.0.1:2379 \
   --cacert=/etc/kubernetes/pki/etcd/ca.crt \
   --cert=/etc/kubernetes/pki/etcd/server.crt \
   --key=/etc/kubernetes/pki/etcd/server.key \
-  snapshot save /root/cert-rotate-${TS}/etcd-snapshot.db
+  snapshot save ${BAK}/etcd-snapshot.db
 
-# 验证快照
-ETCDCTL_API=3 etcdctl --write-out=table snapshot status /root/cert-rotate-${TS}/etcd-snapshot.db
+# 4) 必须校验,不然损坏的快照恢复不了
+etcdctl --write-out=table snapshot status ${BAK}/etcd-snapshot.db
+# 期望:HASH / REVISION / TOTAL KEYS / TOTAL SIZE 四列;文件不能是 0 字节
+ls -lh ${BAK}/
 ```
+
+> 为什么用 `cp -a` 一把梭而不是分项 cp:
+> - `-a` = 保留权限/属主/时间戳/软链接,出问题 `rm -rf /etc/kubernetes && cp -a ${BAK}/etc-kubernetes /etc/kubernetes` 就能整体回滚。
+> - 分项 cp(pki / *.conf / manifests)容易漏掉以后版本里新加的东西(比如 1.29 加的 `super-admin.conf`、`pki/etcd/` 子目录里的某些文件)。
 
 ### 2.4 记录当前集群健康基线(后面对比用)
 
@@ -317,19 +325,23 @@ tar czf /root/cert-rotate-$(date +%F).tar.gz /root/cert-rotate-$(date +%F)/
 ### 6.1 回滚单台 master(没影响到 etcd)
 
 ```bash
-TS=<你备份时记下的时间戳>
-# 1) 恢复证书
-rm -rf /etc/kubernetes/pki
-cp -a /etc/kubernetes/pki.bak.${TS} /etc/kubernetes/pki
-# 2) 恢复 kubeconfig
-cp -f /etc/kubernetes/backup-${TS}/*.conf /etc/kubernetes/
+TS=<你备份时记下的时间戳,例如 2026-06-01-1430>
+BAK=/root/cert-rotate-${TS}
+
+# 1) 整体恢复 /etc/kubernetes(因为是 cp -a 整目录备份,直接覆盖回去)
+mv /etc/kubernetes /etc/kubernetes.broken.$(date +%s)   # 留现场,别 rm
+cp -a ${BAK}/etc-kubernetes /etc/kubernetes
+
+# 2) 恢复 admin kubeconfig
 cp -f /etc/kubernetes/admin.conf /root/.kube/config
-# 3) 触发 static pod 重建
+
+# 3) 触发 static pod 重建(kubelet 会感知到 manifests 时间戳变化)
 cd /etc/kubernetes/manifests
 for f in kube-apiserver.yaml kube-controller-manager.yaml kube-scheduler.yaml etcd.yaml; do
     mv $f /tmp/$f; sleep 20; mv /tmp/$f .; sleep 30
 done
-# 4) kubelet
+
+# 4) kubelet 重新加载
 systemctl restart kubelet
 ```
 
