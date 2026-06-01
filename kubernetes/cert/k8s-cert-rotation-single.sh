@@ -26,21 +26,52 @@ echo "==== [1/6] 前置检查 ===="
 [ "$(kubectl get node -l node-role.kubernetes.io/control-plane --no-headers 2>/dev/null | wc -l)" = "1" ] \
     || { echo "检测到多 master,请用 k8s-cert-rotation.sh / 3masters.md"; exit 1; }
 
-# 检查 etcdctl,没装就尝试从仓库一键装(kubeadm 默认不在主机上装 etcdctl)
+# 检查 etcdctl,kubeadm 默认不装(etcd 是 static pod,etcdctl 只在容器里)
+# 三级 fallback:Nexus → chfs → 从容器镜像挂出来(应付 distroless 没 cat 的情况)
 if ! command -v etcdctl >/dev/null 2>&1; then
-    echo "  [WARN] 主机未安装 etcdctl,尝试从 chfs 拉取..."
-    if wget -q https://chfs.sxxpqp.top:8443/chfs/shared/k8s/etcd/etcd-v3.5.18-linux-amd64.tar.gz -O /tmp/etcd.tar.gz; then
-        tar -xzf /tmp/etcd.tar.gz -C /usr/local/bin/ --strip-components=1 etcd-v3.5.18-linux-amd64/etcdctl
-        rm -f /tmp/etcd.tar.gz
-        echo "  ✓ etcdctl 已安装:$(etcdctl version | head -1)"
-    else
-        echo "  [FAIL] chfs 拉取失败,改从 etcd 容器里拷一份:"
-        ETCD_ID=$(crictl ps -q --name etcd 2>/dev/null | head -1)
-        [ -z "$ETCD_ID" ] && { echo "  etcd 容器也找不到,放弃。请手动:bash kubernetes/etcd/instatletcdctl.sh"; exit 1; }
-        crictl exec $ETCD_ID cat /usr/local/bin/etcdctl > /usr/local/bin/etcdctl
-        chmod +x /usr/local/bin/etcdctl
-        echo "  ✓ 从容器拷出 etcdctl:$(etcdctl version | head -1)"
+    echo "  [WARN] 主机未安装 etcdctl,尝试自动安装..."
+    ETCD_VER=v3.5.18
+    PKG=etcd-${ETCD_VER}-linux-amd64.tar.gz
+    NEXUS_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/etcd-io/etcd/releases/download/${ETCD_VER}/${PKG}"
+    CHFS_URL="https://chfs.sxxpqp.top:8443/chfs/shared/k8s/etcd/${PKG}"
+
+    INSTALLED=0
+    # 1) Nexus raw-github 代理(优先,内网稳定)
+    if wget --no-check-certificate -q "$NEXUS_URL" -O /tmp/etcd.tar.gz && [ -s /tmp/etcd.tar.gz ]; then
+        tar -xzf /tmp/etcd.tar.gz -C /usr/local/bin/ --strip-components=1 etcd-${ETCD_VER}-linux-amd64/etcdctl \
+            && INSTALLED=1 && echo "  ✓ 从 Nexus 安装 etcdctl"
     fi
+    # 2) chfs 备用
+    if [ $INSTALLED -eq 0 ]; then
+        echo "  [WARN] Nexus 拉取失败,尝试 chfs..."
+        if wget --no-check-certificate -q "$CHFS_URL" -O /tmp/etcd.tar.gz && [ -s /tmp/etcd.tar.gz ]; then
+            tar -xzf /tmp/etcd.tar.gz -C /usr/local/bin/ --strip-components=1 etcd-${ETCD_VER}-linux-amd64/etcdctl \
+                && INSTALLED=1 && echo "  ✓ 从 chfs 安装 etcdctl"
+        fi
+    fi
+    # 3) 最后兜底:从正在跑的 etcd 容器镜像里挂出来(distroless 没 cat 也能用)
+    if [ $INSTALLED -eq 0 ]; then
+        echo "  [WARN] 下载都失败,尝试从 etcd 镜像挂载..."
+        ETCD_IMG=$(crictl ps --name etcd -o json 2>/dev/null | grep -oP '"image":\s*"\K[^"]+' | head -1)
+        if [ -n "$ETCD_IMG" ] && command -v ctr >/dev/null 2>&1; then
+            MNT=$(mktemp -d)
+            ctr -n k8s.io images mount "$ETCD_IMG" $MNT >/dev/null 2>&1 \
+                && cp $MNT/usr/local/bin/etcdctl /usr/local/bin/etcdctl \
+                && ctr -n k8s.io images unmount $MNT >/dev/null 2>&1 \
+                && INSTALLED=1 && echo "  ✓ 从镜像 $ETCD_IMG 挂载提取 etcdctl"
+            rmdir $MNT 2>/dev/null || true
+        fi
+    fi
+
+    rm -f /tmp/etcd.tar.gz
+    if [ $INSTALLED -eq 0 ]; then
+        echo "  [FAIL] 三种方式都失败,请手动安装:"
+        echo "    wget --no-check-certificate $NEXUS_URL"
+        echo "    tar -xzf $PKG -C /usr/local/bin/ --strip-components=1 etcd-${ETCD_VER}-linux-amd64/etcdctl"
+        exit 1
+    fi
+    chmod +x /usr/local/bin/etcdctl
+    echo "  ✓ $(etcdctl version | head -1)"
 fi
 
 kubeadm certs check-expiration

@@ -47,11 +47,20 @@ kubeadm 部署的集群 etcd 是 static pod,etcdctl 只在容器里,**主机上 
 本流程的备份 / 验证步骤都要在主机直接用 etcdctl,先在**所有 master** 上装好:
 
 ```bash
-# 仓库里现成的(chfs 拉,30 秒搞定)
-wget https://chfs.sxxpqp.top:8443/chfs/shared/k8s/etcd/etcd-v3.5.18-linux-amd64.tar.gz
+# 优先 Nexus(代理 GitHub release,内网稳)
+wget --no-check-certificate \
+  https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/etcd-io/etcd/releases/download/v3.5.18/etcd-v3.5.18-linux-amd64.tar.gz
 tar -xzf etcd-v3.5.18-linux-amd64.tar.gz -C /usr/local/bin/ --strip-components=1 etcd-v3.5.18-linux-amd64/etcdctl
 etcdctl version
-# 或:bash kubernetes/etcd/instatletcdctl.sh
+
+# 备用:chfs(部分网络下 Nexus 不通时)
+# wget --no-check-certificate https://chfs.sxxpqp.top:8443/chfs/shared/k8s/etcd/etcd-v3.5.18-linux-amd64.tar.gz
+
+# 实在不行,从正在跑的 etcd 镜像直接挂出来(应付 distroless 没 cat 的场景)
+# ETCD_IMG=$(crictl ps --name etcd -o json | grep -oP '"image":\s*"\K[^"]+' | head -1)
+# MNT=$(mktemp -d) && ctr -n k8s.io images mount "$ETCD_IMG" $MNT \
+#   && cp $MNT/usr/local/bin/etcdctl /usr/local/bin/ \
+#   && ctr -n k8s.io images unmount $MNT && rmdir $MNT
 ```
 
 > 版本对齐:etcdctl 版本应**等于或新于**集群 etcd 版本。查集群 etcd 版本:`crictl exec $(crictl ps -q --name etcd | head -1) etcd --version`

@@ -2,10 +2,10 @@
 # ============ 前置检查 ============
 # 0. 确认 etcdctl 在主机上(kubeadm 默认不装,容器里有但主机没有)
 if ! command -v etcdctl >/dev/null 2>&1; then
-    echo "主机未装 etcdctl,执行以下命令安装后再回来跑:"
-    echo "  wget https://chfs.sxxpqp.top:8443/chfs/shared/k8s/etcd/etcd-v3.5.18-linux-amd64.tar.gz"
+    echo "主机未装 etcdctl,执行以下命令安装后再回来跑(Nexus 代理 GitHub release):"
+    echo "  wget --no-check-certificate https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/etcd-io/etcd/releases/download/v3.5.18/etcd-v3.5.18-linux-amd64.tar.gz"
     echo "  tar -xzf etcd-v3.5.18-linux-amd64.tar.gz -C /usr/local/bin/ --strip-components=1 etcd-v3.5.18-linux-amd64/etcdctl"
-    echo "(或:bash kubernetes/etcd/instatletcdctl.sh)"
+    echo "(备用:chfs https://chfs.sxxpqp.top:8443/chfs/shared/k8s/etcd/)"
     exit 1
 fi
 
