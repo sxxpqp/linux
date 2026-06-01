@@ -325,6 +325,68 @@ docker push registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 - 修改配置文件时:**优先用 Edit 工具改本地文件**,然后告诉用户 `scp` / `git push` 推到服务器的命令,不要只在回复里贴 diff。
 - **每次修改文件后,主动询问是否 git push**,并给出建议的 commit message(格式:`bash gitpush.sh "<message>"`)。
 
+## 输出质量要求(资深运维开发工程师标准)
+
+默认按"**生产环境运维开发工程师**"的水准产出,不是"够用就行"。下面是可落地的具体指标,生成脚本/配置/文档时全部对齐。
+
+### 脚本(`.sh`)
+
+| 要求 | 落地做法 |
+|---|---|
+| **强 fail-fast** | `set -euo pipefail`(三件套:errexit / nounset / pipefail),关键允许失败处显式 `\|\| true` |
+| **首行三件套** | `# 系统:` + `# 下载:` + `# 用法:`(详见上方"脚本首行注释约定") |
+| **参数校验** | 必填缺失 → exit 1 + 用法提示;数值参数(replicas / port / size)校验范围、奇偶、最小值 |
+| **幂等** | `kubectl create ns --dry-run=client -o yaml \| kubectl apply -f -` 而不是裸 create;SQL 用 `CREATE USER IF NOT EXISTS`;目录已存在跳过下载 |
+| **进度可观测** | 每个阶段 `echo "[i/N] xxx..."` + `✓` / `✗` 标识,失败时直接附排查命令(`journalctl -u xxx` / `kubectl describe`) |
+| **可重入** | 第二次跑不破坏第一次结果(`if [ -d ... ]; then warn "跳过"; return; fi`) |
+| **临时文件** | `mktemp` + `trap "rm -f $TMP" EXIT`,或显式 `rm -f` 在路径明确处 |
+| **破坏性动作三档** | `--dry-run`(预演) + `--force`(剥 finalizer 强清) + `--keep-data`(保 PVC) |
+| **pipe / stdin 不抢占** | `curl \| bash -s` 模式下 stdin 是脚本源,**不能再 `</dev/null`**;要切 tty 用 `mktemp + curl -o + bash <file> </dev/null` |
+| **systemctl 防 pager** | `export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''` + `systemctl --no-pager`(老 systemd 不读环境变量) |
+
+### Kubernetes YAML
+
+| 要求 | 落地做法 |
+|---|---|
+| **显式 namespace** | `metadata.namespace` 必填,不依赖当时 kubectl 上下文 |
+| **资源声明** | `requests` + `limits` 都给,测试可以小**不能不写** |
+| **反亲和** | 副本 ≥3 至少 `preferredDuringScheduling` 跨节点;Paxos/Raft 类强一致系统注释里建议生产用 `required` |
+| **可观察** | liveness / readiness / startup 探针;关键服务有 ServiceMonitor |
+| **优雅** | `terminationGracePeriodSeconds` + `preStop`;滚动更新策略明确 |
+| **安全** | `securityContext.runAsNonRoot` / `readOnlyRootFilesystem` 能开就开 |
+| **terminationPolicy** | KubeBlocks Cluster 生产用 `DoNotTerminate`,测试用 `Delete`,**别用 WipeOut 除非你知道在干嘛** |
+
+### 文档 / README
+
+| 要求 | 落地做法 |
+|---|---|
+| **先结论后细节** | 顶部一句话讲完用途;表格列字段;再展开原理 |
+| **决策依据** | 给方案 A / B 对比表(不是只列 A),写"为什么选 A 不选 B" |
+| **跨链接** | 相关方案互链(`见 ../mysql/` / `详见 CLAUDE.md "Harbor 架构"`) |
+| **状态标注** | ✅ 生产验证 / 🟡 实验 / 🔴 已弃用,跟 README 图例对齐 |
+| **可执行示例** | 完整可复制粘贴的命令,不只是描述步骤 |
+| **踩坑回写** | 出过的问题写到 `bug.md` 或本文档"已知踩坑"段 |
+
+### 回答风格
+
+- **表态明确**:不该用就直说"不推荐",**不要"也许可以试试"**
+- **比较要给依据**:"A 比 B 快 3x" 要给测试方法/来源,凭感觉不写
+- **不重复用户已知的**:用户贴了 journalctl,直接基于输出回答,不让用户再跑命令(除非真缺信息)
+- **生产文件特别谨慎**:动 `kubernetes/` `devops/` 下标 ✅ 生产的内容前,先确认是否要 dry-run / 备份
+- **批量动作前先盘点**:涉及 ≥3 个文件先列清单,给用户刹车的机会
+- **commit message 描述"为什么"**:不是 `update xxx`,是 `fix(scope): rationale`
+- **错误不要藏**:做错了直接说"我加错了 X 行",分析根因,**不要悄悄打补丁**
+
+### 反面案例(本仓库踩过的)
+
+| ✗ 错误做法 | ✓ 正确做法 |
+|---|---|
+| `curl ... \| bash -s ... </dev/null` | `mktemp + curl -o + bash <file> </dev/null`(`-s` 模式 stdin 抢占冲突) |
+| `kubectl create namespace x` | `kubectl create ns x --dry-run=client -o yaml \| kubectl apply -f -` |
+| `git add .`(macOS)误以为会带上所有 modified | macOS case-insensitive 下大小写双跟踪文件 `git add` 静默失败,用 `git update-index --add` |
+| 改 README 状态字段后没改图例 | 加新状态(🟡 已弃用)同步更新图例段 |
+| 顶层目录改名后 README 索引不更新 | 改完目录立刻 grep 一遍 README 看死链 |
+
 ## 已知踩坑(跨项目通用)
 
 1. **GitHub raw 直连基本不通**:任何 `raw.githubusercontent.com` 的 URL,优先改成走 Nexus raw 代理。
@@ -332,6 +394,9 @@ docker push registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 3. **CentOS / RHEL 默认带 firewalld + SELinux**:网络类排障第一步先 `systemctl status firewalld` + `getenforce`。
 4. **systemd-resolved**:Ubuntu 系会占 53 端口,跑 DNS 类服务前先 `systemctl status systemd-resolved`。
 5. **libvirt virbr0**:测试机上常见的虚拟网桥,跟物理网卡分流时要排除,自动检测出口网卡的程序经常误选它。
+6. **macOS case-insensitive 文件系统 + git 大小写双跟踪**:在 Linux 上提交过 `README.md` 和 `readme.md` 两份,macOS 本地 pull 下来只有一个 inode(取决于谁先到),`git add README.md` 静默失败(指向不存在的 SHA)。修法:`git update-index --add <path>` 强行 stage;长期清理 `git rm --cached <小写名>` 保留大写。
+7. **`curl <url> \| bash -s args </dev/null` 死锁**:`bash -s` 模式 stdin 是脚本源,`</dev/null` 会抢占管道导致 bash 立即 exit,curl 收 SIGPIPE 报 `curl: (23) Failed writing body`。要切 tty 用 `mktemp + curl -o + bash <file> </dev/null`。
+8. **systemctl 进 less 卡住脚本**:`SYSTEMD_PAGER=` 不够,老 systemd 还读 `PAGER` / `SYSTEMD_LESS`。生产脚本三件套 `export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''` + 每条 `systemctl --no-pager`,子进程切 tty `</dev/null`。
 
 ## 不要做的事
 
