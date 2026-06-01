@@ -25,6 +25,24 @@ echo "==== [1/6] 前置检查 ===="
 [ -f /etc/kubernetes/manifests/etcd.yaml ] || { echo "未发现 stacked etcd,本脚本不适用"; exit 1; }
 [ "$(kubectl get node -l node-role.kubernetes.io/control-plane --no-headers 2>/dev/null | wc -l)" = "1" ] \
     || { echo "检测到多 master,请用 k8s-cert-rotation.sh / 3masters.md"; exit 1; }
+
+# 检查 etcdctl,没装就尝试从仓库一键装(kubeadm 默认不在主机上装 etcdctl)
+if ! command -v etcdctl >/dev/null 2>&1; then
+    echo "  [WARN] 主机未安装 etcdctl,尝试从 chfs 拉取..."
+    if wget -q https://chfs.sxxpqp.top:8443/chfs/shared/k8s/etcd/etcd-v3.5.18-linux-amd64.tar.gz -O /tmp/etcd.tar.gz; then
+        tar -xzf /tmp/etcd.tar.gz -C /usr/local/bin/ --strip-components=1 etcd-v3.5.18-linux-amd64/etcdctl
+        rm -f /tmp/etcd.tar.gz
+        echo "  ✓ etcdctl 已安装:$(etcdctl version | head -1)"
+    else
+        echo "  [FAIL] chfs 拉取失败,改从 etcd 容器里拷一份:"
+        ETCD_ID=$(crictl ps -q --name etcd 2>/dev/null | head -1)
+        [ -z "$ETCD_ID" ] && { echo "  etcd 容器也找不到,放弃。请手动:bash kubernetes/etcd/instatletcdctl.sh"; exit 1; }
+        crictl exec $ETCD_ID cat /usr/local/bin/etcdctl > /usr/local/bin/etcdctl
+        chmod +x /usr/local/bin/etcdctl
+        echo "  ✓ 从容器拷出 etcdctl:$(etcdctl version | head -1)"
+    fi
+fi
+
 kubeadm certs check-expiration
 
 # ============ 2. 备份 ============

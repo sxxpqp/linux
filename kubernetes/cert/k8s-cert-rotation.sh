@@ -1,5 +1,14 @@
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/cert/k8s-cert-rotation.sh
 # ============ 前置检查 ============
+# 0. 确认 etcdctl 在主机上(kubeadm 默认不装,容器里有但主机没有)
+if ! command -v etcdctl >/dev/null 2>&1; then
+    echo "主机未装 etcdctl,执行以下命令安装后再回来跑:"
+    echo "  wget https://chfs.sxxpqp.top:8443/chfs/shared/k8s/etcd/etcd-v3.5.18-linux-amd64.tar.gz"
+    echo "  tar -xzf etcd-v3.5.18-linux-amd64.tar.gz -C /usr/local/bin/ --strip-components=1 etcd-v3.5.18-linux-amd64/etcdctl"
+    echo "(或:bash kubernetes/etcd/instatletcdctl.sh)"
+    exit 1
+fi
+
 # 1. 查看证书当前过期时间
 kubeadm certs check-expiration
 
