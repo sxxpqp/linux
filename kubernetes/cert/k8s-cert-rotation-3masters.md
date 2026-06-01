@@ -173,17 +173,70 @@ cp -f /etc/kubernetes/admin.conf /root/.kube/config
 
 > **关键**:逐个重启,**不是一次性全部 move 走**。一次性 move 走 4 个 yaml 会让整台 master 失能,etcd 也会短暂掉一个成员,如果同时 master-2/3 有问题就直接丢 quorum。
 
+**不要用死 sleep**,用轮询 + 实时进度输出,避免干等还看不到状态。把下面这段贴进 master 当前 shell 直接跑:
+
 ```bash
 cd /etc/kubernetes/manifests
+
+# 工具函数:轮询等容器消失 / 出现,每秒打一行进度
+wait_container_gone() {        # $1=容器名关键字  $2=最长等待秒(默认 60)
+    local name=$1 max=${2:-60} i=0
+    while crictl ps -q --name "$name" 2>/dev/null | grep -q .; do
+        i=$((i+1))
+        [ $i -ge $max ] && { echo "  [TIMEOUT] $name 容器 ${max}s 内没停"; return 1; }
+        printf "\r  [%02ds] 等待 %s 容器停止..." $i "$name"; sleep 1
+    done
+    printf "\r  [%02ds] %s 容器已停止     \n" $i "$name"
+}
+wait_container_up() {          # $1=容器名关键字  $2=最长等待秒(默认 90)
+    local name=$1 max=${2:-90} i=0
+    while ! crictl ps --name "$name" 2>/dev/null | grep -q Running; do
+        i=$((i+1))
+        [ $i -ge $max ] && { echo "  [TIMEOUT] $name 容器 ${max}s 内没起来"; return 1; }
+        printf "\r  [%02ds] 等待 %s 容器拉起..." $i "$name"; sleep 1
+    done
+    printf "\r  [%02ds] %s 容器 Running   \n" $i "$name"
+}
+
 for f in kube-apiserver.yaml kube-controller-manager.yaml kube-scheduler.yaml etcd.yaml; do
-    echo "=== restarting $f ==="
+    name=$(basename $f .yaml | sed 's/^kube-//')
+    echo ""
+    echo "==== [$(date +%T)] 处理 $f ===="
+    echo "  [1/4] 移走 manifest → 等 kubelet 停旧 pod"
     mv $f /tmp/$f
-    sleep 20            # 等 kubelet 感知到 manifest 消失,把 pod 停掉
+    wait_container_gone "$name" 60 || break
+
+    echo "  [2/4] 移回 manifest → 等 kubelet 拉起新 pod(加载新证书)"
     mv /tmp/$f .
-    sleep 30            # 等 kubelet 重新拉起 pod
-    # 单点确认:容器在跑
-    crictl ps | grep $(basename $f .yaml) || echo "WARN: $f container not found yet"
+    wait_container_up "$name" 120 || break
+
+    echo "  [3/4] 多观察 5s,确保不是起来又挂"
+    sleep 5
+    crictl ps --name "$name" | grep -v CONTAINER || { echo "  [FAIL] $name 又掉了"; break; }
+
+    echo "  [4/4] $f 完成 ✓"
 done
+echo ""
+echo "==== [$(date +%T)] 控制面 4 个 static pod 全部重建完成 ===="
+```
+
+**预期输出样子**(每个组件一段,有可见进度):
+
+```
+==== [14:32:10] 处理 kube-apiserver.yaml ====
+  [1/4] 移走 manifest → 等 kubelet 停旧 pod
+  [03s] apiserver 容器已停止
+  [2/4] 移回 manifest → 等 kubelet 拉起新 pod(加载新证书)
+  [12s] apiserver 容器 Running
+  [3/4] 多观察 5s,确保不是起来又挂
+  [4/4] kube-apiserver.yaml 完成 ✓
+```
+
+**如果某个组件在新窗口里再观察**(可选,另开一个 SSH 窗口):
+
+```bash
+watch -n 1 'crictl ps --name "kube-apiserver|controller|scheduler|etcd"; echo; \
+            kubectl get pod -n kube-system --field-selector spec.nodeName=$(hostname) 2>&1 | tail -10'
 ```
 
 ### 3.5 重启 kubelet
