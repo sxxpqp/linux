@@ -1,5 +1,5 @@
 #!/bin/bash
-# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/uninstall-docker.sh
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/uninstall-docker-apt-yum.sh
 
 # 自适应系统的Docker卸载脚本
 # 支持Debian/Ubuntu（apt）和CentOS/RHEL（yum）系统
