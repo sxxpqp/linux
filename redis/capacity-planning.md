@@ -155,6 +155,100 @@ redis-cli --cluster check <host>:<port>
 | **Cluster bus 端口** | 集群节点互探用 `port + 10000`(默认 16379),K8s 防火墙挡掉 | NetworkPolicy / SecurityGroup 同时放 `6379` 和 `16379` |
 | **PVC `accessMode: RWO`** + 重调度 | Pod 飘到另一个节点起不来 | 用 local-path / longhorn(支持 RWO 但跨节点 detach 干净)或 RWX SC |
 
+## 真实案例:24G 实例 fork 60s(机械盘集群)
+
+### 现象
+- 集群每台 24G,`used_memory` 10+G(还有空间)
+- `latest_fork_usec` ~ 60s(正常 24G 应 < 500ms)
+- 机械盘
+- 业务侧 P99 出现 60s 尖刺,跟 BGSAVE 时间对应
+
+### 解读 — fork 时间 vs RDB dump 时间
+
+| 阶段 | 时长决定因素 | 主线程阻塞? |
+|---|---|---|
+| **`fork()` 系统调用** | 页表 + THP split + overcommit 检查,**跟磁盘无关** | **是**(业务停 60s 在这里) |
+| RDB dump | 磁盘顺序写带宽(机械盘 ~100MB/s) | 否(子进程跑) |
+
+混淆这两个会找错根因。**60s = fork() 系统调用本身**,机械盘只是次要因素。
+
+### 根因(按概率排序)
+
+| 根因 | 验证 | 占比 |
+|---|---|---|
+| 🔴 **THP 开着 + 高写入** | `cat /sys/kernel/mm/transparent_hugepage/enabled` 含 `[always]` | ~70% |
+| 🔴 **`vm.overcommit_memory=0`** | `sysctl vm.overcommit_memory` = 0 | ~25% |
+| 🟡 swap 在跑 | `free -m` Swap used > 0 | <5% |
+| 🟡 内核老 / NUMA 跨 socket | `uname -r` < 3.10 | 极少 |
+
+`fork()` 内部:24G / 2MB = 12,288 个大页,**THP 开时每个都要 split 成 512 个 4K 页 + TLB shootdown**,这一步可以从毫秒级涨到几十秒。
+
+### 修复脚本(已验证)
+
+```bash
+# === 1. 关 THP(临时即时 + 永久 systemd)===
+echo never > /sys/kernel/mm/transparent_hugepage/enabled
+echo never > /sys/kernel/mm/transparent_hugepage/defrag
+
+cat > /etc/systemd/system/disable-thp.service <<'EOF'
+[Unit]
+Description=Disable Transparent Huge Pages
+DefaultDependencies=no
+After=sysinit.target local-fs.target
+Before=redis.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c '\
+  echo never > /sys/kernel/mm/transparent_hugepage/enabled && \
+  echo never > /sys/kernel/mm/transparent_hugepage/defrag'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=basic.target
+EOF
+systemctl daemon-reload
+systemctl enable --now disable-thp.service
+
+# === 2. overcommit / somaxconn / swappiness ===
+cat >> /etc/sysctl.d/99-redis.conf <<'EOF'
+vm.overcommit_memory = 1
+net.core.somaxconn = 1024
+vm.swappiness = 1
+EOF
+sysctl --system
+
+# === 3. Redis 配置 - 机械盘场景 ===
+# 纯缓存: 直接关 RDB
+redis-cli CONFIG SET save ""
+redis-cli CONFIG REWRITE
+
+# 或数据库: 降频
+redis-cli CONFIG SET save "21600 1000000"
+redis-cli CONFIG SET auto-aof-rewrite-percentage 200
+redis-cli CONFIG SET auto-aof-rewrite-min-size 4gb
+redis-cli CONFIG SET repl-diskless-sync yes
+redis-cli CONFIG SET repl-diskless-sync-delay 5
+redis-cli CONFIG REWRITE
+```
+
+### 验证
+
+```bash
+cat /sys/kernel/mm/transparent_hugepage/enabled   # 期望 [never]
+sysctl vm.overcommit_memory                        # 期望 1
+
+redis-cli BGSAVE && sleep 5
+redis-cli INFO stats | grep latest_fork_usec
+# 期望从 60000000 → < 500000(500ms 内)
+```
+
+### 长期改进路径
+
+1. **机械盘 → SSD/NVMe**:RDB dump 不再卡 IO,AOF rewrite 不再抢带宽
+2. **24G 实例 → 拆成 8G × 3 分片**:fork 各自小,Cluster 横向扩展
+3. **diskless replication** 已开,主从全量同步不写 RDB 到本地盘
+
 ## 一句话总结
 
 > **Redis 性能 = 内存(容量) × 单核 CPU+RTT(QPS) × 不被大 key/热 key/Fork 拖死(实际表现)**。
