@@ -249,6 +249,85 @@ redis-cli INFO stats | grep latest_fork_usec
 2. **24G 实例 → 拆成 8G × 3 分片**:fork 各自小,Cluster 横向扩展
 3. **diskless replication** 已开,主从全量同步不写 RDB 到本地盘
 
+### 级联灾难:fork 60s → 误主从切换 → 数据丢
+
+fork 60s 不止业务卡 60s,**几乎必然触发集群误切换**,这才是真正的灾难。
+
+#### 完整时间线
+
+```
+T+0s    主节点 fork() 开始 → 主线程被内核暂停 → 心跳停发
+T+15s   ❶ cluster-node-timeout(默认 15s)触发,其他 master 标 PFAIL
+T+~17s  ❷ 多数 master 判定 FAIL → replica 启动 failover election
+T+~20s  ❸ 新 master 接管,客户端收 MOVED 重定向
+T+60s   ❹ 原主 fork() 返回 → 发现自己已是 replica → 丢弃内存做全量同步
+T+几分钟 ❺ 机械盘 + 10G+ RDB 全量同步又卡几分钟才恢复
+```
+
+**丢失数据**:
+- fork 期间业务写入被新 master 接走,跟旧主可能有窗口差
+- 旧主 replication backlog 里没发出去的数据 → **永久丢失**
+
+#### 根因 — 三个默认值碰撞
+
+| 参数 | 默认 | 问题 |
+|---|---|---|
+| `cluster-node-timeout` | **15000 ms** | fork 60s 必超过,误切换不可避免 |
+| `cluster-require-full-coverage` | **yes** | 一个 slot 没主整个集群拒绝服务 |
+| `min-replicas-to-write` (≥8.0) / `min-slaves-to-write` (<5.0) | **0** | 主库被孤立时仍接受写入,**脑裂丢数据** |
+
+#### 修复 — 集群参数加固(配合 fork 根治一起做)
+
+```bash
+# 调大 cluster-node-timeout 容忍长 fork(留裕度调到 90s)
+redis-cli CONFIG SET cluster-node-timeout 90000
+
+# 防脑裂:主库失去所有 replica 或 replica 落后 > 10s 时停写
+# 业务侧会收到 NOREPLICAS 错误,但不会丢数据
+redis-cli CONFIG SET min-replicas-to-write 1
+redis-cli CONFIG SET min-replicas-max-lag 10
+
+# 部分 slot 不可用时其他 slot 继续服务(看业务接受度)
+redis-cli CONFIG SET cluster-require-full-coverage no
+
+redis-cli CONFIG REWRITE
+```
+
+#### 一次性给集群所有节点改
+
+```bash
+# 从 seed 节点拿到所有 endpoint,逐个 CONFIG SET
+SEED_HOST=<your-seed-host>
+SEED_PORT=6379
+for node in $(redis-cli -h $SEED_HOST -p $SEED_PORT CLUSTER NODES | awk '{print $2}' | cut -d@ -f1); do
+  HOST=${node%:*}; PORT=${node#*:}
+  echo "[$HOST:$PORT] applying..."
+  redis-cli -h $HOST -p $PORT CONFIG SET cluster-node-timeout 90000
+  redis-cli -h $HOST -p $PORT CONFIG SET min-replicas-to-write 1
+  redis-cli -h $HOST -p $PORT CONFIG SET min-replicas-max-lag 10
+  redis-cli -h $HOST -p $PORT CONFIG SET cluster-require-full-coverage no
+  redis-cli -h $HOST -p $PORT CONFIG REWRITE
+done
+```
+
+#### 验证
+
+```bash
+redis-cli CONFIG GET cluster-node-timeout         # 期望 90000
+redis-cli CONFIG GET min-replicas-*               # 期望 1 / 10
+redis-cli CLUSTER NODES | awk '$3 ~ /fail/'       # 期望空,无 failed 节点
+redis-cli --cluster check $SEED_HOST:$SEED_PORT   # 期望 [OK] All nodes agree
+```
+
+#### 选型对比 — 防误切换三种力度
+
+| 方案 | 效果 | 副作用 | 选 |
+|---|---|---|---|
+| **消除 fork 60s 本身** | 根治 | 无 | ✅ 必做(见上面"修复脚本") |
+| 调大 `cluster-node-timeout` 到 60-90s | fork 期间集群不慌 | 真故障切换变慢 | ✅ 兜底 |
+| `cluster-replica-no-failover yes` | 完全禁用自动 failover | 真故障要人工切 | 🟡 只在受不了误切换 + 有 7x24 oncall 时用 |
+| `min-replicas-to-write 1` + `max-lag 10` | 防脑裂 | 网络抖业务报 NOREPLICAS | ✅ 跨机房必做 |
+
 ## 一句话总结
 
 > **Redis 性能 = 内存(容量) × 单核 CPU+RTT(QPS) × 不被大 key/热 key/Fork 拖死(实际表现)**。
