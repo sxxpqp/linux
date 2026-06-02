@@ -153,13 +153,111 @@ curl -fsSL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/
 | Google | `https://maven.aliyun.com/repository/google` |
 | Gradle plugin | `https://maven.aliyun.com/repository/gradle-plugin` |
 
-## Node / Go / Rust
+## Node.js 生态
 
-| 语言 | 镜像(非阿里云,但国内首选) |
-|---|---|
-| npm / yarn / pnpm | `https://registry.npmmirror.com`(阿里旗下淘宝团队维护) |
-| Go modules | `https://goproxy.cn`(七牛云,**不是阿里云**) |
-| Rust crates | 阿里云无,用清华 `https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/` |
+> `registry.npmmirror.com` 是 **淘宝团队维护**(2022 从 `registry.npm.taobao.org` 迁过来),阿里旗下,国内首选。
+> 二进制依赖(node-sass / sharp / electron / puppeteer 等)必须单独配镜像,否则会去外网拉死。
+
+### npm
+
+```bash
+# ① 全局换源
+npm config set registry https://registry.npmmirror.com
+npm config get registry        # 验证
+
+# ② 单次使用(不改全局)
+npm install <pkg> --registry=https://registry.npmmirror.com
+```
+
+### yarn / pnpm / bun
+
+```bash
+yarn config set registry https://registry.npmmirror.com
+pnpm config set registry https://registry.npmmirror.com
+bun config set registry https://registry.npmmirror.com   # 1.0+
+```
+
+### 二进制依赖镜像(关键!不配会卡死)
+
+写到 `~/.npmrc`(用户级)或 `<project>/.npmrc`(项目级):
+
+```ini
+registry=https://registry.npmmirror.com
+
+# Node 二进制(node-gyp / nvm 等需要)
+disturl=https://registry.npmmirror.com/-/binary/node
+
+# 常见原生模块
+sass_binary_site=https://registry.npmmirror.com/-/binary/node-sass
+sharp_dist_base_url=https://registry.npmmirror.com/-/binary/sharp-libvips
+canvas_binary_host_mirror=https://registry.npmmirror.com/-/binary/canvas
+
+# Electron / Chromium 类(最容易卡)
+electron_mirror=https://registry.npmmirror.com/-/binary/electron/
+electron_builder_binaries_mirror=https://registry.npmmirror.com/-/binary/electron-builder-binaries/
+
+# Puppeteer / Playwright(headless 浏览器)
+puppeteer_download_host=https://registry.npmmirror.com/-/binary
+PLAYWRIGHT_DOWNLOAD_HOST=https://registry.npmmirror.com/-/binary/playwright
+
+# 浏览器驱动
+chromedriver_cdnurl=https://registry.npmmirror.com/-/binary/chromedriver
+selenium_cdnurl=https://registry.npmmirror.com/-/binary/selenium
+operadriver_cdnurl=https://registry.npmmirror.com/-/binary/operadriver
+phantomjs_cdnurl=https://registry.npmmirror.com/-/binary/phantomjs
+```
+
+### Node 版本管理(nvm / fnm)
+
+```bash
+# nvm 镜像(写到 ~/.bashrc 或 ~/.zshrc)
+export NVM_NODEJS_ORG_MIRROR=https://registry.npmmirror.com/-/binary/node
+export NVM_IOJS_ORG_MIRROR=https://registry.npmmirror.com/-/binary/iojs
+nvm install 20
+
+# fnm 镜像
+fnm install --node-dist-mirror https://registry.npmmirror.com/-/binary/node 20
+
+# n 镜像
+N_NODE_MIRROR=https://registry.npmmirror.com/-/binary/node n latest
+```
+
+### nrm 一键切换工具(推荐)
+
+```bash
+npm install -g nrm
+nrm ls               # 列源: npm / taobao / cnpm / yarn / tencent
+nrm use taobao       # 一键切到淘宝(实际就是 registry.npmmirror.com)
+nrm test taobao      # 测延迟
+```
+
+## Go 生态
+
+```bash
+# Go modules proxy(七牛云,**不是阿里云**)
+go env -w GOPROXY=https://goproxy.cn,direct
+go env -w GOSUMDB=sum.golang.google.cn
+go env -w GO111MODULE=on
+```
+
+阿里云也有 Go proxy: `https://mirrors.aliyun.com/goproxy/`,但 `goproxy.cn` 名气更大、覆盖更全,**推荐 `goproxy.cn`**。
+
+## Rust 生态
+
+阿里云无 crates 镜像,走清华 TUNA:
+
+```toml
+# ~/.cargo/config.toml
+[source.crates-io]
+replace-with = 'tuna'
+
+[source.tuna]
+registry = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
+
+# 或用稀疏索引(更快,2023+ 版本支持)
+[source.tuna-sparse]
+registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"
+```
 
 ## 阿里云没覆盖的常见源(走清华 TUNA)
 
