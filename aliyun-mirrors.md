@@ -167,6 +167,91 @@ npm config get registry        # 验证
 
 # ② 单次使用(不改全局)
 npm install <pkg> --registry=https://registry.npmmirror.com
+
+# ③ 升级 npm 自己也走镜像
+npm install -g npm@latest --registry=https://registry.npmmirror.com
+
+# ④ 查实际生效的所有配置
+npm config list -l
+```
+
+### 完整 `~/.npmrc` 推荐模板(粘贴即用)
+
+```ini
+# ===== 源 =====
+registry=https://registry.npmmirror.com
+
+# ===== 减少噪音 =====
+fund=false                      # 关闭 funding 提示(很多包都会调外网查)
+audit=false                     # 关闭 audit(每次 install 都跑去 registry 查 CVE,国内慢)
+update-notifier=false           # 关掉 npm 自己的更新检查
+
+# ===== 缓存 / 进度 =====
+cache=~/.npm-cache              # 自定义路径,方便共享 / 清理
+prefer-offline=true             # 优先用缓存(CI/重建很快)
+progress=true                   # 安装进度条
+
+# ===== 网络 =====
+fetch-retries=5
+fetch-retry-mintimeout=20000
+fetch-retry-maxtimeout=120000
+network-timeout=300000          # 5 分钟,大包慢源用
+
+# ===== 行为 =====
+save-exact=true                 # 锁版本不带 ^ ~,生产可控
+package-lock=true               # 强制写 lock(团队协作必须)
+engine-strict=true              # package.json 的 engines 字段当硬约束
+
+# ===== 二进制依赖(关键!不配光换 registry 没用)=====
+disturl=https://registry.npmmirror.com/-/binary/node
+sass_binary_site=https://registry.npmmirror.com/-/binary/node-sass
+sharp_dist_base_url=https://registry.npmmirror.com/-/binary/sharp-libvips
+canvas_binary_host_mirror=https://registry.npmmirror.com/-/binary/canvas
+electron_mirror=https://registry.npmmirror.com/-/binary/electron/
+electron_builder_binaries_mirror=https://registry.npmmirror.com/-/binary/electron-builder-binaries/
+puppeteer_download_host=https://registry.npmmirror.com/-/binary
+PLAYWRIGHT_DOWNLOAD_HOST=https://registry.npmmirror.com/-/binary/playwright
+chromedriver_cdnurl=https://registry.npmmirror.com/-/binary/chromedriver
+selenium_cdnurl=https://registry.npmmirror.com/-/binary/selenium
+operadriver_cdnurl=https://registry.npmmirror.com/-/binary/operadriver
+phantomjs_cdnurl=https://registry.npmmirror.com/-/binary/phantomjs
+```
+
+> **作用域**:`~/.npmrc` 是当前用户;放在项目根目录的 `.npmrc` 是项目级(优先级更高,团队共用必须 commit 进 git);`/etc/npmrc` 是机器级。
+
+### 私有 + 公共 scope 混搭
+
+业务自家的 `@mycompany/*` 走私有 Nexus,其他包走淘宝镜像:
+
+```ini
+# ~/.npmrc 或 项目 .npmrc
+registry=https://registry.npmmirror.com
+
+# 自家 scope 走 Nexus
+@mycompany:registry=https://nexus.ihome.sxxpqp.top:8443/repository/npm-private/
+//nexus.ihome.sxxpqp.top:8443/repository/npm-private/:_authToken=${NPM_TOKEN}
+always-auth=true
+```
+
+`always-auth=true` 关键:防止下载 tarball 时丢 token 报 401。
+
+### 企业内网代理穿透
+
+公司只有一台机器能出公网,其他机器走它代理:
+
+```bash
+npm config set proxy http://proxy.intra:8080
+npm config set https-proxy http://proxy.intra:8080
+npm config set noproxy "localhost,127.0.0.1,*.intra,nexus.ihome.sxxpqp.top"
+```
+
+或写到 `.npmrc`:
+
+```ini
+proxy=http://proxy.intra:8080
+https-proxy=http://proxy.intra:8080
+noproxy=localhost,127.0.0.1,*.intra,nexus.ihome.sxxpqp.top
+strict-ssl=false              # 公司自签 CA 时关掉(或导入 CA 更优)
 ```
 
 ### yarn / pnpm / bun
