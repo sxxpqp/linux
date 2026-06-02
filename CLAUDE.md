@@ -235,9 +235,7 @@ Harbor 前端是自签 / 内网证书,需要:
 | 阿里 ACR(其它命名空间,只读引用) | 见下表 | — |
 | CentOS / RHEL / EPEL yum | `https://mirrors.aliyun.com/centos/` / `epel/` | `https://mirrors.tuna.tsinghua.edu.cn/centos/` |
 | Ubuntu / Debian apt | `https://mirrors.aliyun.com/ubuntu/` | `https://mirrors.tuna.tsinghua.edu.cn/ubuntu/` |
-| PyPI(公网) | `https://mirrors.aliyun.com/pypi/simple/` | `https://pypi.tuna.tsinghua.edu.cn/simple/` |
-| **PyPI(阿里云 ECS 内网)** | `http://mirrors.cloud.aliyuncs.com/pypi/simple/` —— **ECS 上免流量、最快**,只能在阿里云内网用 | — |
-| **PyTorch wheels** | `https://mirrors.aliyun.com/pytorch-wheels/` —— 替代 `download.pytorch.org/whl/`,装 torch / torchvision / torchaudio 用 | — |
+| PyPI / PyTorch / conda / maven 等(完整阿里云镜像汇总) | 见 [aliyun-mirrors.md](aliyun-mirrors.md) | `https://pypi.tuna.tsinghua.edu.cn/simple/` 等 |
 | npm | `https://registry.npmmirror.com` | — |
 | Go proxy | `https://goproxy.cn` | — |
 | Kubernetes 二进制 | `https://mirrors.aliyun.com/kubernetes/` | — |

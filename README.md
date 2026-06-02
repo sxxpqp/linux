@@ -70,6 +70,7 @@ Linux 运维知识库，涵盖容器编排、云原生、CI/CD、监控、网络
 
 | 目录 | 内容 | 状态 |
 |---|---|---|
+| [aliyun-mirrors.md](aliyun-mirrors.md) | 阿里云镜像源速查（PyPI / PyTorch+CUDA / Conda / yum/apt / ACR / Maven / k8s,公网 vs ECS 内网） | ✅ 生产参考 |
 | [kubernetes/k9s/](kubernetes/k9s/README.md) | K9s Kubernetes 终端管理工具 | 常用工具 |
 | [ai/go/](ai/go/README.md) | Go 语言笔记（Channel 模式） | 学习笔记 |
 
