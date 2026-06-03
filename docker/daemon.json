@@ -5,5 +5,8 @@
   },
   "registry-mirrors": [
     "https://dockerhub.ihome.sxxpqp.top:8443"
+  ],
+  "exec-opts": [
+    "native.cgroupdriver=systemd"
   ]
 }
