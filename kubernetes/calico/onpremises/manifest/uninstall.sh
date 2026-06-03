@@ -6,9 +6,9 @@
 # 卸载 manifest 方式装的 Calico(单 calico.yaml,跑在 kube-system)。
 # 默认 dry-run,加 --apply 才真删。
 #
-# 卸载顺序:
-#   1. 恢复 kube-proxy(如果之前删了)
-#   2. 切回 iptables dataplane(让 BPF 程序卸载干净)
+# 卸载顺序(顺序错了 kube-proxy 起不来):
+#   1. 切回 iptables dataplane(Calico BPF 会清理 kube-proxy 的 iptables 规则,必须先切)
+#   2. 恢复 kube-proxy(如果之前删了)
 #   3. 反向 delete calico.yaml
 #   4. 节点残留清理提示
 #
@@ -121,9 +121,30 @@ else
 fi
 
 # ============================================================
-# 2/5 恢复 kube-proxy
+# 2/5 切回 iptables dataplane(关键!不切的话恢复 kube-proxy 会失败)
+# Calico BPF 模式会主动清理 kube-proxy iptables 规则,必须先关 BPF
 # ============================================================
-log "[2/5] 恢复 kube-proxy"
+log "[2/5] 切回 iptables dataplane"
+
+if [ "$HAS_FELIX_BPF" = "true" ]; then
+  run "kubectl patch felixconfiguration default --type=merge -p '{\"spec\":{\"bpfEnabled\": false}}'"
+  if [ "$APPLY" = "true" ]; then
+    log "  重启 calico-node 让 BPF 程序 detach"
+    kubectl -n kube-system rollout restart ds/calico-node
+    kubectl -n kube-system rollout status ds/calico-node --timeout=300s
+    ok "已切回 iptables 模式,BPF 程序已卸载"
+  fi
+else
+  ok "FelixConfiguration.bpfEnabled 已是 false,跳过"
+fi
+
+# 删 kubernetes-services-endpoint ConfigMap(manifest 模式装在 kube-system)
+run "kubectl -n kube-system delete cm kubernetes-services-endpoint --ignore-not-found"
+
+# ============================================================
+# 3/5 恢复 kube-proxy
+# ============================================================
+log "[3/5] 恢复 kube-proxy"
 
 if [ "$RESTORE_DECISION" = "yes" ]; then
   if [ -z "$APISERVER_HOST" ]; then
@@ -152,26 +173,6 @@ if [ "$RESTORE_DECISION" = "yes" ]; then
 else
   log "  跳过"
 fi
-
-# ============================================================
-# 3/5 切回 iptables dataplane(让 BPF 程序卸载)
-# ============================================================
-log "[3/5] 切回 iptables dataplane"
-
-if [ "$HAS_FELIX_BPF" = "true" ]; then
-  run "kubectl patch felixconfiguration default --type=merge -p '{\"spec\":{\"bpfEnabled\": false}}'"
-  if [ "$APPLY" = "true" ]; then
-    log "  重启 calico-node 让 BPF 程序 detach"
-    kubectl -n kube-system rollout restart ds/calico-node
-    kubectl -n kube-system rollout status ds/calico-node --timeout=300s
-    ok "已切回 iptables 模式,BPF 程序已卸载"
-  fi
-else
-  ok "FelixConfiguration.bpfEnabled 已是 false,跳过"
-fi
-
-# 删 kubernetes-services-endpoint ConfigMap(manifest 模式装在 kube-system)
-run "kubectl -n kube-system delete cm kubernetes-services-endpoint --ignore-not-found"
 
 # ============================================================
 # 4/5 反向 delete calico.yaml

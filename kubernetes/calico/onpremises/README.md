@@ -252,6 +252,7 @@ containerd 加速源配置见 [CLAUDE.md "Docker / containerd 加速源配置"](
 | 现象 | 原因 | 修法 |
 |---|---|---|
 | operator 日志报 `IPPool X is not within the platform's configured pod network CIDR(s) [Y]`,`calico-system` namespace 一直不建 | Installation CR `cidr` 跟 kubeadm `--pod-network-cidr` 不一致,**operator 模式严格校验,manifest 模式不校验** | `kubectl -n kube-system get cm kubeadm-config -o yaml \| grep podSubnet` 确认真实值,然后 `kubectl patch installation default --type=merge -p '{"spec":{"calicoNetwork":{"ipPools":[{"name":"default-ipv4-ippool","cidr":"<真实CIDR>","encapsulation":"VXLANCrossSubnet","natOutgoing":"Enabled","nodeSelector":"all()"}]}}}'` |
+| 卸载/回滚时 `kubeadm init phase addon kube-proxy` 装回 kube-proxy 后 DS 永远 `2/3 ready`,`rollout status` 超时 | Calico BPF 模式默认 `bpfKubeProxyIptablesCleanupEnabled=true`,主动清理 kube-proxy 的 iptables 规则 → kube-proxy readiness 失败 | **必须先切回 Iptables dataplane 再恢复 kube-proxy**:`kubectl patch installation default --type=merge -p '{"spec":{"calicoNetwork":{"linuxDataplane":"Iptables"}}}'` → 等 calico-node rollout → 删卡的 kube-proxy Pod 让它重启 |
 | 删 kube-proxy 后 calico-node CrashLoop | 没配 `kubernetes-services-endpoint` ConfigMap,Pod 访问 `kubernetes.default` 失败 | 先配 ConfigMap → 重启 calico-node → 再删 kube-proxy |
 | `bpfEnabled: true` 但日志没 BPF | calico-node 没重启或 operator 还没同步 | `kubectl rollout restart ds/calico-node`,等 60s |
 | NodePort 通,ClusterIP 不通 | BPF nat 表没建好,通常是 ConfigMap 里 host/port 写错 | 进 calico-node Pod `calico-node -bpf nat dump` 看有没有目标 service |
