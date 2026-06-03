@@ -216,6 +216,7 @@ containerd 加速源配置见 [CLAUDE.md "Docker / containerd 加速源配置"](
 
 | 现象 | 原因 | 修法 |
 |---|---|---|
+| operator 日志报 `IPPool X is not within the platform's configured pod network CIDR(s) [Y]`,`calico-system` namespace 一直不建 | Installation CR `cidr` 跟 kubeadm `--pod-network-cidr` 不一致,**operator 模式严格校验,manifest 模式不校验** | `kubectl -n kube-system get cm kubeadm-config -o yaml \| grep podSubnet` 确认真实值,然后 `kubectl patch installation default --type=merge -p '{"spec":{"calicoNetwork":{"ipPools":[{"name":"default-ipv4-ippool","cidr":"<真实CIDR>","encapsulation":"VXLANCrossSubnet","natOutgoing":"Enabled","nodeSelector":"all()"}]}}}'` |
 | 删 kube-proxy 后 calico-node CrashLoop | 没配 `kubernetes-services-endpoint` ConfigMap,Pod 访问 `kubernetes.default` 失败 | 先配 ConfigMap → 重启 calico-node → 再删 kube-proxy |
 | `bpfEnabled: true` 但日志没 BPF | calico-node 没重启或 operator 还没同步 | `kubectl rollout restart ds/calico-node`,等 60s |
 | NodePort 通,ClusterIP 不通 | BPF nat 表没建好,通常是 ConfigMap 里 host/port 写错 | 进 calico-node Pod `calico-node -bpf nat dump` 看有没有目标 service |

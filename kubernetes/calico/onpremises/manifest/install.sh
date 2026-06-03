@@ -21,7 +21,7 @@ set -euo pipefail
 # 默认值 / 参数解析
 # ============================================================
 CALICO_VERSION="v3.28.2"
-POD_CIDR="192.168.0.0/16"
+POD_CIDR=""    # 默认空,自动从 kubeadm-config 探测;探测失败 fallback 192.168.0.0/16
 APISERVER_HOST=""
 APISERVER_PORT="6443"
 ENABLE_EBPF="false"
@@ -34,7 +34,7 @@ usage() {
 可选:
   --apiserver-host=HOST    API server 地址(开 eBPF + 删 kube-proxy 时必填)
   --apiserver-port=PORT    API server 端口,默认 6443
-  --pod-cidr=CIDR          Pod CIDR,默认 192.168.0.0/16
+  --pod-cidr=CIDR          Pod CIDR,默认自动探测 kubeadm-config.podSubnet,探测失败 fallback 192.168.0.0/16
   --calico-version=VER     Calico 版本,默认 v3.28.2
   --enable-ebpf            装完后切到 eBPF dataplane
   --delete-kube-proxy      删 kube-proxy(必须同时开 --enable-ebpf)
@@ -107,6 +107,20 @@ fi
 if kubectl get ds -n kube-system 2>/dev/null | grep -E 'cilium|kube-flannel|weave' >/dev/null; then
   err "检测到其他 CNI"
   exit 1
+fi
+
+# Pod CIDR(manifest 模式 operator 不校验,但 IPPool 跟 kubeadm 不一致 Pod 也拿不到 IP)
+if [ -z "$POD_CIDR" ]; then
+  POD_CIDR=$(kubectl -n kube-system get cm kubeadm-config -o yaml 2>/dev/null \
+    | grep -oE 'podSubnet: [0-9./,]+' | awk '{print $2}' | head -1 || true)
+  if [ -n "$POD_CIDR" ]; then
+    ok "自动探测 Pod CIDR: $POD_CIDR (kubeadm-config.podSubnet)"
+  else
+    POD_CIDR="192.168.0.0/16"
+    warn "未从 kubeadm-config 探测到 podSubnet,回退默认 $POD_CIDR"
+  fi
+else
+  ok "Pod CIDR: $POD_CIDR(用户指定)"
 fi
 
 ok "前置检查通过"

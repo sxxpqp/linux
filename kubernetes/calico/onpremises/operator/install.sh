@@ -22,7 +22,7 @@ set -euo pipefail
 # 默认值 / 参数解析
 # ============================================================
 CALICO_VERSION="v3.28.2"
-POD_CIDR="192.168.0.0/16"
+POD_CIDR=""    # 默认空,自动从 kubeadm-config 探测;探测失败 fallback 192.168.0.0/16
 APISERVER_HOST=""
 APISERVER_PORT="6443"
 DELETE_KUBE_PROXY="false"
@@ -38,7 +38,8 @@ usage() {
 
 可选:
   --apiserver-port=PORT    API server 端口,默认 6443
-  --pod-cidr=CIDR          Pod CIDR,默认 192.168.0.0/16
+  --pod-cidr=CIDR          Pod CIDR,默认自动探测 kubeadm-config.podSubnet,探测失败 fallback 192.168.0.0/16
+                           ⚠ operator 模式严格校验 cidr ⊆ kubeadm podSubnet,不匹配 calico-system 不会建
   --calico-version=VER     Calico 版本,默认 v3.28.2
   --installation-yaml=PATH 自定义 Installation CR 路径(否则用脚本同目录的)
   --delete-kube-proxy      安装完成后删除 kube-proxy(危险,需手动确认)
@@ -101,6 +102,21 @@ if ! mount | grep -q 'bpf on /sys/fs/bpf'; then
   warn "/sys/fs/bpf 未挂载 bpffs,Calico 启动时会自动 mount,但建议在 fstab 固化"
 fi
 
+# Pod CIDR(关键!operator 模式会校验 IPPool.cidr 必须 ⊆ kubeadm.podSubnet,不匹配直接拒绝 reconcile)
+if [ -z "$POD_CIDR" ]; then
+  POD_CIDR=$(kubectl -n kube-system get cm kubeadm-config -o yaml 2>/dev/null \
+    | grep -oE 'podSubnet: [0-9./,]+' | awk '{print $2}' | head -1 || true)
+  if [ -n "$POD_CIDR" ]; then
+    ok "自动探测 Pod CIDR: $POD_CIDR (kubeadm-config.podSubnet)"
+  else
+    POD_CIDR="192.168.0.0/16"
+    warn "未从 kubeadm-config 探测到 podSubnet,回退默认 $POD_CIDR"
+    warn "如果 kubeadm init 时用了别的 CIDR,operator 会拒绝 reconcile!请显式 --pod-cidr=<CIDR>"
+  fi
+else
+  ok "Pod CIDR: $POD_CIDR(用户指定)"
+fi
+
 # API server 地址
 if [ -z "$APISERVER_HOST" ]; then
   APISERVER_HOST=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)
@@ -123,6 +139,17 @@ fi
 # 检查是否已装 Calico
 if kubectl get ns tigera-operator >/dev/null 2>&1; then
   warn "tigera-operator namespace 已存在,脚本将走 apply(幂等),不会破坏现有部署"
+fi
+
+# 检查 kube-system 里有没有老 Calico(manifest 方式装的)
+if kubectl -n kube-system get ds calico-node >/dev/null 2>&1; then
+  warn "检测到 kube-system 里有老 Calico(manifest 方式装的),与 operator 模式可能冲突"
+  warn "  → 老 calico-node DaemonSet: kubectl -n kube-system get ds calico-node"
+  warn "  → 建议:"
+  warn "    A. 想保留老 Calico:取消安装,改用 manifest/install.sh --enable-ebpf 在原地切 BPF"
+  warn "    B. 想切 operator:先 kubectl -n kube-system delete -f calico.yaml,等 10 秒,再重跑本脚本"
+  warn "  10 秒后继续,Ctrl-C 中止..."
+  sleep 10
 fi
 
 ok "前置检查通过"
@@ -194,9 +221,14 @@ if [ -z "$INSTALLATION_YAML" ]; then
 fi
 
 if [ -n "$INSTALLATION_YAML" ] && [ -f "$INSTALLATION_YAML" ]; then
-  log "  使用 $INSTALLATION_YAML"
-  # 替换 CIDR(如果传了)
-  sed "s|192.168.0.0/16|${POD_CIDR}|g" "$INSTALLATION_YAML" | kubectl apply -f -
+  log "  使用 $INSTALLATION_YAML(替换占位符 REPLACE_POD_CIDR → $POD_CIDR)"
+  # 模板里 cidr 是占位符 REPLACE_POD_CIDR,避免用户裸 apply 时踩 CIDR 不匹配
+  if ! grep -q "REPLACE_POD_CIDR" "$INSTALLATION_YAML"; then
+    warn "$INSTALLATION_YAML 不含 REPLACE_POD_CIDR 占位符,可能是旧版或自定义文件,跳过 sed 直接 apply"
+    kubectl apply -f "$INSTALLATION_YAML"
+  else
+    sed "s|REPLACE_POD_CIDR|${POD_CIDR}|g" "$INSTALLATION_YAML" | kubectl apply -f -
+  fi
 else
   log "  使用内嵌默认配置"
   kubectl apply -f - <<EOF
@@ -229,22 +261,88 @@ ok "Installation CR 已 apply"
 # ============================================================
 # 5/7 等 Calico 全部 ready
 # ============================================================
-log "[5/7] 等待 Calico Pods ready(最多 5 分钟)"
+log "[5/7] 等待 Calico Pods ready"
 
-# operator 会自动建 calico-system namespace
-for i in $(seq 1 30); do
-  if kubectl get ns calico-system >/dev/null 2>&1; then break; fi
-  sleep 2
+# 失败时 dump 诊断信息,避免用户瞎猜
+dump_calico_diag() {
+  echo
+  err "==== 诊断信息 ===="
+  echo "--- tigera-operator 日志(最后 60 行) ---"
+  kubectl -n tigera-operator logs deploy/tigera-operator --tail=60 2>&1 || true
+  echo
+  echo "--- Installation CR status ---"
+  kubectl get installation default -o yaml 2>&1 | tail -40 || true
+  echo
+  echo "--- tigerastatus ---"
+  kubectl get tigerastatus 2>&1 || true
+  echo
+  echo "--- 相关 namespace ---"
+  kubectl get ns 2>&1 | grep -iE 'calico|tigera' || true
+  echo
+  echo "--- calico-system Pod 状态(如果 ns 存在) ---"
+  kubectl -n calico-system get pods 2>&1 || true
+  echo
+  err "==================="
+}
+
+# operator 会自动建 calico-system namespace,但要拉镜像 + reconcile,慢的话 3-5 分钟
+log "  等待 calico-system namespace 出现(最多 5 分钟)..."
+NS_READY=false
+for i in $(seq 1 60); do
+  if kubectl get ns calico-system >/dev/null 2>&1; then
+    NS_READY=true
+    ok "calico-system namespace 已出现(第 $((i*5)) 秒)"
+    break
+  fi
+  sleep 5
+  if [ $((i % 6)) -eq 0 ]; then
+    # 每 30 秒打一次进度,顺便给个 hint
+    log "  ...仍在等(已等 $((i*5)) 秒),operator 可能在拉镜像,Ctrl-C 后跑 kubectl -n tigera-operator logs deploy/tigera-operator --tail=50 看"
+  fi
 done
-kubectl get ns calico-system >/dev/null 2>&1 || { err "calico-system namespace 一直没出现,看 tigera-operator 日志"; exit 1; }
+
+if [ "$NS_READY" != "true" ]; then
+  err "calico-system namespace 5 分钟内未出现"
+  dump_calico_diag
+  cat <<'EOF'
+
+【常见原因 + 对应修法】
+
+1. operator 日志显示 ImagePullBackOff / Failed to pull image
+   → quay.io 拉不动,改走 Harbor 代理:
+     kubectl patch installation default --type=merge \
+       -p '{"spec":{"registry":"quay.ihome.sxxpqp.top:8443/"}}'
+
+2. operator 日志显示 "unknown field" / "strict decoding error"
+   → Installation CR 字段跟你的 Calico 版本不匹配
+   → 看 installation.yaml 里 spec 下哪个字段不对,删掉
+
+3. tigerastatus 显示 message="kubernetes-services-endpoint ConfigMap not found"
+   → ConfigMap 没建对或在错的 namespace
+     kubectl -n tigera-operator get cm kubernetes-services-endpoint -o yaml
+
+4. operator 日志正常但一直 reconcile
+   → 网络拉镜像太慢,加大耐心等(可能 10 分钟+),或改 image 源
+
+EOF
+  exit 1
+fi
 
 # 等所有 calico-node ready
-log "  等 calico-node DaemonSet rollout..."
-kubectl -n calico-system rollout status ds/calico-node --timeout=300s
+log "  等 calico-node DaemonSet rollout(最多 8 分钟,首次拉镜像慢)..."
+if ! kubectl -n calico-system rollout status ds/calico-node --timeout=480s; then
+  err "calico-node DaemonSet 没起来"
+  dump_calico_diag
+  exit 1
+fi
 ok "calico-node ready"
 
 log "  等 calico-kube-controllers..."
-kubectl -n calico-system rollout status deploy/calico-kube-controllers --timeout=180s
+if ! kubectl -n calico-system rollout status deploy/calico-kube-controllers --timeout=300s; then
+  err "calico-kube-controllers 没起来"
+  dump_calico_diag
+  exit 1
+fi
 ok "calico-kube-controllers ready"
 
 # ============================================================

@@ -1,9 +1,14 @@
 # =============================================================================
 # Calico Installation CR(Operator 模式核心配置)
 #
+# ⚠ 不要直接 kubectl apply -f 这个文件!REPLACE_POD_CIDR 是占位符。
+# 推荐用 ../operator/install.sh,它会自动探测 kubeadm-config.podSubnet 替换。
+# 手动用法:
+#   sed "s|REPLACE_POD_CIDR|10.244.0.0/16|g" installation.yaml | kubectl apply -f -
+#
 # 关键字段:
-#   linuxDataplane: BPF        ← eBPF dataplane(替换 iptables/ipvs)
-#   cidr: 192.168.0.0/16       ← Pod CIDR,要跟 kubeadm --pod-network-cidr 对齐
+#   linuxDataplane: BPF              ← eBPF dataplane(替换 iptables/ipvs)
+#   cidr: <kubeadm podSubnet>        ← 必须 ⊆ kubeadm --pod-network-cidr,否则 operator 拒绝 reconcile
 #   encapsulation: VXLANCrossSubnet  ← 跨子网才封包,同子网直接路由(性能最好的折中)
 #                                      纯 BGP 环境可改 None
 #                                      所有跨节点都跨子网可改 VXLAN
@@ -22,7 +27,7 @@ spec:
     ipPools:
       - name: default-ipv4-ippool
         blockSize: 26
-        cidr: 192.168.0.0/16
+        cidr: REPLACE_POD_CIDR
         encapsulation: VXLANCrossSubnet
         natOutgoing: Enabled
         nodeSelector: all()
