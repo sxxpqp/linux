@@ -23,8 +23,7 @@ set -euo pipefail
 # ============================================================
 CALICO_VERSION="v3.28.2"
 APPLY="false"                  # 默认 dry-run,加 --apply 才真删
-RESTORE_KUBE_PROXY="auto"      # auto(默认探测) / true / false
-SKIP_KUBE_PROXY_RESTORE="false"
+RESTORE_KUBE_PROXY="false"     # 默认不恢复,加 --restore-kube-proxy 才恢复
 FORCE="false"                  # 剥 finalizer
 KEEP_TIGERA_NS="false"
 APISERVER_HOST=""
@@ -35,10 +34,14 @@ usage() {
 
 默认行为:dry-run,只打印将执行的命令,不真删。
 
+⚠ 默认不恢复 kube-proxy。卸载后集群 Service DNAT 无人接管,要么:
+   - 加 --restore-kube-proxy(回退到 kube-proxy)
+   - 接下来立即装 Cilium / 其他 eBPF CNI 接管
+   - 实验环境直接 kubeadm reset
+
 主要选项:
   --apply                     真执行(默认只打印)
-  --restore-kube-proxy        强制恢复 kube-proxy(如果探测到 kube-proxy 不存在)
-  --skip-kube-proxy-restore   跳过恢复 kube-proxy(只在确定要立即装别的 CNI 时用)
+  --restore-kube-proxy        恢复 kube-proxy(传统模式回退,大多数场景用这个)
   --apiserver-host=HOST       恢复 kube-proxy 时用,默认从 kubeadm-config 探测
   --calico-version=VER        Calico 版本(必须跟当初装时一致,否则反向 delete 漏资源),默认 v3.28.2
   --force                     剥 finalizer 强删(namespace 卡 Terminating 时用)
@@ -49,14 +52,14 @@ usage() {
   # 看计划(强烈推荐先跑一遍)
   bash uninstall.sh
 
-  # 完整卸载,恢复 kube-proxy
+  # 卸载并回退到 kube-proxy(最常见)
+  bash uninstall.sh --apply --restore-kube-proxy
+
+  # 卸载,接下来装 cilium 接管(不恢复 kube-proxy)
   bash uninstall.sh --apply
 
-  # 要立即装 cilium,不恢复 kube-proxy
-  bash uninstall.sh --apply --skip-kube-proxy-restore
-
   # namespace 卡 Terminating 强清
-  bash uninstall.sh --apply --force
+  bash uninstall.sh --apply --force --restore-kube-proxy
 EOF
 }
 
@@ -64,7 +67,9 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --apply) APPLY="true" ;;
     --restore-kube-proxy) RESTORE_KUBE_PROXY="true" ;;
-    --skip-kube-proxy-restore) SKIP_KUBE_PROXY_RESTORE="true" ;;
+    --skip-kube-proxy-restore)
+      warn "--skip-kube-proxy-restore 已废弃(默认就不恢复)。要恢复用 --restore-kube-proxy"
+      ;;
     --apiserver-host=*) APISERVER_HOST="${1#*=}" ;;
     --calico-version=*) CALICO_VERSION="${1#*=}" ;;
     --force) FORCE="true" ;;
@@ -135,16 +140,33 @@ if [ "$APPLY" != "true" ]; then
 fi
 
 # 决策:要不要恢复 kube-proxy?
+# 默认不恢复(说不定用户接下来要装 Cilium / 其他 eBPF CNI 接管)
+# 加 --restore-kube-proxy 才显式恢复
 RESTORE_DECISION="no"
-if [ "$SKIP_KUBE_PROXY_RESTORE" = "true" ]; then
-  warn "--skip-kube-proxy-restore:不恢复 kube-proxy。卸载后集群 Service 立即全断,确保你接下来要装别的 CNI"
-  RESTORE_DECISION="no"
-elif [ "$HAS_KUBE_PROXY" = "true" ]; then
-  ok "kube-proxy 还在运行,无需恢复"
-  RESTORE_DECISION="no"
-elif [ "$RESTORE_KUBE_PROXY" = "true" ] || [ "$RESTORE_KUBE_PROXY" = "auto" ]; then
-  warn "kube-proxy 已被删除,卸载 Calico 前需要先恢复它,否则集群网络立即全断"
+if [ "$HAS_KUBE_PROXY" = "true" ]; then
+  ok "kube-proxy 还在运行,无需处理"
+elif [ "$RESTORE_KUBE_PROXY" = "true" ]; then
+  warn "--restore-kube-proxy:将恢复 kube-proxy"
   RESTORE_DECISION="yes"
+else
+  echo
+  warn "═══════════════════════════════════════════════════════════════════"
+  warn " kube-proxy 已被删除,且未指定 --restore-kube-proxy"
+  warn ""
+  warn " 卸载 Calico 后【没有任何组件做 Service DNAT】,集群所有 ClusterIP/"
+  warn " NodePort 流量立即失败,业务 Pod 互通断、CoreDNS 不可达、控制器全废"
+  warn ""
+  warn " 你接下来的计划必须是以下之一:"
+  warn "   1. 立即装 Cilium / 其他 eBPF CNI 接管(它们自带 dataplane)"
+  warn "   2. 实验环境直接 kubeadm reset 重装集群"
+  warn "   3. Ctrl-C 中止本脚本,加 --restore-kube-proxy 重新跑"
+  warn ""
+  warn " 10 秒后继续卸载,不再恢复 kube-proxy..."
+  warn "═══════════════════════════════════════════════════════════════════"
+  echo
+  if [ "$APPLY" = "true" ]; then
+    sleep 10
+  fi
 fi
 
 # ============================================================

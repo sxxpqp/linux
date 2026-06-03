@@ -162,34 +162,50 @@ bash manifest/install.sh --pod-cidr=10.244.0.0/16
 
 ## 卸载 Calico
 
-⚠ **顺序绝不能反**:先恢复 kube-proxy → 再删 Calico。直接删 Calico 而 kube-proxy 已删 → 集群 Service 全断,Pod 互通断 → 没法救。
-
 两个 uninstall.sh 都**默认 dry-run**,加 `--apply` 才真删。
 
-```bash
-# 1. 看计划(强烈推荐先跑一遍)
-bash operator/uninstall.sh                # 看会做什么
+⚠ **核心约束**:卸 Calico 等于拿掉 Service DNAT 引擎。**集群必须始终有一个**做 DNAT 的组件(kube-proxy / Calico eBPF / Cilium eBPF / ...)。卸载后接下来必须有人接,否则集群 Service 立即全断。
 
-# 2. 真卸载(自动恢复 kube-proxy)
+### 三种卸载后续路径(你选)
+
+| 路径 | 命令 | 适用 |
+|---|---|---|
+| **A. 回退到 kube-proxy 传统模式** | `bash operator/uninstall.sh --apply --restore-kube-proxy` | 大多数情况,保险 |
+| **B. 立即装别的 eBPF CNI(Cilium 等)** | `bash operator/uninstall.sh --apply` + 立即装 Cilium | 想继续用 eBPF,只是换实现 |
+| **C. 集群不要了,直接重置** | `kubeadm reset -f` | 实验环境 |
+
+### 默认行为(不指定 `--restore-kube-proxy` 时)
+
+脚本**不会**自动恢复 kube-proxy,只在 kube-proxy 已删除的情况下打印一段醒目警告 + 10 秒倒计时,让你确认是要走路径 B/C(或 Ctrl-C 重跑加 `--restore-kube-proxy`)。
+
+### 关键顺序(脚本已固化,改了就是 bug)
+
+1. **先**切回 Iptables dataplane(让 Calico Felix 停止清理 iptables 规则)
+2. **再**(可选)恢复 kube-proxy
+3. **然后**删 Installation/APIServer CR(operator 自动清理 calico-system)
+4. 反向 `kubectl delete -f tigera-operator.yaml`
+5. 删 tigera-operator namespace
+6. 打印每个节点要执行的清理命令(iptables / cni / bpf 残留)
+
+顺序反了 → kube-proxy 装回去会被 Felix 当作残留清掉 → DS 永远不 Ready(踩坑表里有这条)。
+
+### 常用命令
+
+```bash
+# 看计划(必跑,核对状态)
+bash operator/uninstall.sh
+
+# 卸载并回退到 kube-proxy 模式(最常见,无 eBPF 需求时)
+bash operator/uninstall.sh --apply --restore-kube-proxy
+
+# 卸载,接下来手动装 Cilium 接管(保持 eBPF)
 bash operator/uninstall.sh --apply
 
-# 3. 要立即装 cilium / 别的 CNI,不恢复 kube-proxy
-bash operator/uninstall.sh --apply --skip-kube-proxy-restore
-
-# 4. namespace 卡 Terminating 强清
-bash operator/uninstall.sh --apply --force
+# namespace 卡 Terminating 强清
+bash operator/uninstall.sh --apply --force --restore-kube-proxy
 ```
 
-卸载流程(operator):
-1. 现状盘点:看 Installation/APIServer CR、namespace、kube-proxy 状态
-2. **恢复 kube-proxy**(本机有 kubeadm 就自动,没有给手动命令)
-3. 删 Installation/APIServer CR(operator 自动清理 calico-system)
-4. 等 calico-system Pod 全消失
-5. 反向 `kubectl delete -f tigera-operator.yaml`
-6. 删 tigera-operator namespace
-7. 打印每个节点要执行的清理命令(iptables / cni / bpf 残留)
-
-卸载脚本**不会**自动 ssh 到节点清理 iptables/cni 残留 — 这是设计上故意的,避免误操作。会打印精确命令,你 ssh 上去跑。
+卸载脚本**不会**自动 ssh 到节点清理 iptables/cni 残留 — 设计上故意的,避免误操作。会打印精确命令,你 ssh 上去跑。
 
 manifest 版本流程相似但更短(5 步),没有 operator/CR 这一层。
 
