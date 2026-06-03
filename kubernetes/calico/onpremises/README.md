@@ -29,11 +29,13 @@ bash manifest/install.sh --apiserver-host=<LB_IP> --enable-ebpf --delete-kube-pr
 onpremises/
 ├── README.md                                # 本文档
 ├── operator/                                # 官方推荐:Tigera Operator 模式
-│   ├── install.sh                           # 安装脚本(含前置检查 + 7 步流程)
-│   ├── installation.yaml                    # Installation CR(BPF dataplane)
+│   ├── install.sh                           # 安装脚本(7 步流程,自动 CIDR 探测)
+│   ├── uninstall.sh                         # 卸载脚本(默认 dry-run,自动恢复 kube-proxy)
+│   ├── installation.yaml                    # Installation CR(BPF dataplane,CIDR 用占位符)
 │   └── kubernetes-services-endpoint.yaml    # 让 Calico 直连 API server(替换 kube-proxy 必需)
 └── manifest/                                # 经典:单 calico.yaml
-    └── install.sh                           # 装完后手动 patch FelixConfiguration 开 eBPF
+    ├── install.sh                           # 装完后手动 patch FelixConfiguration 开 eBPF
+    └── uninstall.sh                         # 卸载脚本(默认 dry-run)
 ```
 
 ---
@@ -157,6 +159,39 @@ bash manifest/install.sh --pod-cidr=10.244.0.0/16
 | Service 互通 | `kubectl run b -it --image=curlimages/curl -- curl http://kubernetes.default.svc:443 -k` | 401(说明 ClusterIP 转发到 API server 了) |
 
 ---
+
+## 卸载 Calico
+
+⚠ **顺序绝不能反**:先恢复 kube-proxy → 再删 Calico。直接删 Calico 而 kube-proxy 已删 → 集群 Service 全断,Pod 互通断 → 没法救。
+
+两个 uninstall.sh 都**默认 dry-run**,加 `--apply` 才真删。
+
+```bash
+# 1. 看计划(强烈推荐先跑一遍)
+bash operator/uninstall.sh                # 看会做什么
+
+# 2. 真卸载(自动恢复 kube-proxy)
+bash operator/uninstall.sh --apply
+
+# 3. 要立即装 cilium / 别的 CNI,不恢复 kube-proxy
+bash operator/uninstall.sh --apply --skip-kube-proxy-restore
+
+# 4. namespace 卡 Terminating 强清
+bash operator/uninstall.sh --apply --force
+```
+
+卸载流程(operator):
+1. 现状盘点:看 Installation/APIServer CR、namespace、kube-proxy 状态
+2. **恢复 kube-proxy**(本机有 kubeadm 就自动,没有给手动命令)
+3. 删 Installation/APIServer CR(operator 自动清理 calico-system)
+4. 等 calico-system Pod 全消失
+5. 反向 `kubectl delete -f tigera-operator.yaml`
+6. 删 tigera-operator namespace
+7. 打印每个节点要执行的清理命令(iptables / cni / bpf 残留)
+
+卸载脚本**不会**自动 ssh 到节点清理 iptables/cni 残留 — 这是设计上故意的,避免误操作。会打印精确命令,你 ssh 上去跑。
+
+manifest 版本流程相似但更短(5 步),没有 operator/CR 这一层。
 
 ## 回滚:从 eBPF 退回 iptables + kube-proxy
 
