@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 set -e
 
 echo "=== 1. 部署 ingress-nginx ==="
-kubectl apply -f ./ingress-nginx.yaml
+kubectl apply -f ./deploy.yaml
 
 echo "=== 2. 等待 ingress-nginx controller ready ==="
 kubectl wait --namespace ingress-nginx \
