@@ -1,0 +1,18 @@
+# =============================================================================
+# 让 Calico/Felix 直连 API server,不依赖 kubernetes.default ClusterIP
+#
+# 必须在删 kube-proxy 之前 apply,否则 Calico 自己会失联 → 集群死锁
+#
+# HA 集群:KUBERNETES_SERVICE_HOST 必须填 LB 地址(haproxy / keepalived VIP / 云 SLB)
+# 单 master:填 master 节点 IP
+# 用法:envsubst < kubernetes-services-endpoint.yaml | kubectl apply -f -
+#       或直接 sed 改完再 apply
+# =============================================================================
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: kubernetes-services-endpoint
+  namespace: tigera-operator
+data:
+  KUBERNETES_SERVICE_HOST: "REPLACE_APISERVER_HOST"
+  KUBERNETES_SERVICE_PORT: "6443"

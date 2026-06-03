@@ -1,0 +1,223 @@
+# =============================================================================
+# DSP 多模块 Java 项目 GitLab CI 流水线
+#
+# 触发方式:仅支持手动触发(Web UI / API / Trigger Token),push 不会自动跑
+# 模块结构:dsp-dependencies → dsp-common → dsp-api → dsp-third-sdk → 业务模块
+# 镜像构建:Kaniko(rootless) → Harbor
+# 部署方式:kubectl set image + rollout restart + rollout status
+#
+# 使用前替换占位符:
+#   harbor.example.com:6443 → 实际 Harbor 地址
+#   myproject               → 实际 Harbor 项目名
+#   HARBOR_USERNAME/PASSWORD/KUBE_CONFIG → CI/CD Variables 中配置(masked + protected)
+# =============================================================================
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "api"'
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+
+default:
+  tags:
+    - docker
+  before_script:
+    - export MAVEN_OPTS="-Dmaven.repo.local=${CI_PROJECT_DIR}/.m2/repository"
+
+stages:
+  - dependencies
+  - package
+  - build_image
+  - deploy
+
+variables:
+  MAVEN_IMAGE: "harbor.example.com:6443/middleware/maven:3.8.6-openjdk-11"
+  KANIKO_IMAGE: "harbor.example.com:6443/middleware/executor:debug"
+  KUBECTL_IMAGE: "harbor.example.com:6443/middleware/kubectl:latest"
+  HARBOR_REGISTRY: "harbor.example.com:6443"
+  HARBOR_PROJECT: "myproject"
+  # ↓ 手动触发时在 GitLab UI "Run pipeline" 页面可修改
+  VERSION:
+    value: "1.0.1-SNAPSHOT"
+    description: "镜像版本号,例如: test-1.0.1 / prod-1.0.1"
+  MODULES:
+    value: "auth,gateway,account,ad,gen,open,order,system"
+    description: "要构建的模块,逗号分隔"
+  IS_DEPLOY_COMMON:
+    value: "false"
+    description: "是否只构建基础依赖,跳过业务模块(true/false)"
+  DEPLOY_TO_K8S:
+    value: "true"
+    description: "构建完成后是否自动滚动更新 K8s(true/false)"
+  REBUILD_DEPS:
+    value: "false"
+    description: "是否强制重新构建依赖链,pom 有变更时设为 true(true/false)"
+  K8S_NAMESPACE:
+    value: "dsp-test"
+    description: "K8s 命名空间,例如: dsp-test / dsp-prod"
+
+cache:
+  key: "maven-${CI_COMMIT_REF_SLUG}"
+  paths:
+    - .m2/repository/
+
+# ============================================================
+# Stage 1: 依赖链(1-6 步合并)
+# cache 命中自动跳过,REBUILD_DEPS=true 强制重建
+# ============================================================
+build-deps:
+  stage: dependencies
+  image: $MAVEN_IMAGE
+  cache:
+    key: "maven-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .m2/repository/
+    policy: pull-push
+  script:
+    - |
+      DSP_DEPS_POM="${CI_PROJECT_DIR}/.m2/repository/com/dsp/dsp-dependencies/1.0.0-SNAPSHOT/dsp-dependencies-1.0.0-SNAPSHOT.pom"
+
+      if [ -f "$DSP_DEPS_POM" ] && [ "$REBUILD_DEPS" != "true" ]; then
+        echo "===== Cache 命中,跳过依赖构建 ====="
+        find ${CI_PROJECT_DIR}/.m2/repository/com/dsp -name "*.pom" | sort
+        exit 0
+      fi
+
+      echo "===== 开始构建依赖链 ====="
+
+      echo "--- Step 1: dsp-dependencies ---"
+      cd ${CI_PROJECT_DIR}/dsp-dependencies
+      mvn clean install -DskipTests -U
+
+      echo "--- Step 2: dsp-common (parent) + dsp-common-api ---"
+      cd ${CI_PROJECT_DIR}/dsp-common
+      mvn clean install -DskipTests -N -U
+      cd ${CI_PROJECT_DIR}/dsp-common/dsp-common-api
+      mvn clean install -DskipTests -U
+
+      echo "--- Step 3: dsp-common-core ---"
+      cd ${CI_PROJECT_DIR}/dsp-common/dsp-common-core
+      mvn clean install -DskipTests -U
+
+      echo "--- Step 4: dsp-api ---"
+      cd ${CI_PROJECT_DIR}/dsp-api
+      mvn clean install -DskipTests -N -U
+      mvn clean install -DskipTests -U
+
+      echo "--- Step 5: dsp-common (full) ---"
+      cd ${CI_PROJECT_DIR}/dsp-common
+      mvn clean install -DskipTests -N -U
+      mvn clean install -DskipTests -U
+
+      echo "--- Step 6: dsp-third-sdk ---"
+      cd ${CI_PROJECT_DIR}/dsp-third-sdk
+      mvn clean install -DskipTests -N -U
+      mvn clean install -DskipTests -U
+
+      echo "===== 依赖链构建完成 ====="
+      find ${CI_PROJECT_DIR}/.m2/repository/com/dsp -name "*.pom" | sort
+
+# ============================================================
+# Stage 2: 打包业务模块
+# ============================================================
+package-modules:
+  stage: package
+  image: $MAVEN_IMAGE
+  needs:
+    - job: build-deps
+  rules:
+    - if: '$IS_DEPLOY_COMMON == "true"'
+      when: never
+    - when: on_success
+  cache:
+    key: "maven-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .m2/repository/
+    policy: pull
+  script:
+    - |
+      for module in $(echo "$MODULES" | tr ',' '\n' | xargs); do
+        echo "===== Maven 打包: dsp-${module} ====="
+        cd ${CI_PROJECT_DIR}/dsp-${module}
+        mvn clean package -Ptest -DskipTests
+        ls -lh target/dsp-${module}.jar
+      done
+  artifacts:
+    expire_in: 1 hour
+    paths:
+      - "dsp-*/target/dsp-*.jar"
+
+# ============================================================
+# Stage 3: Kaniko 构建镜像
+# ============================================================
+build-images:
+  stage: build_image
+  image:
+    name: $KANIKO_IMAGE
+    entrypoint: [""]
+  needs:
+    - job: package-modules
+      artifacts: true
+  rules:
+    - if: '$IS_DEPLOY_COMMON == "true"'
+      when: never
+    - when: on_success
+  before_script: []
+  cache: []
+  script:
+    - mkdir -p /kaniko/.docker
+    - |
+      cat > /kaniko/.docker/config.json <<EOF
+      {"auths":{"${HARBOR_REGISTRY}":{"username":"${HARBOR_USERNAME}","password":"${HARBOR_PASSWORD}"}}}
+      EOF
+    - |
+      for module in $(echo "$MODULES" | tr ',' '\n' | xargs); do
+        echo "===== Kaniko 构建: dsp-${module} ====="
+
+        JAR="${CI_PROJECT_DIR}/dsp-${module}/target/dsp-${module}.jar"
+        if [ ! -f "$JAR" ]; then
+          echo "ERROR: jar 不存在: $JAR"
+          exit 1
+        fi
+
+        /kaniko/executor \
+          --context "${CI_PROJECT_DIR}/dsp-${module}" \
+          --dockerfile "${CI_PROJECT_DIR}/dsp-${module}/Dockerfile" \
+          --destination "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/dsp-${module}:${VERSION}" \
+          --cache=true \
+          --verbosity=info
+      done
+
+# ============================================================
+# Stage 4: 滚动更新 K8s 服务
+# ============================================================
+deploy-k8s:
+  stage: deploy
+  image:
+    name: $KUBECTL_IMAGE
+    entrypoint: [""]
+  needs:
+    - job: build-images
+      artifacts: false
+  rules:
+    - if: '$DEPLOY_TO_K8S == "true" && $IS_DEPLOY_COMMON != "true"'
+      when: on_success
+    - when: manual
+      allow_failure: true
+  before_script: []
+  cache: []
+  script:
+    - mkdir -p ~/.kube
+    - cp $KUBE_CONFIG ~/.kube/config
+    - |
+      for module in $(echo "$MODULES" | tr ',' '\n' | xargs); do
+        echo "===== 更新镜像: dsp-${module} ====="
+        kubectl set image deployment/dsp-${module} \
+          dsp-${module}=${HARBOR_REGISTRY}/${HARBOR_PROJECT}/dsp-${module}:${VERSION} \
+          -n ${K8S_NAMESPACE}
+        echo "===== 强制重启: dsp-${module} ====="
+        kubectl rollout restart deployment/dsp-${module} -n ${K8S_NAMESPACE}
+        echo "===== 等待滚动更新完成: dsp-${module} ====="
+        kubectl rollout status deployment/dsp-${module} \
+          -n ${K8S_NAMESPACE} --timeout=300s
+      done

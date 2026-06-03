@@ -1,0 +1,39 @@
+# =============================================================================
+# Calico Installation CR(Operator 模式核心配置)
+#
+# 关键字段:
+#   linuxDataplane: BPF        ← eBPF dataplane(替换 iptables/ipvs)
+#   cidr: 192.168.0.0/16       ← Pod CIDR,要跟 kubeadm --pod-network-cidr 对齐
+#   encapsulation: VXLANCrossSubnet  ← 跨子网才封包,同子网直接路由(性能最好的折中)
+#                                      纯 BGP 环境可改 None
+#                                      所有跨节点都跨子网可改 VXLAN
+#
+# 镜像源:operator 默认拉 quay.io/calico/*,内网慢的话改 spec.registry
+# =============================================================================
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  # eBPF dataplane,替换 kube-proxy
+  calicoNetwork:
+    linuxDataplane: BPF
+    bgp: Disabled                    # eBPF + VXLAN 模式下 BGP 不需要,纯 BGP 改 Enabled
+    ipPools:
+      - name: default-ipv4-ippool
+        blockSize: 26
+        cidr: 192.168.0.0/16
+        encapsulation: VXLANCrossSubnet
+        natOutgoing: Enabled
+        nodeSelector: all()
+  # 控制面副本数,生产建议 ≥3
+  controlPlaneReplicas: 2
+  # 镜像源(默认 quay.io,要走内网代理改成 quay.ihome.sxxpqp.top:8443/)
+  # registry: quay.io/
+---
+# API server CR(让 calicoctl / kubectl 能直接管 Calico 资源)
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: default
+spec: {}
