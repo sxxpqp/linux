@@ -218,7 +218,7 @@ pass "busybox ready($BUSYBOX_NODE, $BUSYBOX_IP)"
 # 等 Felix 的 reconciliation loop 跑完再开始测。
 log "等待 Calico BPF 程序 attach(10s)..."
 sleep 10
-ok "预热完成,开始连通性测试"
+log "预热完成,开始连通性测试"
 
 # kubectl exec 包装(集中处理超时)
 exec_in_busybox() {
