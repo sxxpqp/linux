@@ -119,10 +119,9 @@ kubectl get felixconfiguration default -o yaml | grep bpfEnabled
 kubectl -n kube-system delete ds kube-proxy
 kubectl -n kube-system delete cm kube-proxy
 
-# 6. 每个 node 清理 iptables 残留
-ssh node-N "iptables-save | grep -v KUBE | iptables-restore"
-# ipvs 模式额外:
-ssh node-N "ipvsadm -C"
+# 6. 每个 node 清理残留(推荐重启节点最干净;不重启留着无害,下次重启自动消失)
+ssh node-N "reboot"
+# ⚠ 不要跑 'iptables-save | grep -v KUBE | iptables-restore' 这类整表替换,易误伤其它规则
 ```
 
 或者一步到位(自动删 kube-proxy,先在测试集群跑):
@@ -272,7 +271,7 @@ containerd 加速源配置见 [CLAUDE.md "Docker / containerd 加速源配置"](
 | 删 kube-proxy 后 calico-node CrashLoop | 没配 `kubernetes-services-endpoint` ConfigMap,Pod 访问 `kubernetes.default` 失败 | 先配 ConfigMap → 重启 calico-node → 再删 kube-proxy |
 | `bpfEnabled: true` 但日志没 BPF | calico-node 没重启或 operator 还没同步 | `kubectl rollout restart ds/calico-node`,等 60s |
 | NodePort 通,ClusterIP 不通 | BPF nat 表没建好,通常是 ConfigMap 里 host/port 写错 | 进 calico-node Pod `calico-node -bpf nat dump` 看有没有目标 service |
-| 节点 iptables 还有 KUBE-* 链 | 删 kube-proxy 不会清残留 | 手动 `iptables-save \| grep -v KUBE \| iptables-restore` |
+| 节点 iptables 还有 KUBE-* 链 | 删 kube-proxy 不会清残留 | 重启节点最干净;留着也无害(kube-proxy 没了不会再更新)。**不要**整表 `iptables-save \| grep -v KUBE \| iptables-restore`,易误伤其它规则 |
 | Pod 跨子网不通 | `encapsulation: None`(纯 BGP)但路由没宣告 | 改 `VXLANCrossSubnet` 兜底,或配 BGP peer |
 | HA 集群 LB 重启后 Calico 全断 | `KUBERNETES_SERVICE_HOST` 填的单 master IP 不是 VIP | 改成 VIP 重启 calico-node |
 

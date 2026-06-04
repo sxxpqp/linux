@@ -317,9 +317,10 @@ kubectl -n kube-system rollout restart ds/calico-node >/dev/null 2>&1 || true
 kubectl -n kube-system rollout status ds/calico-node --timeout=120s
 ok "calico-node 已重启,service NAT 已接管"
 
-warn "节点上的 iptables KUBE-* 链需要手动清理(每个 node):"
-echo "  iptables-save | grep -v KUBE | iptables-restore"
-echo "  ipvs 用户额外: ipvsadm -C"
+warn "节点上残留 KUBE-* iptables 链处理:"
+echo "  推荐:逐个节点重启(最干净)"
+echo "  不重启也行:kube-proxy 已删,KUBE-* 链不会再被更新,留着无害"
+echo "  ⚠ 不要跑 'iptables-save | grep -v KUBE | iptables-restore'(会误伤其它规则)"
 
 log "==== 安装完成 (eBPF + 无 kube-proxy) ===="
 kubectl -n kube-system get pods -l k8s-app=calico-node

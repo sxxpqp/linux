@@ -132,20 +132,15 @@ cat <<EOF
 
 每个节点需要清理:
 
-  # 1. iptables KUBE-/CALI- 链
-  iptables-save | grep -vE '^(:|-A )(KUBE|CALI|cali|kube)' | iptables-restore
-
-  # 2. ipvs
-  ipvsadm -C 2>/dev/null
-
-  # 3. CNI 配置 + 二进制
+  # 1. CNI 配置 + 二进制
   rm -f /etc/cni/net.d/*calico* /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 
-  # 4. Calico 数据目录
+  # 2. Calico 数据目录
   rm -rf /var/lib/calico /var/log/calico /var/run/calico
 
-  # 5. BPF 程序(开过 eBPF 才有)
-  bpftool prog list 2>/dev/null | grep -B1 calico && echo "有残留,建议重启节点"
+  # 3. BPF 程序 / iptables / ipvs / conntrack 残留 → 直接重启节点最干净
+  #    不重启的话:KUBE-*/CALI-* 链没人更新,留着无害(下次重启自动消失)
+  #    ⚠ 不要跑 'iptables-save | grep ... | iptables-restore' 这类整表替换,易误伤其它规则
 
 节点列表:
 EOF

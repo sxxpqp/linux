@@ -92,7 +92,8 @@ docker push      registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
 - 用户喜欢 **表格 + 代码块 + 分点** 的结构,排版清晰比文字密度更重要。
 - 用户会贴 `journalctl` / `ip route` / `systemctl status` 的原始输出 —— 直接基于输出回答,不要让用户"再跑一遍 X 命令"除非真的缺信息。
 - 修改配置文件时:**优先用 Edit 工具改本地文件**,然后告诉用户 `scp` / `git push` 推到服务器的命令,不要只在回复里贴 diff。
-- **每次修改文件后,主动询问是否 git push**,并给出建议的 commit message(格式:`bash gitpush.sh "<message>"`)。
+- **执行命令不需要询问**(包括 git push / kubectl apply / 启动服务等),修改完直接 push,commit message 自拟(格式:`bash gitpush.sh "<message>"`)。
+- **只有删除 / 移动 / 覆盖类操作才需要确认**:`rm` / `mv` / `git rm` / `kubectl delete` 重要资源 / 整表 `iptables-restore` / `truncate` 这些动作前问一句,其它都直接做。
 
 ## 输出质量要求(资深运维开发工程师标准)
 
