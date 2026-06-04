@@ -23,10 +23,10 @@ curl -I http://<ingress-node-ip>:80   # 期望: 404 Not Found(controller 在 lis
 | [uninstall.sh](uninstall.sh) | ✅ | 卸载脚本: 删 DS → 清 Pod → 剥 namespace finalizer, 默认 dry-run |
 | [deploy.yaml](deploy.yaml) | ✅ | ingress-nginx v1.15.1 完整部署(DaemonSet + hostNetwork + admission webhook) |
 | [deploy-guide.md](deploy-guide.md) | 参考 | 改造思路 + 选型对比 + 镜像加速 |
+| [test.sh](test.sh) | ✅ | **验证脚本**: 部署测试应用 → Pod→ClusterIP → 集群内 Ingress → 外部 Ingress, 装完跑 |
 | [ingress-demo.yaml](ingress-demo.yaml) | 参考 | 基础 Ingress 示例 |
 | [ingress-example.yaml](ingress-example.yaml) | 参考 | 多路径路由示例 |
 | [test.yaml](test.yaml) | 参考 | 测试 Pod + Service + Ingress |
-| [test_ingress.sh](test_ingress.sh) | 参考 | 测试脚本 |
 
 ## 前置
 
