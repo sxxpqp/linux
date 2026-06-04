@@ -672,4 +672,4 @@ webhooks:
     - UPDATE
     resources:
     - ingresses
-  sideEffects: Nones
+  sideEffects: None
