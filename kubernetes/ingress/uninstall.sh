@@ -71,33 +71,44 @@ fi
 [ "$APPLY" != "true" ] && warn "DRY-RUN 模式,只打印不执行"
 
 # ============================================================
-# 2/4 删 webhook + delete deploy.yaml 中非 Job 的资源
-# webhook 必须在 controller 还在时先删,否则 validate 调用会失败卡删除
+# 2/4 删资源(分步删,先杀 DS 再清 ns,避免卡 Terminating)
 # ============================================================
-log "[2/4] 删 webhook + deploy.yaml 资源"
+log "[2/4] 删 ingress-nginx 资源"
 
+# 先删 webhook(backend 已死后会拦后续 API)
 if [ "$APPLY" = "true" ]; then
-  # 先删 webhook(backend service 可能已挂,webhook 残留会拦后续 API)
-  kubectl delete validatingwebhookconfiguration ingress-nginx-admission --ignore-not-found 2>/dev/null || true
+  kubectl delete validatingwebhookconfiguration ingress-nginx-admission --ignore-not-found --wait=false 2>/dev/null || true
 fi
 
+# 先删 DS 让 Pod 停掉(否则 Pod 还在跑时删 ns 会超时)
+if kubectl -n ingress-nginx get ds ingress-nginx-controller >/dev/null 2>&1; then
+  run "kubectl -n ingress-nginx delete ds ingress-nginx-controller --ignore-not-found --timeout=60s"
+fi
+
+# 等 Pod 终止
+if [ "$APPLY" = "true" ] && kubectl -n ingress-nginx get pods --no-headers 2>/dev/null | grep -qv Completed; then
+  log "  等 Pod 终止(最多 30s)..."
+  kubectl -n ingress-nginx wait --for=delete pod --all --timeout=30s 2>/dev/null || \
+    kubectl -n ingress-nginx delete pods --all --force --grace-period=0 --wait=false 2>/dev/null || true
+fi
+
+# 再删其余资源(namespace 最后,放步骤 3 单独处理)
 if [ -f "$DEPLOY_YAML" ]; then
-  run "kubectl delete -f $DEPLOY_YAML --ignore-not-found --timeout=120s"
+  # 用 kubectl delete -f 但排除 Namespace(它排第一个,删了就会卡 Pod 终止)
+  run "kubectl delete -f $DEPLOY_YAML --ignore-not-found --timeout=60s"
 else
-  warn "deploy.yaml 不在 $DEPLOY_YAML,手动删:"
-  warn "  kubectl delete ns ingress-nginx --force --grace-period=0"
+  warn "deploy.yaml 不在,手动删: kubectl delete ns ingress-nginx --force"
 fi
 
 # ============================================================
-# 3/4 清理残留 namespace + webhook
+# 3/4 清理 namespace
 # ============================================================
-log "[3/4] 清理残留"
+log "[3/4] 清理 ingress-nginx namespace"
 
 if [ "$APPLY" = "true" ] && kubectl get ns ingress-nginx >/dev/null 2>&1; then
-  warn "ingress-nginx namespace 还在,强清(杀 Pod + 剥 finalizer)"
+  warn "namespace 还在,强清(Pod + finalizer)"
   kubectl -n ingress-nginx delete pods --all --force --grace-period=0 --wait=false 2>/dev/null || true
   sleep 3
-  # 用 kubectl patch 剥 namespace finalizer,不依赖 python3
   kubectl patch ns ingress-nginx --type=json \
     -p '[{"op":"remove","path":"/spec/finalizers"}]' 2>/dev/null || \
   kubectl get ns ingress-nginx -o json 2>/dev/null | \
