@@ -1,0 +1,19 @@
+# Calico BGP Installation CR
+# 跟 operator 默认 BPF 模式不同: IPTables dataplane + BGP 路由 + 无 VXLAN 封包
+# kube-proxy 保留(负责 ClusterIP NAT), BIRD 负责 Pod CIDR BGP 宣告
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    linuxDataplane: Iptables
+    bgp: Enabled
+    ipPools:
+      - name: default-ipv4-ippool
+        blockSize: 26
+        cidr: REPLACE_POD_CIDR
+        encapsulation: None         # BGP 直接路由,不封包
+        natOutgoing: Enabled
+        nodeSelector: all()
+  controlPlaneReplicas: 2
