@@ -164,6 +164,29 @@ fi
 # ============================================================
 # 4/6 apply calico.yaml
 # ============================================================
+
+# kubernetes-services-endpoint ConfigMap 必须在 calico.yaml apply 之 前 建好,
+# 否则 install-cni init container 无法通过 ClusterIP 访问 API server(尤其 kube-proxy 已挂时)。
+# 即使默认 iptables 模式也建,无害且防止 kube-proxy 意外缺失时安装失败。
+if [ -z "$APISERVER_HOST" ]; then
+  APISERVER_HOST=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)
+  [ -z "$APISERVER_HOST" ] && warn "无法自动探测 API server 地址,跳过 ConfigMap"
+fi
+if [ -n "$APISERVER_HOST" ] && ! kubectl -n kube-system get cm kubernetes-services-endpoint >/dev/null 2>&1; then
+  log "  写 kubernetes-services-endpoint ConfigMap(install-cni 需要)"
+  kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubernetes-services-endpoint
+  namespace: kube-system
+data:
+  KUBERNETES_SERVICE_HOST: "${APISERVER_HOST}"
+  KUBERNETES_SERVICE_PORT: "${APISERVER_PORT}"
+EOF
+  ok "ConfigMap 已写"
+fi
+
 log "[4/6] apply Calico"
 
 kubectl apply -f "$TMP_YAML"
@@ -189,9 +212,12 @@ fi
 # ============================================================
 log "[5/6] 切换到 eBPF dataplane"
 
-# 5.1 配 kubernetes-services-endpoint ConfigMap(必须先做!)
-log "  写 kubernetes-services-endpoint ConfigMap"
-kubectl apply -f - <<EOF
+# 5.1 kubernetes-services-endpoint ConfigMap(如果前面已建就跳过)
+if kubectl -n kube-system get cm kubernetes-services-endpoint >/dev/null 2>&1; then
+  ok "kubernetes-services-endpoint ConfigMap 已存在(跳过)"
+else
+  log "  写 kubernetes-services-endpoint ConfigMap"
+  kubectl apply -f - <<EOF
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -201,7 +227,8 @@ data:
   KUBERNETES_SERVICE_HOST: "${APISERVER_HOST}"
   KUBERNETES_SERVICE_PORT: "${APISERVER_PORT}"
 EOF
-ok "ConfigMap 已写"
+  ok "ConfigMap 已写"
+fi
 
 # 5.2 重启 calico-node + typha 让它读到新 ConfigMap
 log "  重启 calico-node 读新 ConfigMap"
@@ -265,6 +292,16 @@ sleep 5
 kubectl -n kube-system delete ds kube-proxy --ignore-not-found
 kubectl -n kube-system delete cm kube-proxy --ignore-not-found
 ok "kube-proxy 已删除"
+
+# 通知 Calico 接管 service NAT(删了 kube-proxy 必须做,否则 ClusterIP/DNS 全挂)
+log "  通知 Calico 接管 service NAT..."
+kubectl patch felixconfiguration default --type=merge \
+  -p '{"spec":{"bpfKubeProxyIptablesCleanupEnabled":true,"bpfKubeProxyMinSyncPeriod":"5s"}}' 2>/dev/null || \
+  warn "FelixConfiguration patch 失败,可能 default 不存在,跳过"
+log "  滚动重启 calico-node 以加载 kube-proxy replacement..."
+kubectl -n kube-system rollout restart ds/calico-node >/dev/null 2>&1 || true
+kubectl -n kube-system rollout status ds/calico-node --timeout=120s
+ok "calico-node 已重启,service NAT 已接管"
 
 warn "节点上的 iptables KUBE-* 链需要手动清理(每个 node):"
 echo "  iptables-save | grep -v KUBE | iptables-restore"
