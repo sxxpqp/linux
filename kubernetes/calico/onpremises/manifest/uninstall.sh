@@ -121,6 +121,19 @@ fi
 # eBPF 模式装的辅助 ConfigMap,calico-node 删完之后删它才安全
 run "kubectl -n kube-system delete cm kubernetes-services-endpoint --ignore-not-found"
 
+# 清理 operator 方式残留的 namespace(mani↔operator 交叉安装时会剩)
+# CRD 删除后这些 ns 里的资源 finalizer 没人清,直接强删
+for ns in calico-system calico-apiserver tigera-operator; do
+  if [ "$APPLY" = "true" ] && kubectl get ns "$ns" >/dev/null 2>&1; then
+    warn "检测到 operator 残留 namespace: $ns,正在强清"
+    kubectl -n "$ns" delete pods --all --force --grace-period=0 --wait=false 2>/dev/null || true
+    sleep 2
+    kubectl get ns "$ns" -o json 2>/dev/null | \
+      python3 -c "import sys,json; d=json.load(sys.stdin); d['spec']['finalizers']=[]; print(json.dumps(d))" 2>/dev/null | \
+      kubectl replace --raw "/api/v1/namespaces/$ns/finalize" -f - 2>/dev/null || true
+  fi
+done
+
 # ============================================================
 # 3/3 节点残留清理提示
 # ============================================================
