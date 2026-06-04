@@ -21,8 +21,9 @@ RUN go build -trimpath -ldflags="-s -w" -o /out/node-cordon-watcher .
 # 不用 distroless 因为 gcr.io 国内不通,而 Docker registry-mirrors 只代理 docker.io
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata && \
-    addgroup -S app && adduser -S app -G app
+    addgroup -g 65532 -S app && adduser -u 65532 -S app -G app
 COPY --from=builder /out/node-cordon-watcher /usr/local/bin/node-cordon-watcher
-USER app:app
+# 必须用数字 UID,否则 kubelet 在 runAsNonRoot=true 下无法校验,Pod 起不来
+USER 65532:65532
 ENTRYPOINT ["/usr/local/bin/node-cordon-watcher"]
 EXPOSE 8080
