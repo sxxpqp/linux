@@ -6,13 +6,14 @@
 # 安装 nerdctl(containerd 官方 CLI,docker 命令的替代品)。
 # 二进制方式,从 GitHub release 拉(走 Nexus raw-github 代理)。
 #
-# 默认会问"是否别名 docker?":
-#   选 y → 写入 /etc/profile.d/nerdctl-alias.sh,内容 `alias docker=nerdctl`
-#          交互 shell 里跑 docker xxx 实际跑 nerdctl xxx
-#          ★ 不影响 /usr/local/bin/docker 真实二进制,跟已有 docker 不冲突
-#   选 n → 仅装 nerdctl,不写 alias
+# docker 软链行为(默认):
+#   1. 系统已经有 docker(任何位置)→ 跳过,不覆盖,提示用户怎么手动接管
+#   2. 系统没有 docker → 默认问"装软链吗?",y/Y 创建 /usr/local/bin/docker → nerdctl
+#   3. 我们自己之前装的软链 → 视为已存在,不重装(幂等)
 #
-# 加 --alias-docker / --no-alias-docker 可跳过提问,适合自动化场景。
+# 加 --alias-docker / --no-alias-docker 可跳过提问。
+#
+# 软链全局生效(交互 shell + 脚本 + systemd unit),解决 alias 在脚本里不展开的问题。
 
 set -euo pipefail
 
@@ -35,8 +36,8 @@ usage() {
 选项:
   --version=VER           nerdctl 版本(例 2.0.0,默认从 GitHub API 探测最新)
   --install-dir=DIR       安装目录,默认 /usr/local/bin
-  --alias-docker          直接写 alias docker=nerdctl 到 /etc/profile.d/,不问
-  --no-alias-docker       不写 alias,不问
+  --alias-docker          直接创建 /usr/local/bin/docker 软链,不问
+  --no-alias-docker       不创建软链,不问
   --extra-tools           连同 tar 里的其他工具一起装(buildctl 等,谨慎)
   -h, --help              显示帮助
 
@@ -178,31 +179,73 @@ fi
 "$INSTALL_DIR/nerdctl" --version
 
 # ============================================================
-# 5/5 docker shell alias(默认问)
-# 写到 /etc/profile.d/nerdctl-alias.sh,只在交互 shell 生效
-# 不动 /usr/local/bin/docker,真实 docker 二进制(如果有)继续走 PATH
+# 5/5 docker 软链(智能判断:已有 docker 就跳过)
 # ============================================================
-log "[5/5] docker shell alias"
+log "[5/5] docker 软链"
 
-ALIAS_FILE="/etc/profile.d/nerdctl-alias.sh"
+# 检测 PATH 里是否已有 docker
+EXISTING_DOCKER=$(command -v docker 2>/dev/null || true)
 
+# 判断"已有 docker"是不是我们之前装的软链(自己装的等于没装,要重做)
+EXISTING_IS_OUR_LINK="false"
+if [ -n "$EXISTING_DOCKER" ] && [ -L "$EXISTING_DOCKER" ]; then
+  TARGET=$(readlink -f "$EXISTING_DOCKER" 2>/dev/null || true)
+  NERDCTL_REAL=$(readlink -f "$INSTALL_DIR/nerdctl" 2>/dev/null || true)
+  if [ -n "$TARGET" ] && [ "$TARGET" = "$NERDCTL_REAL" ]; then
+    EXISTING_IS_OUR_LINK="true"
+  fi
+fi
+
+# 老 alias 文件残留检测(给个清理提示)
+if [ -f /etc/profile.d/nerdctl-alias.sh ]; then
+  warn "检测到 /etc/profile.d/nerdctl-alias.sh(老版本 alias 残留)"
+  warn "  建议清理:rm /etc/profile.d/nerdctl-alias.sh"
+fi
+
+# 分支 1:已有 docker(且不是我们的软链)→ 跳过,保护用户已有环境
+if [ -n "$EXISTING_DOCKER" ] && [ "$EXISTING_IS_OUR_LINK" = "false" ]; then
+  echo
+  if [ -L "$EXISTING_DOCKER" ]; then
+    warn "系统已存在 docker:$EXISTING_DOCKER → $(readlink -f "$EXISTING_DOCKER" 2>/dev/null)"
+  else
+    warn "系统已存在 docker:$EXISTING_DOCKER(真实二进制)"
+  fi
+  warn "跳过软链创建,保护你已有的 docker 不被覆盖"
+  cat <<EOF
+
+  你的选择:
+    a. 共存:nerdctl 跟原 docker 并存,需要 nerdctl 命令时显式写 nerdctl xxx
+    b. 接管:让 nerdctl 替代 docker
+       rm $EXISTING_DOCKER
+       ln -sf $INSTALL_DIR/nerdctl $INSTALL_DIR/docker
+       (然后 docker xxx 实际跑 nerdctl xxx)
+EOF
+  exit 0
+fi
+
+# 分支 2:已有的就是我们的软链 → 幂等跳过
+if [ "$EXISTING_IS_OUR_LINK" = "true" ]; then
+  ok "$EXISTING_DOCKER 已是软链 → nerdctl,跳过(幂等)"
+  docker --version 2>/dev/null || true
+  exit 0
+fi
+
+# 分支 3:系统没有 docker → 询问 / 按参数决定
 if [ -z "$ALIAS_DOCKER" ]; then
   echo
   cat <<EOF
-  是否在交互 shell 里把 docker 别名为 nerdctl?
+  系统没有 docker 命令,是否创建 docker → nerdctl 软链(全局)?
 
-    实现:写入 $ALIAS_FILE,内容 alias docker='nerdctl'
-    ✓ 好处:登录 shell 跑 docker ps / docker pull 实际跑 nerdctl
-    ✓ 无冲突:跟 /usr/local/bin/docker 真实二进制(如果有)不冲突
-              因为 alias 只在交互 shell 生效,脚本 / systemd unit 仍走 PATH
-    ✗ 想关:删 $ALIAS_FILE,重新登录即可
+    实现:ln -sf $INSTALL_DIR/nerdctl $INSTALL_DIR/docker
+    ✓ 好处:交互 shell + 自动化脚本 + systemd unit 都能用 docker
+            build/push/CI 流水线无需改代码
+    ✗ 想关:rm $INSTALL_DIR/docker
 
 EOF
-  # 用 /dev/tty 让 curl | bash 模式也能交互
   if [ -e /dev/tty ]; then
-    read -rp "  写 docker alias?[Y/n]: " answer </dev/tty || answer=""
+    read -rp "  装 docker 软链?[Y/n]: " answer </dev/tty || answer=""
   else
-    read -rp "  写 docker alias?[Y/n]: " answer || answer=""
+    read -rp "  装 docker 软链?[Y/n]: " answer || answer=""
   fi
   case "$answer" in
     [Nn]*) ALIAS_DOCKER="false" ;;
@@ -211,19 +254,12 @@ EOF
 fi
 
 if [ "$ALIAS_DOCKER" = "true" ]; then
-  cat > "$ALIAS_FILE" <<'EOF'
-# nerdctl 安装时配的 docker 别名
-# 让交互 shell 下 `docker xxx` 实际跑 `nerdctl xxx`
-# 删除此文件 + 重新登录 即可关闭别名
-alias docker='nerdctl'
-EOF
-  chmod 0644 "$ALIAS_FILE"
-  ok "alias 已写入 $ALIAS_FILE"
-  warn "生效方式(任选其一):"
-  echo "    a. 重新登录 / 新开一个终端"
-  echo "    b. 当前 shell 立即生效:source $ALIAS_FILE"
+  ln -sf "$INSTALL_DIR/nerdctl" "$INSTALL_DIR/docker"
+  ok "软链已创建:$INSTALL_DIR/docker → nerdctl"
+  docker --version 2>/dev/null || true
 else
-  ok "跳过 docker alias"
+  ok "跳过 docker 软链"
+  warn "你之后跑 docker xxx 会报 command not found,只能用 nerdctl xxx"
 fi
 
 # ============================================================
