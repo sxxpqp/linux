@@ -50,6 +50,31 @@ subjects:
     name: node-cordon-watcher
     namespace: monitoring
 ---
+# 补丁式 NetworkPolicy:kube-prometheus 默认装的 NetworkPolicy `prometheus-k8s`
+# 只放行 prometheus / prometheus-adapter / grafana 入站 9090,会拦掉本 controller。
+# NetworkPolicy 多条规则取并集,这里加一条放行,不动上游 kube-prometheus 配置。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus-allow-node-cordon-watcher
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: prometheus
+      app.kubernetes.io/instance: k8s
+      app.kubernetes.io/name: prometheus
+      app.kubernetes.io/part-of: kube-prometheus
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: node-cordon-watcher
+      ports:
+        - port: 9090
+          protocol: TCP
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
