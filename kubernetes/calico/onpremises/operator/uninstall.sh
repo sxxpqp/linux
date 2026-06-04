@@ -8,9 +8,15 @@
 # 反向卸载 install.sh 装过的内容,不做额外动作:
 #   1. 删 Installation + APIServer CR(operator 自动清理 calico-system)
 #   2. 等 calico-system 资源消失
-#   3. 反向 delete tigera-operator.yaml + 删 kubernetes-services-endpoint ConfigMap
-#   4. 删 tigera-operator namespace
-#   5. 打印节点残留清理命令
+#   3. 删 kubernetes-services-endpoint ConfigMap(必须在 tigera-operator ns 还活着时删)
+#   4. 反向 delete tigera-operator.yaml(一次性带走 ns + operator + RBAC + CRDs)
+#   5. 兜底 force 删 ns + 打印节点残留清理命令
+#
+# 删除顺序的依赖关系(重要):
+#   - 先删 CR 再删 operator:不然 operator 没了,CR 上的 finalizer 没人处理 → 卡 Terminating
+#   - 先删 cm 再删 operator yaml:tigera-operator.yaml 第一个对象就是 Namespace,kubectl delete 一删 ns,
+#     里面的 cm 跟着没,后面单独 delete cm 就成无意义动作
+#   - 先 CR 后 CRD:CR 还在时删 CRD 会触发 cascade,把 finalizer 流程搅乱
 #
 # 不包含:kube-proxy 恢复 / dataplane 切换(需要自己手动)
 
@@ -119,9 +125,10 @@ if [ "$FORCE" = "true" ] && [ "$APPLY" = "true" ]; then
 fi
 
 # ============================================================
-# 3/4 等 calico-system 清完 + 反向 delete tigera-operator.yaml + 删 namespace
+# 3/4 等 calico-system 清完 → 删 cm → 反向 delete tigera-operator.yaml → 兜底删 ns
+# 顺序原因见文件开头注释
 # ============================================================
-log "[3/4] 等 calico-system 资源消失 + 反向 delete tigera-operator"
+log "[3/4] 等 calico-system 资源消失"
 
 if [ "$APPLY" = "true" ] && [ "$HAS_CALICO_NS" = "true" ]; then
   for i in $(seq 1 60); do
@@ -146,18 +153,27 @@ if [ "$APPLY" = "true" ] && [ "$HAS_CALICO_NS" = "true" ]; then
   fi
 fi
 
+# 必须在 tigera-operator ns 还活着时删 cm,
+# 否则后面 delete -f tigera-operator.yaml 会一并干掉 ns,cm 就找不到了
+if [ "$HAS_TIGERA_NS" = "true" ]; then
+  log "  删 kubernetes-services-endpoint ConfigMap(趁 ns 还在)"
+  run "kubectl -n tigera-operator delete cm kubernetes-services-endpoint --ignore-not-found"
+fi
+
+log "  反向 delete tigera-operator.yaml(含 ns + operator + RBAC + CRDs)"
 NEXUS_RAW="${NEXUS_RAW:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent}"
 TIGERA_OP_URL="${NEXUS_RAW}/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml"
 TMP_OP=$(mktemp /tmp/tigera-operator.XXXXXX.yaml)
 trap "rm -f $TMP_OP" EXIT
 
-log "  拉取 $TIGERA_OP_URL(用于反向 delete)"
+log "  拉取 $TIGERA_OP_URL"
 if [ "$APPLY" = "true" ]; then
   if ! curl -fsSLk "$TIGERA_OP_URL" -o "$TMP_OP"; then
     warn "下载 tigera-operator.yaml 失败,手动 delete:"
     echo "    kubectl -n tigera-operator delete deploy tigera-operator"
     echo "    kubectl delete crd installations.operator.tigera.io apiservers.operator.tigera.io \\"
     echo "      imagesets.operator.tigera.io tigerastatuses.operator.tigera.io"
+    echo "    kubectl delete ns tigera-operator"
   else
     run "kubectl delete -f $TMP_OP --ignore-not-found --timeout=180s"
   fi
@@ -165,22 +181,60 @@ else
   warn "[dry-run] 会下载 $TIGERA_OP_URL 后反向 delete"
 fi
 
-# install.sh 装过的辅助 ConfigMap
-if [ "$HAS_TIGERA_NS" = "true" ]; then
-  run "kubectl -n tigera-operator delete cm kubernetes-services-endpoint --ignore-not-found"
-fi
-
+# 兜底:yaml delete 失败或 --keep-tigera-ns 跳过时,这里再处理 ns
 if [ "$KEEP_TIGERA_NS" = "true" ]; then
   warn "--keep-tigera-ns,保留 tigera-operator namespace"
-elif [ "$HAS_TIGERA_NS" = "true" ]; then
+elif [ "$APPLY" = "true" ] && kubectl get ns tigera-operator >/dev/null 2>&1; then
+  warn "tigera-operator namespace 还在(yaml delete 没删干净),兜底再删一次"
   run "kubectl delete ns tigera-operator --ignore-not-found --timeout=120s"
 
-  if [ "$FORCE" = "true" ] && [ "$APPLY" = "true" ] && kubectl get ns tigera-operator >/dev/null 2>&1; then
+  if [ "$FORCE" = "true" ] && kubectl get ns tigera-operator >/dev/null 2>&1; then
     warn "tigera-operator 卡 Terminating,剥 finalizer"
     kubectl get ns tigera-operator -o json | \
       python3 -c "import sys,json; d=json.load(sys.stdin); d['spec']['finalizers']=[]; print(json.dumps(d))" | \
       kubectl replace --raw "/api/v1/namespaces/tigera-operator/finalize" -f - || true
   fi
+fi
+
+# 等到 ns 真正消失再退出(避免立刻重装时撞 Terminating)
+if [ "$APPLY" = "true" ] && [ "$KEEP_TIGERA_NS" != "true" ]; then
+  log "  等 tigera-operator namespace 真正消失(最多 2 分钟)"
+  for i in $(seq 1 24); do
+    if ! kubectl get ns tigera-operator >/dev/null 2>&1; then
+      ok "tigera-operator namespace 已消失"
+      break
+    fi
+    sleep 5
+    [ $((i % 6)) -eq 0 ] && log "  ...还在 Terminating(已等 $((i*5)) 秒,加 --force 试试)"
+  done
+fi
+
+# 最终残留检查 — 列出来,用户清楚之后能不能直接重装
+log "  最终残留检查"
+LEFTOVER=""
+for cr in installation apiserver; do
+  if kubectl get $cr default >/dev/null 2>&1; then
+    LEFTOVER="$LEFTOVER\n    - $cr/default 还在"
+  fi
+done
+for ns in calico-system tigera-operator calico-apiserver; do
+  if kubectl get ns $ns >/dev/null 2>&1; then
+    LEFTOVER="$LEFTOVER\n    - ns/$ns 还在"
+  fi
+done
+for role in calico-kube-controllers calico-node calico-cni-plugin tigera-operator; do
+  if kubectl get clusterrole $role >/dev/null 2>&1; then
+    LEFTOVER="$LEFTOVER\n    - clusterrole/$role 还在"
+  fi
+done
+if [ -n "$LEFTOVER" ]; then
+  warn "发现残留(重装会踩坑,建议先清):"
+  echo -e "$LEFTOVER"
+  warn "  快速清理:"
+  echo "    kubectl delete clusterrole,clusterrolebinding calico-kube-controllers calico-node calico-cni-plugin tigera-operator 2>/dev/null"
+  echo "    bash $0 --apply --force"
+else
+  ok "无残留,可以直接重装"
 fi
 
 # ============================================================

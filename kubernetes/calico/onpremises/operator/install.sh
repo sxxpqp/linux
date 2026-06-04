@@ -136,6 +136,53 @@ if kubectl get ds -n kube-system 2>/dev/null | grep -E 'cilium|kube-flannel|weav
   exit 1
 fi
 
+# 检查残留 Terminating 状态(上次 uninstall 没清干净就重装会踩这个坑)
+# 在 Terminating 资源上做 apply → kubectl 会变成 "configured" 而不是 "created",
+# operator 拿到 zombie 状态,RBAC 不会被正常重建,calico-kube-controllers 会 RBAC forbidden
+TERMINATING_FOUND=false
+for cr in installation apiserver; do
+  if kubectl get $cr default -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null | grep -q .; then
+    err "$cr/default 正在 Terminating,无法在此状态下重装"
+    err "  → kubectl patch $cr default --type=merge -p '{\"metadata\":{\"finalizers\":null}}'"
+    err "  → kubectl delete $cr default --ignore-not-found"
+    TERMINATING_FOUND=true
+  fi
+done
+for ns in calico-system tigera-operator calico-apiserver; do
+  if kubectl get ns $ns -o jsonpath='{.status.phase}' 2>/dev/null | grep -q Terminating; then
+    err "namespace $ns 正在 Terminating,无法在此状态下重装"
+    err "  → 剥 finalizer:"
+    err "    kubectl get ns $ns -o json | \\"
+    err "      python3 -c \"import sys,json; d=json.load(sys.stdin); d['spec']['finalizers']=[]; print(json.dumps(d))\" | \\"
+    err "      kubectl replace --raw \"/api/v1/namespaces/$ns/finalize\" -f -"
+    TERMINATING_FOUND=true
+  fi
+done
+if [ "$TERMINATING_FOUND" = "true" ]; then
+  err ""
+  err "建议:先跑 uninstall.sh --apply --force 彻底清干净再重装"
+  exit 1
+fi
+
+# 检查残留 ClusterRole(operator 不会强覆盖已存在的 ClusterRole)
+# 命中说明上次 manifest 或 operator 没清干净 RBAC,operator 重装时不会重建,
+# 新启 Pod 会用着不完整的旧 RBAC 报 forbidden
+STALE_RBAC=""
+for role in calico-kube-controllers calico-node calico-cni-plugin; do
+  if kubectl get clusterrole $role >/dev/null 2>&1 && \
+     ! kubectl get ns tigera-operator >/dev/null 2>&1; then
+    STALE_RBAC="$STALE_RBAC $role"
+  fi
+done
+if [ -n "$STALE_RBAC" ]; then
+  warn "检测到残留 ClusterRole(tigera-operator ns 不存在但 RBAC 还在):$STALE_RBAC"
+  warn "  operator 不会强覆盖已存在的 ClusterRole,继续装会触发 RBAC forbidden"
+  warn "  建议先清:kubectl delete clusterrole$STALE_RBAC"
+  warn "          kubectl delete clusterrolebinding$STALE_RBAC"
+  warn "  10 秒后继续(Ctrl-C 中止)..."
+  sleep 10
+fi
+
 # 检查是否已装 Calico
 if kubectl get ns tigera-operator >/dev/null 2>&1; then
   warn "tigera-operator namespace 已存在,脚本将走 apply(幂等),不会破坏现有部署"
