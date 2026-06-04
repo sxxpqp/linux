@@ -213,6 +213,13 @@ BUSYBOX_IP=$(kubectl -n "$TEST_NS" get pod test-busybox -o jsonpath='{.status.po
 BUSYBOX_NODE=$(kubectl -n "$TEST_NS" get pod test-busybox -o jsonpath='{.spec.nodeName}')
 pass "busybox ready($BUSYBOX_NODE, $BUSYBOX_IP)"
 
+# Felix attach BPF 程序到新 Pod 的 cali* 接口需要几秒,
+# 立刻测会踩 "Operation not permitted"(BPF 程序还没加载完)。
+# 等 Felix 的 reconciliation loop 跑完再开始测。
+log "等待 Calico BPF 程序 attach(10s)..."
+sleep 10
+ok "预热完成,开始连通性测试"
+
 # kubectl exec 包装(集中处理超时)
 exec_in_busybox() {
   local desc="$1"; shift
@@ -322,20 +329,20 @@ fi
 section "7. Pod → 外部网络"
 
 # 测试 HTTPS 出站(用多个目标,避免单点故障误判)
-log "busybox → 外网 HTTPS(wget)"
+log "busybox → 外网 HTTP(wget)"
+# busybox wget 不支持 TLS,用 HTTP 目标(baidu / httpbin 都稳)
 EGRESS_OK=false
 for target in \
-  "https://www.baidu.com" \
-  "https://mirrors.aliyun.com" \
-  "https://www.google.com"; do
+  "http://www.baidu.com" \
+  "http://httpbin.org/get"; do
   if exec_in_busybox "egress-${target##*/}" wget -qO- --timeout=8 "$target" >/dev/null 2>&1; then
-    pass "Pod→外网 HTTPS 连通 ($target)"
+    pass "Pod→外网连通 ($target)"
     EGRESS_OK=true
     break
   fi
 done
 if [ "$EGRESS_OK" != "true" ]; then
-  fail "Pod→外网 HTTPS 均不通"
+  fail "Pod→外网 HTTP 均不通"
   warn "  → 检查: NAT 出站 / 防火墙 / 代理配置"
 fi
 
@@ -352,7 +359,9 @@ fi
 # ============================================================
 section "8. NodePort(可选)"
 
+kubectl -n "$TEST_NS" delete svc test-nginx-nodeport --ignore-not-found --wait 2>/dev/null || true
 kubectl -n "$TEST_NS" expose ds test-nginx --name=test-nginx-nodeport --type=NodePort --port=80 >/dev/null 2>&1 || true
+sleep 2  # 等 Service 分配 NodePort
 NODEPORT=$(kubectl -n "$TEST_NS" get svc test-nginx-nodeport -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || true)
 if [ -n "$NODEPORT" ]; then
   # 取一个 worker 节点 IP
