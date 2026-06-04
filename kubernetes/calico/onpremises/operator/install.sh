@@ -160,7 +160,7 @@ for ns in calico-system tigera-operator calico-apiserver; do
 done
 if [ "$TERMINATING_FOUND" = "true" ]; then
   err ""
-  err "建议:先跑 uninstall.sh --apply --force 彻底清干净再重装"
+  err "建议:先跑 uninstall.sh --apply 彻底清干净再重装"
   exit 1
 fi
 

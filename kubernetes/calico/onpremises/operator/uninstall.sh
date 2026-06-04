@@ -6,17 +6,22 @@
 # 卸载 Tigera Operator 部署的 Calico。默认 dry-run,加 --apply 才真删。
 #
 # 反向卸载 install.sh 装过的内容,不做额外动作:
-#   1. 删 Installation + APIServer CR(operator 自动清理 calico-system)
-#   2. 等 calico-system 资源消失
+#   1. 剥 Installation + APIServer CR finalizer → delete CR
+#   2. 剥 calico-system ns finalizer → 等 ns 消失
 #   3. 删 kubernetes-services-endpoint ConfigMap(必须在 tigera-operator ns 还活着时删)
 #   4. 反向 delete tigera-operator.yaml(一次性带走 ns + operator + RBAC + CRDs)
-#   5. 兜底 force 删 ns + 打印节点残留清理命令
+#   5. 兜底剥 tigera-operator ns finalizer → delete ns + 节点残留清理命令
 #
-# 删除顺序的依赖关系(重要):
-#   - 先删 CR 再删 operator:不然 operator 没了,CR 上的 finalizer 没人处理 → 卡 Terminating
-#   - 先删 cm 再删 operator yaml:tigera-operator.yaml 第一个对象就是 Namespace,kubectl delete 一删 ns,
-#     里面的 cm 跟着没,后面单独 delete cm 就成无意义动作
-#   - 先 CR 后 CRD:CR 还在时删 CRD 会触发 cascade,把 finalizer 流程搅乱
+# 设计原则:
+#   - 卸载 = "我就是要它没"。每一步删除前都先剥 finalizer,不等 operator 慢慢清,
+#     避免 operator 中间态 / 卡 Terminating 把脚本挂死。代价是 calico-system 内可能有
+#     极少量孤儿资源(operator 清不完),但 ns 强删时会一起带走。
+#   - 删除顺序依赖:
+#     · 先剥 CR finalizer 再 delete:CR 上的 finalizer 是 operator/uninstall-controller,
+#       operator 自己也快没了,等它处理就是死等
+#     · 先删 cm 再删 operator yaml:tigera-operator.yaml 第一个对象就是 Namespace,
+#       kubectl delete 一删 ns 里面的 cm 跟着没,后面单独 delete cm 就成无意义动作
+#     · 先 CR 后 CRD:CR 还在时删 CRD 会触发 cascade,把 finalizer 流程搅乱
 #
 # 不包含:kube-proxy 恢复 / dataplane 切换(需要自己手动)
 
@@ -27,7 +32,6 @@ set -euo pipefail
 # ============================================================
 CALICO_VERSION="v3.28.2"
 APPLY="false"
-FORCE="false"
 KEEP_TIGERA_NS="false"
 
 usage() {
@@ -35,18 +39,17 @@ usage() {
 用法: bash uninstall.sh [选项]
 
 默认 dry-run。加 --apply 才真删。
+卸载流程已经默认"删除前先剥 finalizer",不会卡 Terminating,所以没有 --force 选项。
 
 选项:
   --apply                 真执行
   --calico-version=VER    Calico 版本(必须跟装时一致),默认 v3.28.2
-  --force                 剥 finalizer 强删(namespace / CR 卡 Terminating 时用)
   --keep-tigera-ns        卸载完不删 tigera-operator namespace
   -h, --help              显示帮助
 
 示例:
   bash uninstall.sh                       # 看计划
   bash uninstall.sh --apply               # 真删
-  bash uninstall.sh --apply --force       # 卡 Terminating 时用
 EOF
 }
 
@@ -54,7 +57,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --apply) APPLY="true" ;;
     --calico-version=*) CALICO_VERSION="${1#*=}" ;;
-    --force) FORCE="true" ;;
+    --force) warn "--force 已废弃(默认就剥 finalizer 强删),自动忽略" ;;
     --keep-tigera-ns) KEEP_TIGERA_NS="true" ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: 未知参数: $1" >&2; usage >&2; exit 1 ;;
@@ -105,52 +108,53 @@ fi
 
 # ============================================================
 # 2/4 删 Installation / APIServer CR
+# 卸载语义就是"我要它没",finalizer 卡 Terminating 的话 delete 会阻塞 60s+,
+# 所以默认就是"先剥 finalizer 再 delete",不再用 --force 门控
 # ============================================================
 log "[2/4] 删 Installation / APIServer CR"
 
-if [ "$HAS_APISERVER_CR" = "true" ]; then
-  run "kubectl delete apiserver default --ignore-not-found --timeout=120s"
-fi
-if [ "$HAS_INSTALLATION" = "true" ]; then
-  run "kubectl delete installation default --ignore-not-found --timeout=120s"
-fi
-
-if [ "$FORCE" = "true" ] && [ "$APPLY" = "true" ]; then
-  for cr in installation apiserver; do
+if [ "$APPLY" = "true" ]; then
+  for cr in apiserver installation; do
     if kubectl get $cr default >/dev/null 2>&1; then
-      warn "$cr/default 卡 Terminating,剥 finalizer"
-      kubectl patch $cr default --type=merge -p '{"metadata":{"finalizers":null}}' || true
+      log "  剥 $cr/default finalizer"
+      kubectl patch $cr default --type=merge -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
     fi
   done
+fi
+
+if [ "$HAS_APISERVER_CR" = "true" ]; then
+  run "kubectl delete apiserver default --ignore-not-found --timeout=30s"
+fi
+if [ "$HAS_INSTALLATION" = "true" ]; then
+  run "kubectl delete installation default --ignore-not-found --timeout=30s"
 fi
 
 # ============================================================
 # 3/4 等 calico-system 清完 → 删 cm → 反向 delete tigera-operator.yaml → 兜底删 ns
 # 顺序原因见文件开头注释
 # ============================================================
-log "[3/4] 等 calico-system 资源消失"
+log "[3/4] 处理 calico-system namespace"
 
+# 先剥 finalizer(同样不门控 --force,卸载就是要它没)
+# operator 已经被剥 finalizer + 删除中,calico-system 的 ns finalizer 也很可能没人来清,
+# 不剥的话等 5 分钟就是浪费
 if [ "$APPLY" = "true" ] && [ "$HAS_CALICO_NS" = "true" ]; then
-  for i in $(seq 1 60); do
+  if kubectl get ns calico-system >/dev/null 2>&1; then
+    log "  剥 calico-system ns finalizer"
+    kubectl get ns calico-system -o json | \
+      python3 -c "import sys,json; d=json.load(sys.stdin); d['spec']['finalizers']=[]; print(json.dumps(d))" | \
+      kubectl replace --raw "/api/v1/namespaces/calico-system/finalize" -f - 2>/dev/null || true
+  fi
+
+  # 等最多 30 秒让 ns 真正消失(剥了 finalizer 一般几秒就没)
+  for i in $(seq 1 6); do
     if ! kubectl get ns calico-system >/dev/null 2>&1; then
       ok "calico-system namespace 已消失"
       break
     fi
-    POD_COUNT=$(kubectl -n calico-system get pods --no-headers 2>/dev/null | wc -l)
-    if [ "$POD_COUNT" = "0" ]; then
-      ok "calico-system 内 Pod 已全部删除"
-      break
-    fi
     sleep 5
-    [ $((i % 6)) -eq 0 ] && log "  ...还在清理(已等 $((i*5)) 秒,剩 $POD_COUNT 个 Pod)"
+    [ $i -eq 6 ] && warn "calico-system 30 秒后仍在,继续往下走"
   done
-
-  if [ "$FORCE" = "true" ] && kubectl get ns calico-system >/dev/null 2>&1; then
-    warn "calico-system 卡 Terminating,剥 finalizer"
-    kubectl get ns calico-system -o json | \
-      python3 -c "import sys,json; d=json.load(sys.stdin); d['spec']['finalizers']=[]; print(json.dumps(d))" | \
-      kubectl replace --raw "/api/v1/namespaces/calico-system/finalize" -f - || true
-  fi
 fi
 
 # 必须在 tigera-operator ns 还活着时删 cm,
@@ -181,19 +185,16 @@ else
   warn "[dry-run] 会下载 $TIGERA_OP_URL 后反向 delete"
 fi
 
-# 兜底:yaml delete 失败或 --keep-tigera-ns 跳过时,这里再处理 ns
+# 兜底:yaml delete 没把 ns 删干净时,这里强制清掉(剥 finalizer 再 delete)
 if [ "$KEEP_TIGERA_NS" = "true" ]; then
   warn "--keep-tigera-ns,保留 tigera-operator namespace"
 elif [ "$APPLY" = "true" ] && kubectl get ns tigera-operator >/dev/null 2>&1; then
-  warn "tigera-operator namespace 还在(yaml delete 没删干净),兜底再删一次"
-  run "kubectl delete ns tigera-operator --ignore-not-found --timeout=120s"
-
-  if [ "$FORCE" = "true" ] && kubectl get ns tigera-operator >/dev/null 2>&1; then
-    warn "tigera-operator 卡 Terminating,剥 finalizer"
-    kubectl get ns tigera-operator -o json | \
-      python3 -c "import sys,json; d=json.load(sys.stdin); d['spec']['finalizers']=[]; print(json.dumps(d))" | \
-      kubectl replace --raw "/api/v1/namespaces/tigera-operator/finalize" -f - || true
-  fi
+  warn "tigera-operator namespace 还在(yaml delete 没删干净),兜底强清"
+  log "  剥 tigera-operator ns finalizer"
+  kubectl get ns tigera-operator -o json | \
+    python3 -c "import sys,json; d=json.load(sys.stdin); d['spec']['finalizers']=[]; print(json.dumps(d))" | \
+    kubectl replace --raw "/api/v1/namespaces/tigera-operator/finalize" -f - 2>/dev/null || true
+  run "kubectl delete ns tigera-operator --ignore-not-found --timeout=30s"
 fi
 
 # 等到 ns 真正消失再退出(避免立刻重装时撞 Terminating)
