@@ -236,12 +236,15 @@ func (p *promQLSource) query(ctx context.Context, q string) (float64, error) {
 	return f, nil
 }
 
-// node_exporter 标签 instance 形如 "<ip>:9100",而 K8s node 名通常是 hostname。
-// 用 kubernetes_node label(kube-prometheus 默认有 relabel)定位更稳。
+// kube-prometheus 的 node-exporter ServiceMonitor 用 relabeling 把
+// __meta_kubernetes_pod_node_name 注入到 `instance` label(参见 nodeExporter-serviceMonitor.yaml),
+// 不是 `node` label。所以筛选条件用 instance="<nodeName>"。
+// 如果用户的 kube-prometheus 版本 relabel 到别的 label,可通过环境变量 PROM_NODE_LABEL 覆盖。
 func (p *promQLSource) GetNodeUsage(ctx context.Context, node *corev1.Node) (NodeUsage, error) {
 	name := node.Name
-	cpuQ := fmt.Sprintf(`100 * (1 - avg by(node) (rate(node_cpu_seconds_total{mode="idle",node="%s"}[5m])))`, name)
-	memQ := fmt.Sprintf(`100 * (1 - node_memory_MemAvailable_bytes{node="%s"} / node_memory_MemTotal_bytes{node="%s"})`, name, name)
+	lbl := getEnv("PROM_NODE_LABEL", "instance")
+	cpuQ := fmt.Sprintf(`100 * (1 - avg by(%s) (rate(node_cpu_seconds_total{mode="idle",%s="%s"}[5m])))`, lbl, lbl, name)
+	memQ := fmt.Sprintf(`100 * (1 - node_memory_MemAvailable_bytes{%s="%s"} / node_memory_MemTotal_bytes{%s="%s"})`, lbl, name, lbl, name)
 
 	cpu, err := p.query(ctx, cpuQ)
 	if err != nil {
