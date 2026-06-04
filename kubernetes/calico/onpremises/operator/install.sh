@@ -394,27 +394,27 @@ ok "calico-kube-controllers ready"
 
 # ============================================================
 # 6/7 验证 BPF dataplane 真的在跑
+# operator 模式的权威源是 Installation.spec.calicoNetwork.linuxDataplane,
+# 不是 FelixConfiguration.bpfEnabled(operator 不一定显式同步到 Felix CR)
+# 实际是否在跑用 `calico-node -bpf conntrack dump` 验证
 # ============================================================
 log "[6/7] 验证 eBPF dataplane"
 
-# Felix 配置里 bpfEnabled 应该 true(operator 模式自动同步,看一眼放心)
-FELIX_BPF=$(kubectl get felixconfiguration default -o jsonpath='{.spec.bpfEnabled}' 2>/dev/null || echo "false")
-if [ "$FELIX_BPF" = "true" ]; then
-  ok "FelixConfiguration.spec.bpfEnabled = true"
+DATAPLANE=$(kubectl get installation default -o jsonpath='{.spec.calicoNetwork.linuxDataplane}' 2>/dev/null)
+if [ "$DATAPLANE" = "BPF" ]; then
+  ok "Installation.spec.calicoNetwork.linuxDataplane = BPF"
 else
-  warn "FelixConfiguration.spec.bpfEnabled = $FELIX_BPF(operator 可能还没同步,再等 30s 看看)"
-  sleep 30
-  FELIX_BPF=$(kubectl get felixconfiguration default -o jsonpath='{.spec.bpfEnabled}' 2>/dev/null || echo "false")
-  [ "$FELIX_BPF" = "true" ] && ok "现在已经 true" || warn "仍是 $FELIX_BPF,手动检查"
+  warn "Installation 没设 BPF dataplane,linuxDataplane=$DATAPLANE"
 fi
 
-# 看一个 calico-node Pod 的日志确认 BPF 字样
+# 实测 BPF dataplane:conntrack dump 能输出数据就说明 BPF map 已 attach
 NODE_POD=$(kubectl -n calico-system get pod -l k8s-app=calico-node -o name | head -1)
 if [ -n "$NODE_POD" ]; then
-  if kubectl -n calico-system logs "$NODE_POD" --tail=200 2>/dev/null | grep -q "BPF"; then
-    ok "calico-node 日志含 BPF 字样"
+  if kubectl -n calico-system exec "$NODE_POD" -- calico-node -bpf conntrack dump 2>/dev/null | head -3 | grep -qE '^(TCP|UDP|ICMP)'; then
+    ok "BPF conntrack dump 有数据 → BPF dataplane 真的在跑"
   else
-    warn "calico-node 日志没看到 BPF,手动 kubectl -n calico-system logs $NODE_POD | grep -i bpf"
+    warn "BPF conntrack dump 没数据(可能还没流量,也可能 BPF 没起来)"
+    warn "  手动验证:kubectl -n calico-system exec $NODE_POD -- calico-node -bpf conntrack dump | head"
   fi
 fi
 

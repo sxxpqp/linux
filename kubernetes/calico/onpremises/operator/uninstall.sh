@@ -185,6 +185,12 @@ else
   warn "[dry-run] 会下载 $TIGERA_OP_URL 后反向 delete"
 fi
 
+# operator 运行时动态创建的 cluster-scoped RBAC,不在 tigera-operator.yaml 里,
+# operator 已经被剥 finalizer + 删除,没人来清,显式清掉避免 install.sh 触发"残留 RBAC"警告
+log "  清 operator 创建的 cluster-scoped RBAC 残留"
+run "kubectl delete clusterrole calico-kube-controllers calico-node calico-cni-plugin --ignore-not-found 2>/dev/null"
+run "kubectl delete clusterrolebinding calico-kube-controllers calico-node calico-cni-plugin --ignore-not-found 2>/dev/null"
+
 # 兜底:yaml delete 没把 ns 删干净时,这里强制清掉(剥 finalizer 再 delete)
 if [ "$KEEP_TIGERA_NS" = "true" ]; then
   warn "--keep-tigera-ns,保留 tigera-operator namespace"
