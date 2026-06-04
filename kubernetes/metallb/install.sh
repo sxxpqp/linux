@@ -62,28 +62,40 @@ command -v kubectl >/dev/null || { echo "ERROR: kubectl 未安装"; exit 1; }
 # L2 模式: speaker 在 leader 节点回 ARP. kube-proxy IPVS 默认会代答, 会抢答导致 VIP 抖动.
 # 改 strictARP=true 让 kube-proxy 闭嘴, MetalLB speaker 独占 ARP.
 # iptables 模式不受影响, 但改了也没副作用, 统一改更稳.
+# 步骤顺序: 实际可能是 4 步(有 kube-proxy) 或 3 步(无 kube-proxy)
+STEP=1; TOTAL=4
+if ! kubectl -n kube-system get ds kube-proxy >/dev/null 2>&1; then
+  TOTAL=3
+fi
+
 if [ "$SKIP_STRICT_ARP" = false ]; then
-  echo "[1/3] 改 kube-proxy strictARP=true ..."
-  CURRENT=$(kubectl get configmap -n kube-system kube-proxy \
-    -o jsonpath='{.data.config\.conf}' 2>/dev/null | grep -E '^\s*strictARP:' | awk '{print $2}')
-  if [ "$CURRENT" = "true" ]; then
-    echo "  ✓ 已经是 true, 跳过"
+  echo "[${STEP}/${TOTAL}] 改 kube-proxy strictARP=true ..."
+  if ! kubectl -n kube-system get ds kube-proxy >/dev/null 2>&1; then
+    echo "  kube-proxy DaemonSet 不存在(已用 Calico BPF 替换), 跳过 strictARP"
   else
-    kubectl get configmap -n kube-system kube-proxy -o yaml \
-      | sed 's/strictARP: false/strictARP: true/' \
-      | kubectl apply -f - >/dev/null
-    echo "  ✓ ConfigMap 已 patch, rollout 重启 kube-proxy ..."
-    kubectl -n kube-system rollout restart daemonset kube-proxy
-    kubectl -n kube-system rollout status daemonset kube-proxy --timeout=2m || true
+    CURRENT=$(kubectl get configmap -n kube-system kube-proxy \
+      -o jsonpath='{.data.config\.conf}' 2>/dev/null | grep -E '^\s*strictARP:' | awk '{print $2}')
+    if [ "$CURRENT" = "true" ]; then
+      echo "  ✓ 已经是 true, 跳过"
+    else
+      kubectl get configmap -n kube-system kube-proxy -o yaml \
+        | sed 's/strictARP: false/strictARP: true/' \
+        | kubectl apply -f - >/dev/null
+      echo "  ✓ ConfigMap 已 patch, rollout 重启 kube-proxy ..."
+      kubectl -n kube-system rollout restart daemonset kube-proxy
+      kubectl -n kube-system rollout status daemonset kube-proxy --timeout=2m || true
+    fi
   fi
   echo ""
 else
-  echo "[1/3] 跳过 strictARP 修改 (--skip-strict-arp)"
+  echo "[${STEP}/${TOTAL}] 跳过 strictARP 修改 (--skip-strict-arp)"
   echo ""
 fi
+STEP=$((STEP+1))
 
 # ---------- 2. apply native 清单 ----------
-echo "[2/3] 安装 MetalLB 主体 (controller + speaker + CRD) ..."
+echo "[${STEP}/${TOTAL}] 安装 MetalLB 主体 (controller + speaker + CRD) ..."
+STEP=$((STEP+1))
 if ! kubectl apply -f "${NATIVE_SRC}"; then
   echo ""
   if [ "${NATIVE_SRC}" = "${NATIVE_URL}" ]; then
@@ -101,7 +113,8 @@ fi
 echo ""
 
 # ---------- 3. 等 ready ----------
-echo "[3/3] 等 controller / speaker Ready ..."
+echo "[${STEP}/${TOTAL}] 等 controller / speaker Ready ..."
+STEP=$((STEP+1))
 kubectl -n "${NS}" rollout status deploy/controller --timeout=3m || true
 kubectl -n "${NS}" rollout status ds/speaker --timeout=3m || true
 
@@ -120,7 +133,7 @@ done
 echo ""
 
 # ---------- 4. 配置池子 ----------
-echo "应用 IP 池配置 (pool.yaml) ..."
+echo "[${STEP}/${TOTAL}] 应用 IP 池配置 (pool.yaml) ..."
 # CRD 刚 apply, webhook 可能要几秒才就绪, 失败重试几次.
 # 前 N-1 次失败吞错误避免刷屏, 最后一次把 stderr 暴露出来 (避免静默失败)
 POOL_APPLIED=false
