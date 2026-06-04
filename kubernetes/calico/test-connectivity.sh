@@ -174,10 +174,12 @@ spec:
   type: ClusterIP
 EOF
 
-log "等待 nginx Pod 全部 ready(最多 60s)..."
-if ! kubectl -n "$TEST_NS" rollout status ds/test-nginx --timeout=60s; then
-  fail "nginx DaemonSet 未就绪"
-  kubectl -n "$TEST_NS" get pods -l app=test-nginx
+# 镜像已缓存则秒过,没缓存则等拉完(首次最多 5 分钟)
+log "等待 nginx DaemonSet ready(镜像已缓存秒过,未缓存等拉完)..."
+if ! kubectl -n "$TEST_NS" rollout status ds/test-nginx --timeout=300s; then
+  fail "nginx DaemonSet 5 分钟仍未就绪(镜像拉取失败?)"
+  kubectl -n "$TEST_NS" get pods -l app=test-nginx -o wide
+  kubectl -n "$TEST_NS" describe pods -l app=test-nginx | grep -A3 'Events:' | head -20
   exit 1
 fi
 pass "nginx DaemonSet ready"
@@ -207,8 +209,14 @@ done
 
 # 启动一个 busybox 测试客户端(kube-proxy 删了也不影响 Pod 网络)
 log "部署 busybox 测试客户端..."
+kubectl -n "$TEST_NS" delete pod test-busybox --ignore-not-found --wait 2>/dev/null || true
 kubectl -n "$TEST_NS" run test-busybox --image=busybox:stable --restart=Never -- sleep 600 >/dev/null 2>&1 || true
-kubectl -n "$TEST_NS" wait --for=condition=Ready pod/test-busybox --timeout=60s
+# 镜像已缓存秒过,没缓存等拉完(首次最多 3 分钟)
+if ! kubectl -n "$TEST_NS" wait --for=condition=Ready pod/test-busybox --timeout=180s; then
+  fail "busybox 3 分钟仍未就绪"
+  kubectl -n "$TEST_NS" describe pod test-busybox | grep -A5 'Events:' | head -10
+  exit 1
+fi
 BUSYBOX_IP=$(kubectl -n "$TEST_NS" get pod test-busybox -o jsonpath='{.status.podIP}')
 BUSYBOX_NODE=$(kubectl -n "$TEST_NS" get pod test-busybox -o jsonpath='{.spec.nodeName}')
 pass "busybox ready($BUSYBOX_NODE, $BUSYBOX_IP)"
