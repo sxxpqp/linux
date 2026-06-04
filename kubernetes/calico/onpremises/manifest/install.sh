@@ -187,6 +187,16 @@ EOF
   ok "ConfigMap 已写"
 fi
 
+# 如果 kube-proxy 不存在,自动开启 eBPF + kube-proxy replacement,
+# 否则 Calico iptables 模式下 ClusterIP/DNS 全挂(install-cni 和 calico-kube-controllers 都需要)
+if ! kubectl -n kube-system get ds kube-proxy >/dev/null 2>&1; then
+  if [ "$ENABLE_EBPF" != "true" ]; then
+    warn "kube-proxy 不存在(可能已被卸载),自动开启 eBPF kube-proxy replacement"
+    ENABLE_EBPF="true"
+    DELETE_KUBE_PROXY="true"  # 已经不在了,跳过删除步骤
+  fi
+fi
+
 log "[4/6] apply Calico"
 
 kubectl apply -f "$TMP_YAML"
@@ -287,12 +297,15 @@ EOF
   exit 0
 fi
 
-warn "即将删除 kube-proxy DaemonSet,5 秒后开始(Ctrl-C 中止)..."
-sleep 5
-
-kubectl -n kube-system delete ds kube-proxy --ignore-not-found
-kubectl -n kube-system delete cm kube-proxy --ignore-not-found
-ok "kube-proxy 已删除"
+if kubectl -n kube-system get ds kube-proxy >/dev/null 2>&1; then
+  warn "即将删除 kube-proxy DaemonSet,5 秒后开始(Ctrl-C 中止)..."
+  sleep 5
+  kubectl -n kube-system delete ds kube-proxy --ignore-not-found
+  kubectl -n kube-system delete cm kube-proxy --ignore-not-found
+  ok "kube-proxy 已删除"
+else
+  ok "kube-proxy 不存在,跳过删除"
+fi
 
 # 通知 Calico 接管 service NAT(删了 kube-proxy 必须做,否则 ClusterIP/DNS 全挂)
 log "  通知 Calico 接管 service NAT..."
