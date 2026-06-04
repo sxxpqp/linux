@@ -232,7 +232,7 @@ log "预热完成,开始连通性测试"
 exec_in_busybox() {
   local desc="$1"; shift
   local out
-  if out=$(kubectl -n "$TEST_NS" exec test-busybox --timeout=10s -- "$@" 2>&1); then
+  if out=$(kubectl -n "$TEST_NS" exec test-busybox -- "$@" 2>&1); then
     printf '%s\n' "$out"   # 成功:输出到 stdout,供调用方 pipe/grep 消费
     return 0
   else
