@@ -164,6 +164,24 @@ if [ "$HAS_TIGERA_NS" = "true" ]; then
   run "kubectl -n tigera-operator delete cm kubernetes-services-endpoint --ignore-not-found"
 fi
 
+# 先把 operator deployment 杀掉,后面再清 RBAC 才不会被边删边重建
+log "  先 scale operator deployment 到 0(防止 RBAC 边删边重建)"
+if kubectl -n tigera-operator get deploy tigera-operator >/dev/null 2>&1; then
+  run "kubectl -n tigera-operator scale deploy tigera-operator --replicas=0 --timeout=30s"
+fi
+
+# 先清残留 webhook(backend service 一旦死,webhook 会拦后续 admission,
+# 导致 kubectl 显示 "deleted" 但 API 实际拒绝;表现为资源持续存在且 creationTimestamp 不变)
+log "  清残留 admission webhook(防止 backend 死后拦后续 API 调用)"
+if [ "$APPLY" = "true" ]; then
+  kubectl get validatingwebhookconfigurations -o name 2>/dev/null \
+    | grep -iE 'calico|tigera|operator' | xargs -r kubectl delete --wait=false 2>/dev/null || true
+  kubectl get mutatingwebhookconfigurations -o name 2>/dev/null \
+    | grep -iE 'calico|tigera|operator' | xargs -r kubectl delete --wait=false 2>/dev/null || true
+else
+  warn "[dry-run] 会清 validating/mutating webhook 中含 calico/tigera/operator 的"
+fi
+
 log "  反向 delete tigera-operator.yaml(含 ns + operator + RBAC + CRDs)"
 NEXUS_RAW="${NEXUS_RAW:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent}"
 TIGERA_OP_URL="${NEXUS_RAW}/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml"
@@ -185,11 +203,12 @@ else
   warn "[dry-run] 会下载 $TIGERA_OP_URL 后反向 delete"
 fi
 
-# operator 运行时动态创建的 cluster-scoped RBAC,不在 tigera-operator.yaml 里,
-# operator 已经被剥 finalizer + 删除,没人来清,显式清掉避免 install.sh 触发"残留 RBAC"警告
+# operator 运行时动态创建的 cluster-scoped RBAC,不在 tigera-operator.yaml 里。
+# 必须放在 delete -f tigera-operator.yaml 之后,否则 operator 还活着会边删边重建。
+# --wait=false:RBAC 删除是纯 API call,不需要等 watch 确认(等的话偶尔会卡几十秒)
 log "  清 operator 创建的 cluster-scoped RBAC 残留"
-run "kubectl delete clusterrole calico-kube-controllers calico-node calico-cni-plugin --ignore-not-found 2>/dev/null"
-run "kubectl delete clusterrolebinding calico-kube-controllers calico-node calico-cni-plugin --ignore-not-found 2>/dev/null"
+run "kubectl delete clusterrole calico-kube-controllers calico-node calico-cni-plugin --ignore-not-found --wait=false 2>/dev/null"
+run "kubectl delete clusterrolebinding calico-kube-controllers calico-node calico-cni-plugin --ignore-not-found --wait=false 2>/dev/null"
 
 # 兜底:yaml delete 没把 ns 删干净时,这里强制清掉(剥 finalizer 再 delete)
 if [ "$KEEP_TIGERA_NS" = "true" ]; then
@@ -228,6 +247,9 @@ for ns in calico-system tigera-operator calico-apiserver; do
   if kubectl get ns $ns >/dev/null 2>&1; then
     LEFTOVER="$LEFTOVER\n    - ns/$ns 还在"
   fi
+done
+for wh in $(kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations -o name 2>/dev/null | grep -iE 'calico|tigera|operator'); do
+  LEFTOVER="$LEFTOVER\n    - $wh 还在(会拦后续 admission)"
 done
 for role in calico-kube-controllers calico-node calico-cni-plugin tigera-operator; do
   if kubectl get clusterrole $role >/dev/null 2>&1; then

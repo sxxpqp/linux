@@ -183,6 +183,17 @@ if [ -n "$STALE_RBAC" ]; then
   sleep 10
 fi
 
+# 检查残留 webhook(backend service 死了之后会拦 admission,导致后续 API 调用诡异失败)
+STALE_WH=$(kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations -o name 2>/dev/null | grep -iE 'calico|tigera|operator' || true)
+if [ -n "$STALE_WH" ]; then
+  err "检测到残留 webhook(backend 已死会拦后续 API 调用,kubectl 显示成功但实际失败):"
+  echo "$STALE_WH" | sed 's/^/    - /' >&2
+  err "建议先清:"
+  echo "    kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations -o name | \\" >&2
+  echo "      grep -iE 'calico|tigera|operator' | xargs -r kubectl delete" >&2
+  exit 1
+fi
+
 # 检查是否已装 Calico
 if kubectl get ns tigera-operator >/dev/null 2>&1; then
   warn "tigera-operator namespace 已存在,脚本将走 apply(幂等),不会破坏现有部署"
