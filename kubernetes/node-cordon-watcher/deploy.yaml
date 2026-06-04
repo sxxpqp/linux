@@ -1,0 +1,183 @@
+# node-cordon-watcher: 监控节点 CPU/内存,过载自动 cordon
+#
+# 部署:
+#   kubectl apply -f deploy.yaml
+# 卸载:
+#   kubectl delete -f deploy.yaml
+#   # 残留 cordon 的节点(annotation managed=true)需手动处理:
+#   kubectl get node -o json | jq -r '.items[] | select(.metadata.annotations."node-cordon-watcher.sxxpqp.top/managed"=="true") | .metadata.name' | xargs -r -n1 kubectl uncordon
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  # 如 monitoring 已存在(kube-prometheus 部署的),apply 时会幂等
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: node-cordon-watcher
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-cordon-watcher
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: node-cordon-watcher
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: node-cordon-watcher
+subjects:
+  - kind: ServiceAccount
+    name: node-cordon-watcher
+    namespace: monitoring
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-cordon-watcher
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: node-cordon-watcher
+spec:
+  replicas: 2  # leader election 保护并发,只有 leader 在做决策
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: node-cordon-watcher
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: node-cordon-watcher
+    spec:
+      serviceAccountName: node-cordon-watcher
+      terminationGracePeriodSeconds: 30
+      # 跑在控制节点,贴近 API server,且工作节点本身可能是被 cordon 的对象
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: node-cordon-watcher
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: watcher
+          image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/node-cordon-watcher:latest
+          imagePullPolicy: Always
+          env:
+            - name: METRIC_SOURCE
+              value: "prometheus"          # metrics-api | prometheus
+            - name: PROMETHEUS_URL
+              value: "http://prometheus-k8s.monitoring.svc:9090"
+            - name: CHECK_INTERVAL
+              value: "30s"
+            - name: HIGH_THRESHOLD
+              value: "80"
+            - name: LOW_THRESHOLD
+              value: "70"
+            - name: TRIGGER_COUNT
+              value: "3"
+            - name: COOLDOWN_SECONDS
+              value: "600"
+            - name: PER_NODE_COOLDOWN
+              value: "300"
+            - name: MIN_HEALTHY_NODES
+              value: "1"
+            - name: EXCLUDE_LABELS
+              value: "node-role.kubernetes.io/control-plane,node-role.kubernetes.io/master"
+            - name: DRY_RUN
+              value: "true"                 # 首次上线建议 true,跑稳了改 false
+            - name: NOTIFY
+              value: "true"
+            - name: WX_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: node-cordon-watcher-secret
+                  key: wx-webhook-url
+                  optional: true
+            - name: ENV_NAME
+              value: "生产"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            - name: health
+              containerPort: 8080
+          livenessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: {path: /healthz, port: health}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+# 可选:把企微 webhook URL 单独放 Secret,避免明文写在 Deployment 里
+# kubectl -n monitoring create secret generic node-cordon-watcher-secret \
+#   --from-literal=wx-webhook-url='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxx'
+#
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: node-cordon-watcher-secret
+#   namespace: monitoring
+# type: Opaque
+# stringData:
+#   wx-webhook-url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxx"

@@ -331,8 +331,10 @@ func (d *Decider) Decide(name string, u NodeUsage, alreadyCordoned, managed bool
 	if overCPU || overMEM {
 		st.overCount++
 		if st.overCount >= d.cfg.TriggerCount {
-			// 每节点冷却:距离上次 cordon 不够久,先按兵不动
+			// 每节点冷却:距离上次 cordon 不够久,先按兵不动。
+			// 同时重置计数,冷却期结束后还需要重新累积 TRIGGER_COUNT 次才会再触发。
 			if !st.lastCordonAt.IsZero() && now.Sub(st.lastCordonAt) < d.cfg.PerNodeCooldown {
+				st.overCount = 0
 				return ActionNone, "per-node-cooldown"
 			}
 			reason := reasonFor(overCPU, overMEM)
