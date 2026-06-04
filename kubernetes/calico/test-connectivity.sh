@@ -184,28 +184,30 @@ if ! kubectl -n "$TEST_NS" rollout status ds/test-nginx --timeout=300s; then
 fi
 pass "nginx DaemonSet ready"
 
-# 获取 Pod IP 列表(按节点分组)
+# 获取 Pod IP 列表(按节点分组,不使用 jq,用 kubectl jsonpath)
 log "收集 Pod IP(按节点分组)..."
-NGINX_PODS=$(kubectl -n "$TEST_NS" get pods -l app=test-nginx -o json)
-NGINX_COUNT=$(echo "$NGINX_PODS" | jq '.items | length')
+# 输出格式: NODE IP NAME
+NGINX_LIST=$(kubectl -n "$TEST_NS" get pods -l app=test-nginx \
+  -o jsonpath='{range .items[*]}{.spec.nodeName} {.status.podIP} {.metadata.name}{"\n"}{end}')
+NGINX_COUNT=$(echo "$NGINX_LIST" | wc -l)
 log "nginx Pod 数: $NGINX_COUNT"
-echo "$NGINX_PODS" | jq -r '.items[] | "  \(.spec.nodeName) → \(.status.podIP)  [\(.metadata.name)]"'
+echo "$NGINX_LIST" | while read node ip name; do echo "  $node → $ip  [$name]"; done
 
-# 取不同节点的两个 Pod(用于跨节点测试)
-POD1_NAME=$(echo "$NGINX_PODS" | jq -r '.items[0].metadata.name')
-POD1_IP=$(echo "$NGINX_PODS" | jq -r '.items[0].status.podIP')
-POD1_NODE=$(echo "$NGINX_PODS" | jq -r '.items[0].spec.nodeName')
+# 取 Pod1(第一个)和 Pod2(不同节点的)
+POD1_NAME=$(echo "$NGINX_LIST" | head -1 | awk '{print $3}')
+POD1_IP=$(echo "$NGINX_LIST" | head -1 | awk '{print $2}')
+POD1_NODE=$(echo "$NGINX_LIST" | head -1 | awk '{print $1}')
 
 POD2_NAME=""; POD2_IP=""; POD2_NODE=""
-for i in $(seq 1 $((NGINX_COUNT - 1))); do
-  _n=$(echo "$NGINX_PODS" | jq -r ".items[$i].spec.nodeName")
-  if [ "$_n" != "$POD1_NODE" ]; then
-    POD2_NAME=$(echo "$NGINX_PODS" | jq -r ".items[$i].metadata.name")
-    POD2_IP=$(echo "$NGINX_PODS" | jq -r ".items[$i].status.podIP")
-    POD2_NODE="$_n"
-    break
-  fi
-done
+if [ "$NGINX_COUNT" -ge 2 ]; then
+  while read node ip name; do
+    if [ "$node" != "$POD1_NODE" ]; then
+      POD2_NAME="$name"; POD2_IP="$ip"; POD2_NODE="$node"; break
+    fi
+  done <<EOF
+$NGINX_LIST
+EOF
+fi
 
 # 启动一个 busybox 测试客户端(kube-proxy 删了也不影响 Pod 网络)
 log "部署 busybox 测试客户端..."
@@ -247,15 +249,8 @@ exec_in_busybox() {
 section "3. Pod ↔ Pod (同节点)"
 
 # busybox → 同节点的 nginx
-SAME_NODE_TARGET=""
-for i in $(seq 0 $((NGINX_COUNT - 1))); do
-  _node=$(echo "$NGINX_PODS" | jq -r ".items[$i].spec.nodeName")
-  if [ "$_node" = "$BUSYBOX_NODE" ]; then
-    SAME_NODE_TARGET=$(echo "$NGINX_PODS" | jq -r ".items[$i].status.podIP")
-    break
-  fi
-done
-
+# 从 NGINX_LIST 中挑跟 busybox 同节点的第一个
+SAME_NODE_TARGET=$(echo "$NGINX_LIST" | awk -v node="$BUSYBOX_NODE" '$1==node {print $2; exit}')
 if [ -n "$SAME_NODE_TARGET" ]; then
   log "busybox($BUSYBOX_NODE) → nginx($BUSYBOX_NODE 同节点) $SAME_NODE_TARGET:80"
   if exec_in_busybox "同节点 Pod→Pod" wget -qO- --timeout=5 "http://$SAME_NODE_TARGET" | grep -qE 'nginx|Welcome'; then
