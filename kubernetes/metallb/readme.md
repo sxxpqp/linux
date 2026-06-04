@@ -4,49 +4,44 @@
 
 ## 文件
 
-| 文件 | 说明 |
-|---|---|
-| `install.sh` | 一键安装 (改 kube-proxy strictARP + apply native 清单 + apply pool) |
-| `uninstall.sh` | 卸载 |
-| `pool.yaml` | IP 池 + L2 通告 (默认 L2/ARP 模式) |
-| `bgp.yaml` | BGP 模式配置 (二选一替代 L2) |
-| `metallb-native.yaml` | (可选) 离线 / 国内场景预下载的上游清单, 同目录有就优先用 |
+| 文件 | 状态 | 说明 |
+|---|---|---|
+| [install.sh](install.sh) | ✅ | L2 模式安装(kube-proxy 不在时自动跳过 strictARP) |
+| [install-bgp.sh](install-bgp.sh) | ✅ | BGP 模式安装(需 --my-asn / --peer-asn / --peer-address) |
+| [uninstall.sh](uninstall.sh) | ✅ | 卸载(默认 dry-run, --apply 真删) |
+| [pool.yaml](pool.yaml) | ✅ | IP 池 + L2Advertisement |
+| [bgp.yaml](bgp.yaml) | 参考 | BGP 配置模板(BGPPeer + BGPAdvertisement) |
+| [metallb-native.yaml](metallb-native.yaml) | 离线 | 预下载上游清单(Nexus 不通时用) |
 
-## 安装
-
-```bash
-bash install.sh                # 默认 v0.14.8 + L2 模式
-bash install.sh --version v0.14.5
-```
-
-**国内直接用 Nexus 代理拉**（无需梯子）:
+## L2 模式安装(默认)
 
 ```bash
-# 通过 Nexus raw-githubusercontent 代理下载 (版本对齐 install.sh)
-curl -kLo metallb-native.yaml \
-  https://nexus.ihome.sxxpqp.top:8443/metallb/metallb/v0.14.8/config/manifests/metallb-native.yaml
-
-# 跟 install.sh 同目录, install.sh 会自动用本地的
 bash install.sh
+# 装完后任意 Service type=LoadBalancer 即可拿到 172.16.150.200-210 段 IP
 ```
 
-镜像如果也拉不到 (`quay.io/metallb/controller`, `quay.io/metallb/speaker`),用 sed 把 `metallb-native.yaml` 里的 image 替换成内网 mirror 后再 apply。
+## BGP 模式安装(生产推荐)
 
-装完后任意 namespace 建一个 `type: LoadBalancer` Service 就能拿到 `172.16.150.200-210` 段的 IP。
-
-## 改 IP 池
-
-编辑 `pool.yaml`,重新 apply:
 ```bash
-kubectl apply -f pool.yaml
+bash install-bgp.sh \
+  --my-asn=64500 \
+  --peer-asn=64501 \
+  --peer-address=172.16.150.1
 ```
 
-## L2 → BGP 切换
+**架构**:
+```
+Internet → 路由器(ECMP) → node1/2/3 → ingress-nginx(hostNetwork:80) → Service → Pod
+              ↑ BGP peer ↑
+              └── 3 个节点都跟路由器跑 BGP, LoadBalancer IP 通过 ECMP 直达到目标节点
+```
 
-```bash
-kubectl delete l2advertisement default-l2 -n metallb-system
-# 改 bgp.yaml 里的 ASN / peerAddress 为实际网络配置
-kubectl apply -f bgp.yaml
+**路由器侧只需 3 行**(install-bgp.sh 会自动打印):
+```
+router bgp 64501
+  neighbor 172.16.150.128 remote-as 64500
+  neighbor 172.16.150.129 remote-as 64500
+  neighbor 172.16.150.130 remote-as 64500
 ```
 
 ## 常见坑
