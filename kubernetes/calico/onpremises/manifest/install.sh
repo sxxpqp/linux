@@ -250,8 +250,10 @@ if [ "$DELETE_KUBE_PROXY" != "true" ]; then
   2. 删 kube-proxy:
        kubectl -n kube-system delete ds kube-proxy
        kubectl -n kube-system delete cm kube-proxy
-  3. 清理节点 iptables(每台 node):
-       iptables-save | grep -v KUBE | iptables-restore
+  3. 节点残留 KUBE-* iptables 链处理:
+       - 推荐:逐个节点重启(最干净,清空 conntrack / iptables 一次到位)
+       - 不重启也行:kube-proxy 已删,KUBE-* 链不会再被更新,留着无害
+       ⚠ 不要跑 'iptables-save | grep -v KUBE | iptables-restore'(易误伤其它规则)
 EOF
   log "==== 安装完成 (eBPF + kube-proxy 共存) ===="
   exit 0

@@ -445,8 +445,11 @@ if [ "$DELETE_KUBE_PROXY" != "true" ]; then
   3. 再删 kube-proxy:
        kubectl -n kube-system delete ds kube-proxy
        kubectl -n kube-system delete cm kube-proxy
-  4. 清理节点残留 iptables(每台 node):
-       iptables-save | grep -v KUBE | iptables-restore
+  4. 节点残留的 KUBE-* iptables 链处理:
+       - 推荐:逐个节点重启(最干净,清空内核 conntrack / iptables 一次到位)
+       - 不重启也行:kube-proxy 已删,KUBE-* 链不会再被更新,留着无害
+       ⚠ 不要跑 'iptables-save | grep -v KUBE | iptables-restore',
+         这会把跟 KUBE 沾边的所有规则全清,容易误伤 docker / firewalld / Calico 自身的规则
 EOF
   exit 0
 fi
@@ -458,9 +461,10 @@ kubectl -n kube-system delete ds kube-proxy --ignore-not-found
 kubectl -n kube-system delete cm kube-proxy --ignore-not-found
 ok "kube-proxy 已删除"
 
-warn "节点上的 iptables KUBE-* 链需要手动清理:"
-echo "  在每个 node 上执行: iptables-save | grep -v KUBE | iptables-restore"
-echo "  ipvs 用户额外: ipvsadm -C"
+warn "节点上残留 KUBE-* iptables 链处理:"
+echo "  推荐:逐个节点重启(最干净)"
+echo "  不重启也行:kube-proxy 已删,KUBE-* 链不会再被更新,留着无害"
+echo "  ⚠ 不要跑 'iptables-save | grep -v KUBE | iptables-restore'(会误伤其它规则)"
 
 log "==== 安装完成 ===="
 kubectl -n calico-system get pods
