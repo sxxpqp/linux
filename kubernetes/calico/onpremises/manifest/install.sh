@@ -90,9 +90,10 @@ if [ "$ENABLE_EBPF" = "true" ]; then
   ok "内核 $KERNEL 满足 eBPF 要求"
 fi
 
+# --delete-kube-proxy → 必须开 BPF 替换 kube-proxy,自动升
 if [ "$DELETE_KUBE_PROXY" = "true" ] && [ "$ENABLE_EBPF" != "true" ]; then
-  err "--delete-kube-proxy 必须配合 --enable-ebpf 使用,否则集群 Service 网络会崩"
-  exit 1
+  warn "--delete-kube-proxy 指定了,自动开启 eBPF kube-proxy replacement"
+  ENABLE_EBPF="true"
 fi
 
 if [ "$ENABLE_EBPF" = "true" ] && [ -z "$APISERVER_HOST" ]; then
