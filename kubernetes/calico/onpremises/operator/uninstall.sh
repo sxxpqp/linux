@@ -157,6 +157,25 @@ if [ "$APPLY" = "true" ] && [ "$HAS_CALICO_NS" = "true" ]; then
   done
 fi
 
+	# calico-apiserver namespace(跟 calico-system 同理,经常被漏掉导致重装卡住)
+	HAS_CALICO_APISERVER_NS=false
+	kubectl get ns calico-apiserver >/dev/null 2>&1 && HAS_CALICO_APISERVER_NS=true
+	if [ "$APPLY" = "true" ] && [ "$HAS_CALICO_APISERVER_NS" = "true" ]; then
+	  log "  剥 calico-apiserver ns finalizer"
+	  kubectl get ns calico-apiserver -o json | \
+	    python3 -c "import sys,json; d=json.load(sys.stdin); d['spec']['finalizers']=[]; print(json.dumps(d))" | \
+	    kubectl replace --raw "/api/v1/namespaces/calico-apiserver/finalize" -f - 2>/dev/null || true
+
+	  for i in $(seq 1 6); do
+	    if ! kubectl get ns calico-apiserver >/dev/null 2>&1; then
+	      ok "calico-apiserver namespace 已消失"
+	      break
+	    fi
+	    sleep 5
+	    [ $i -eq 6 ] && warn "calico-apiserver 30 秒后仍在,继续往下走"
+	  done
+	fi
+
 # 必须在 tigera-operator ns 还活着时删 cm,
 # 否则后面 delete -f tigera-operator.yaml 会一并干掉 ns,cm 就找不到了
 if [ "$HAS_TIGERA_NS" = "true" ]; then
