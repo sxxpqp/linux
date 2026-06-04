@@ -118,16 +118,30 @@ log "[2/5] 恢复 kube-proxy"
 if kubectl -n kube-system get ds kube-proxy >/dev/null 2>&1; then
   ok "kube-proxy 已存在,跳过"
 else
-  log "  用 kubeadm 重建 kube-proxy..."
+  log "  重建 kube-proxy(从 kubeadm-config 生成)..."
   if [ "$DRY_RUN" != "true" ]; then
-    # 从 kubeadm-config 提取 kube-proxy 配置并重建
-    kubeadm init phase addon kube-proxy \
-      --config <(kubectl -n kube-system get cm kubeadm-config -o jsonpath='{.data.ClusterConfiguration}' 2>/dev/null) 2>/dev/null || \
-    kubeadm init phase addon kube-proxy 2>/dev/null || \
-    warn "kubeadm 恢复 kube-proxy 失败,手动装: kubectl -n kube-system apply -f <kube-proxy.yaml>"
+    # 先重建 ConfigMap(kube-proxy ConfigMap 可能在删 kube-proxy 时被一起删了)
+    if ! kubectl -n kube-system get cm kube-proxy >/dev/null 2>&1; then
+      # 从 kubeadm-config 提取 proxy 配置,重建 ConfigMap
+      kubectl -n kube-system get cm kubeadm-config -o jsonpath='{.data.ClusterConfiguration}' 2>/dev/null > /tmp/kubeadm-conf.yaml || true
+      if [ -s /tmp/kubeadm-conf.yaml ]; then
+        kubeadm init phase addon kube-proxy --config /tmp/kubeadm-conf.yaml 2>/dev/null || \
+        kubeadm init phase addon kube-proxy 2>/dev/null || true
+        rm -f /tmp/kubeadm-conf.yaml
+      else
+        kubeadm init phase addon kube-proxy 2>/dev/null || true
+      fi
+    else
+      kubeadm init phase addon kube-proxy 2>/dev/null || true
+    fi
     kubectl -n kube-system rollout status ds/kube-proxy --timeout=120s 2>/dev/null || true
   fi
-  ok "kube-proxy 已恢复"
+  if kubectl -n kube-system get ds kube-proxy >/dev/null 2>&1; then
+    ok "kube-proxy 已恢复"
+  else
+    warn "kube-proxy 恢复失败(BGP 模式需要它做 ClusterIP NAT),手动装:"
+    warn "  kubeadm init phase addon kube-proxy"
+  fi
 fi
 
 # ============================================================
@@ -158,10 +172,12 @@ else
   warn "未找到 IPPool,跳过"
 fi
 
-# 4b. Operator 模式: 改 Installation CR
+# 4b. Operator 模式: 改 Installation CR(先等 operator 收敛)
 if [ "$CALICO_API" = "operator" ]; then
   log "  Installation CR: bgp=Enabled, encapsulation=None"
   if [ "$DRY_RUN" != "true" ]; then
+    # 等 operator 收敛完 dataplane 切换再开 BGP,避免 patch 被 operator 覆盖
+    sleep 10
     kubectl patch installation default --type=merge -p '{
       "spec":{
         "calicoNetwork":{
