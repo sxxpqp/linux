@@ -233,9 +233,10 @@ exec_in_busybox() {
   local desc="$1"; shift
   local out
   if out=$(kubectl -n "$TEST_NS" exec test-busybox --timeout=10s -- "$@" 2>&1); then
+    printf '%s\n' "$out"   # 成功:输出到 stdout,供调用方 pipe/grep 消费
     return 0
   else
-    echo "$out"
+    echo "$out" >&2         # 失败:输出到 stderr,不污染 pipe
     return 1
   fi
 }
