@@ -2,6 +2,19 @@
   "permissions": {
     "allow": [
       "*"
+    ],
+    "ask": [
+      "Bash(rm *)",
+      "Bash(mv *)",
+      "Bash(git rm *)",
+      "Bash(git reset --hard *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(truncate *)",
+      "Bash(kubectl delete ns *)",
+      "Bash(kubectl delete namespace *)",
+      "Bash(kubectl delete pv *)",
+      "Bash(kubectl delete persistentvolume *)"
     ]
   }
 }

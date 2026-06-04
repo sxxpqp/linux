@@ -206,19 +206,19 @@ log "  等 calico-node DaemonSet ready..."
 kubectl -n kube-system rollout status ds/calico-node --timeout=300s
 ok "calico-node ready"
 
-log "  等 calico-kube-controllers..."
-kubectl -n kube-system rollout status deploy/calico-kube-controllers --timeout=180s
-ok "calico-kube-controllers ready"
-
-# 不开 eBPF 到这里就结束
+# 不开 eBPF:先等 calico-kube-controllers(有 kube-proxy → ClusterIP 可达)
 if [ "$ENABLE_EBPF" != "true" ]; then
+  log "  等 calico-kube-controllers..."
+  kubectl -n kube-system rollout status deploy/calico-kube-controllers --timeout=180s
+  ok "calico-kube-controllers ready"
   log "==== 安装完成 (iptables/VXLAN 模式) ===="
   kubectl -n kube-system get pods -l k8s-app=calico-node
   exit 0
 fi
 
 # ============================================================
-# 5/6 切 eBPF dataplane
+# 5/6 切 eBPF dataplane(必须在 wait calico-kube-controllers 之前!)
+# 否则 kube-proxy 不在时 controllers 无法访问 ClusterIP API server,一直超时
 # ============================================================
 log "[5/6] 切换到 eBPF dataplane"
 
@@ -240,7 +240,7 @@ EOF
   ok "ConfigMap 已写"
 fi
 
-# 5.2 重启 calico-node + typha 让它读到新 ConfigMap
+# 5.2 重启 calico-node 让它读到新 ConfigMap
 log "  重启 calico-node 读新 ConfigMap"
 kubectl -n kube-system rollout restart ds/calico-node
 kubectl -n kube-system rollout status ds/calico-node --timeout=300s
@@ -273,6 +273,11 @@ if kubectl -n kube-system logs "$NODE_POD" --tail=200 2>/dev/null | grep -q "BPF
 else
   warn "未在日志看到 BPF,手动检查 kubectl -n kube-system logs $NODE_POD | grep -i bpf"
 fi
+
+# 5.5 等 calico-kube-controllers(BPF 已接管 ClusterIP,现在访问 API server 没问题)
+log "  等 calico-kube-controllers..."
+kubectl -n kube-system rollout status deploy/calico-kube-controllers --timeout=180s
+ok "calico-kube-controllers ready"
 
 # ============================================================
 # 6/6 删 kube-proxy
