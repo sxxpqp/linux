@@ -236,20 +236,21 @@ kubectl -n kube-system rollout restart ds/calico-node
 kubectl -n kube-system rollout status ds/calico-node --timeout=300s
 ok "calico-node 已重启"
 
-# 5.3 patch FelixConfiguration 开 BPF
-log "  patch FelixConfiguration: bpfEnabled=true"
-# 如果 default 不存在(刚装,operator 模式才会自动建,manifest 模式可能没有)
+# 5.3 创建/更新 FelixConfiguration 开 BPF
+# manifest 模式用 crd.projectcalico.org/v1,operator 用 projectcalico.org/v3
+log "  FelixConfiguration: bpfEnabled=true"
 if ! kubectl get felixconfiguration default >/dev/null 2>&1; then
   kubectl apply -f - <<EOF
-apiVersion: projectcalico.org/v3
+apiVersion: crd.projectcalico.org/v1
 kind: FelixConfiguration
 metadata:
   name: default
 spec:
   bpfEnabled: true
+  bpfConnectTimeLoadBalancing: TCP
 EOF
 else
-  kubectl patch felixconfiguration default --type=merge -p '{"spec":{"bpfEnabled": true}}'
+  kubectl patch felixconfiguration default --type=merge -p '{"spec":{"bpfEnabled":true,"bpfConnectTimeLoadBalancing":"TCP"}}'
 fi
 ok "FelixConfiguration.bpfEnabled = true"
 
