@@ -430,62 +430,36 @@ if [ -n "$NODE_POD" ]; then
 fi
 
 # ============================================================
-# 7/7 删 kube-proxy + 通知 Calico 接管 service NAT
+# 7/7 service NAT 接管 + 可选删 kube-proxy
+# Installation CR 已经是 linuxDataplane: BPF,无论 kube-proxy 在不在都要接管 service NAT
 # ============================================================
-log "[7/7] 处理 kube-proxy"
+log "[7/7] service NAT 接管 + kube-proxy"
 
-if [ "$DELETE_KUBE_PROXY" != "true" ]; then
-  warn "未指定 --delete-kube-proxy,kube-proxy 仍在跑(Calico BPF 与 kube-proxy 共存,service 仍由 kube-proxy 处理)"
-  cat <<EOF
-
-下一步建议(手动执行):
-  1. 验证业务正常(curl ClusterIP / NodePort 都通)
-  2. 确认 Calico eBPF 路径生效:
-       kubectl -n calico-system exec -it ds/calico-node -- calico-node -bpf conntrack dump | head
-  3. 删 kube-proxy:
-       kubectl -n kube-system delete ds kube-proxy
-       kubectl -n kube-system delete cm kube-proxy
-  4. ⚠ 通知 Calico 接管 service NAT(删完 kube-proxy 后必须做,否则 ClusterIP/DNS 全挂):
-       kubectl patch felixconfiguration default --type=merge \\
-         -p '{"spec":{"bpfKubeProxyIptablesCleanupEnabled":true,"bpfKubeProxyMinSyncPeriod":"5s"}}'
-       kubectl -n calico-system rollout restart ds/calico-node
-  5. 节点残留的 KUBE-* iptables 链:推荐逐个节点重启,不重启也留着无害
-     ⚠ 不要跑 'iptables-save | grep -v KUBE | iptables-restore'
-EOF
-  exit 0
-fi
-
-# ---- 删除 kube-proxy ----
-if kubectl -n kube-system get ds kube-proxy >/dev/null 2>&1; then
-  warn "即将删除 kube-proxy DaemonSet,5 秒后开始(Ctrl-C 中止)..."
-  sleep 5
-  kubectl -n kube-system delete ds kube-proxy --ignore-not-found
-  kubectl -n kube-system delete cm kube-proxy --ignore-not-found
-  ok "kube-proxy 已删除"
-else
-  warn "kube-proxy DaemonSet 不存在(可能已手动删过),跳过删除"
-fi
-
-# ---- 通知 Calico 接管 service NAT(核心!) ----
-# BPF dataplane 模式下,删了 kube-proxy 必须设这个字段,否则 ClusterIP/DNS/NodePort 全挂。
-# operator 自动设的前提是安装时就检测不到 kube-proxy;先装后删的场景 operator 不会重检,
-# 所以脚本显式 patch。
+# ---------- 7a. 通知 Calico 接管 service NAT(必做,跟 kube-proxy 无关) ----------
+# BPF dataplane 下 operator 不一定自动设这个字段,脚本显式 patch + restart
 log "  通知 Calico 接管 service NAT..."
 kubectl patch felixconfiguration default --type=merge \
   -p '{"spec":{"bpfKubeProxyIptablesCleanupEnabled":true,"bpfKubeProxyMinSyncPeriod":"5s"}}' \
-  >/dev/null 2>&1 || warn "FelixConfiguration default 尚不存在,operator 可能还在 reconcile,稍后重试"
+  >/dev/null 2>&1 || warn "FelixConfiguration default 尚不存在,稍后重试"
 ok "FelixConfiguration.bpfKubeProxyIptablesCleanupEnabled = true"
 
-# 等 FelixConfiguration patch 生效后重启 calico-node 让它重新加装 service NAT 程序
 log "  滚动重启 calico-node 以加载 kube-proxy replacement..."
 kubectl -n calico-system rollout restart ds/calico-node >/dev/null 2>&1 || true
 kubectl -n calico-system rollout status ds/calico-node --timeout=120s
 ok "calico-node 已重启,service NAT 已接管"
 
-warn "节点上残留 KUBE-* iptables 链处理:"
-echo "  推荐:逐个节点重启(最干净)"
-echo "  不重启也行:kube-proxy 已删,KUBE-* 链不会再被更新,留着无害"
-echo "  ⚠ 不要跑 'iptables-save | grep -v KUBE | iptables-restore'(会误伤其它规则)"
+# ---------- 7b. 处理 kube-proxy ----------
+if [ "$DELETE_KUBE_PROXY" = "true" ]; then
+  if kubectl -n kube-system get ds kube-proxy >/dev/null 2>&1; then
+    kubectl -n kube-system delete ds kube-proxy --ignore-not-found
+    kubectl -n kube-system delete cm kube-proxy --ignore-not-found
+    ok "kube-proxy 已删除"
+  else
+    ok "kube-proxy 不存在,跳过删除"
+  fi
+else
+  warn "未指定 --delete-kube-proxy,kube-proxy 仍在跑(BPF 共存,但推荐删它减少跳转)"
+fi
 
 log "==== 安装完成 ===="
 kubectl -n calico-system get pods
