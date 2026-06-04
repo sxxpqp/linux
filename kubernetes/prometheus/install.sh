@@ -10,7 +10,8 @@
 set -uo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-MANIFESTS="${DIR}/manifests"
+cd "$DIR"                       # 切到脚本目录,后面用相对路径,输出更干净
+MANIFESTS="./manifests"
 SETUP="${MANIFESTS}/setup"
 SKIP_CRD=false
 DRY_RUN=false
@@ -53,8 +54,9 @@ fi
 # ---------- 1. CRD + Namespace（必须先于其他资源） ----------
 if [ "$SKIP_CRD" = false ]; then
   echo "[1/3] 安装 CRD 和 namespace (setup/)..."
-  # --server-side 避免 last-applied annotation 太大报错（CRD 文件常常超过 256KB 上限）
-  run kubectl apply --server-side -f "${SETUP}/"
+  # --server-side 避免 last-applied annotation 太大报错（CRD 常超过 256KB 上限）
+  # --force-conflicts 抢过 helm 之前留下的 field manager(operator/controller-gen 版本注解 + spec.versions)
+  run kubectl apply --server-side --force-conflicts -f "${SETUP}/"
 
   echo ""
   echo "  等待 CRD 注册..."
