@@ -5,14 +5,17 @@
 #
 # 卸载 Tigera Operator 部署的 Calico,默认 dry-run(只打印计划),加 --apply 才真删。
 #
-# ⚠ 危险!卸载顺序(顺序错了 kube-proxy 起不来):
-#   1. 切回 Iptables dataplane(让 Calico 不再清理 kube-proxy 的 iptables 规则)
-#   2. 恢复 kube-proxy(如果之前删了),否则下一步删 Calico 时集群 Service 立即全断
-#   3. 删 Installation CR + APIServer CR(operator 自动清理 calico-system)
-#   4. 等 calico-system 资源全消失
-#   5. 反向 delete tigera-operator.yaml
-#   6. 删 tigera-operator namespace
-#   7. 节点残留清理提示(iptables / cni / bpf 程序)
+# 卸载流程(简化版,5 步):
+#   1. 现状盘点 + 强检查(kube-proxy 不在且没 --restore/--next-cni-coming → 拒绝继续)
+#   2. (可选)恢复 kube-proxy(用户加 --restore-kube-proxy 才做)
+#   3. 删 Installation + APIServer CR(operator 自动清理 calico-system)
+#   4. 等 calico-system 资源消失 + 反向 delete tigera-operator.yaml + 删 namespace
+#   5. 节点残留清理提示(iptables / cni / bpf 程序,只打印命令不自动 ssh)
+#
+# 设计原则:
+#   - 不在卸载流程中"切 dataplane"(BPF/Iptables)。要切自己 patch Installation CR
+#   - 顺序:先恢复 kube-proxy(若需要),再删 Calico,中间不切 dataplane
+#     Calico 整套删了 Felix 也没了 → 不会干扰 kube-proxy iptables 规则
 #
 # 卸载完后集群没有 CNI,新建 Pod 拿不到 IP,要么立即装别的 CNI,要么重新跑 install.sh
 
@@ -24,6 +27,7 @@ set -euo pipefail
 CALICO_VERSION="v3.28.2"
 APPLY="false"                  # 默认 dry-run,加 --apply 才真删
 RESTORE_KUBE_PROXY="false"     # 默认不恢复,加 --restore-kube-proxy 才恢复
+NEXT_CNI_COMING="false"        # 用户明确"卸 Calico 后立即装别的 CNI",才允许不恢复 kube-proxy
 FORCE="false"                  # 剥 finalizer
 KEEP_TIGERA_NS="false"
 APISERVER_HOST=""
@@ -67,6 +71,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --apply) APPLY="true" ;;
     --restore-kube-proxy) RESTORE_KUBE_PROXY="true" ;;
+    --next-cni-coming) NEXT_CNI_COMING="true" ;;
     --skip-kube-proxy-restore)
       warn "--skip-kube-proxy-restore 已废弃(默认就不恢复)。要恢复用 --restore-kube-proxy"
       ;;
@@ -99,9 +104,9 @@ run() {
 }
 
 # ============================================================
-# 1/7 前置检查 + 现状盘点
+# 1/5 前置检查 + 现状盘点
 # ============================================================
-log "[1/7] 前置检查 + 现状盘点"
+log "[1/5] 前置检查 + 现状盘点"
 
 command -v kubectl >/dev/null || { err "kubectl 不存在"; exit 1; }
 
@@ -161,42 +166,26 @@ else
   warn "   2. 实验环境直接 kubeadm reset 重装集群"
   warn "   3. Ctrl-C 中止本脚本,加 --restore-kube-proxy 重新跑"
   warn ""
-  warn " 10 秒后继续卸载,不再恢复 kube-proxy..."
+  warn " 必须加 --next-cni-coming 表示'我知道我在干什么'才会继续"
   warn "═══════════════════════════════════════════════════════════════════"
   echo
-  if [ "$APPLY" = "true" ]; then
-    sleep 10
+  if [ "$APPLY" = "true" ] && [ "$NEXT_CNI_COMING" != "true" ]; then
+    err "拒绝继续 — 加 --restore-kube-proxy 或 --next-cni-coming 重跑"
+    exit 1
   fi
 fi
 
-# ============================================================
-# 2/7 切回 Iptables dataplane(关键!不切的话恢复 kube-proxy 会失败)
-# Calico BPF 模式默认开 bpfKubeProxyIptablesCleanupEnabled=true,
-# 会主动清理 kube-proxy 的 iptables 规则 → kube-proxy readiness 失败 → 起不来
-# ============================================================
-log "[2/7] 切回 Iptables dataplane"
-
+# 提示:BPF dataplane 状态(不在卸载流程里切,只是告知)
 if [ "$HAS_BPF_DATAPLANE" = "true" ]; then
-  run "kubectl patch installation default --type=merge -p '{\"spec\":{\"calicoNetwork\":{\"linuxDataplane\":\"Iptables\"}}}'"
-  if [ "$APPLY" = "true" ]; then
-    log "  等 operator 重启 calico-node 切换 dataplane(最多 5 分钟)"
-    sleep 10  # 给 operator 时间 reconcile
-    if kubectl -n calico-system get ds calico-node >/dev/null 2>&1; then
-      kubectl -n calico-system rollout status ds/calico-node --timeout=300s || \
-        warn "calico-node 切回 Iptables 超时,继续(可能已经够用)"
-    fi
-    ok "Calico 已切回 Iptables dataplane,BPF 程序应已 detach"
-  fi
-elif [ "$HAS_INSTALLATION" = "true" ]; then
-  log "  Dataplane 已是 $DATAPLANE,跳过"
-else
-  log "  Calico 不在,跳过"
+  warn "Dataplane = BPF,卸载会同时移除 BPF 程序"
+  warn "  如果你只想从 BPF 退回 Iptables 不卸载 Calico,Ctrl-C 出来,手动 patch Installation:"
+  echo "    kubectl patch installation default --type=merge -p '{\"spec\":{\"calicoNetwork\":{\"linuxDataplane\":\"Iptables\"}}}'"
 fi
 
 # ============================================================
-# 3/7 恢复 kube-proxy(如果需要)
+# 2/5 恢复 kube-proxy(可选,用户加 --restore-kube-proxy 才做)
 # ============================================================
-log "[3/7] 恢复 kube-proxy"
+log "[2/5] 恢复 kube-proxy"
 
 if [ "$RESTORE_DECISION" = "yes" ]; then
   # 探测 API server 地址
@@ -240,10 +229,10 @@ else
 fi
 
 # ============================================================
-# 4/7 删 Installation CR + APIServer CR
+# 3/5 删 Installation CR + APIServer CR
 # 删 CR 后 operator 会自动清理 calico-system 下所有资源
 # ============================================================
-log "[4/7] 删 Installation / APIServer CR"
+log "[3/5] 删 Installation / APIServer CR"
 
 if [ "$HAS_APISERVER_CR" = "true" ]; then
   run "kubectl delete apiserver default --ignore-not-found --timeout=120s"
@@ -265,9 +254,9 @@ fi
 ok "CR 删除请求已发出"
 
 # ============================================================
-# 5/7 等 calico-system 清理完
+# 4/5 等 calico-system 清理完 + 反向 delete tigera-operator.yaml + 删 namespace
 # ============================================================
-log "[5/7] 等 calico-system 资源消失(最多 5 分钟)"
+log "[4/5] 等 calico-system 资源消失(最多 5 分钟)"
 
 if [ "$APPLY" = "true" ] && [ "$HAS_CALICO_NS" = "true" ]; then
   for i in $(seq 1 60); do
@@ -298,9 +287,9 @@ else
 fi
 
 # ============================================================
-# 6/7 反向 delete tigera-operator.yaml
+# 4.5/5 反向 delete tigera-operator.yaml(还在 Step 4 范围)
 # ============================================================
-log "[6/7] 卸载 tigera-operator 本体"
+log "  反向 delete tigera-operator.yaml"
 
 NEXUS_RAW="${NEXUS_RAW:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent}"
 TIGERA_OP_URL="${NEXUS_RAW}/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml"
@@ -343,9 +332,9 @@ elif [ "$HAS_TIGERA_NS" = "true" ]; then
 fi
 
 # ============================================================
-# 7/7 节点残留清理提示
+# 5/5 节点残留清理提示
 # ============================================================
-log "[7/7] 节点残留清理(每个 node 手动执行)"
+log "[5/5] 节点残留清理(每个 node 手动执行)"
 
 NODES=$(kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "")
 

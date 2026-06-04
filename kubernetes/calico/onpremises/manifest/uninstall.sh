@@ -6,13 +6,12 @@
 # 卸载 manifest 方式装的 Calico(单 calico.yaml,跑在 kube-system)。
 # 默认 dry-run,加 --apply 才真删。
 #
-# 卸载顺序(顺序错了 kube-proxy 起不来):
-#   1. 切回 iptables dataplane(Calico BPF 会清理 kube-proxy 的 iptables 规则,必须先切)
-#   2. 恢复 kube-proxy(如果之前删了)
-#   3. 反向 delete calico.yaml
-#   4. 节点残留清理提示
+# 反向卸载 install.sh 装过的内容,不做额外动作:
+#   1. 反向 delete calico.yaml(整套删:DS / Deploy / CRD / RBAC)
+#   2. 删 kubernetes-services-endpoint ConfigMap(eBPF 模式才有,没有忽略)
+#   3. 打印节点残留清理命令
 #
-# 卸载完后集群没有 CNI,要么立即装别的,要么重新装 Calico
+# 不包含:kube-proxy 恢复 / dataplane 切换 / namespace force 清理(需要自己手动)
 
 set -euo pipefail
 
@@ -21,8 +20,6 @@ set -euo pipefail
 # ============================================================
 CALICO_VERSION="v3.28.2"
 APPLY="false"
-RESTORE_KUBE_PROXY="false"   # 默认不恢复,加 --restore-kube-proxy 才恢复
-APISERVER_HOST=""
 FORCE="false"
 
 usage() {
@@ -31,32 +28,22 @@ usage() {
 
 默认 dry-run。加 --apply 才真删。
 
-⚠ 默认不恢复 kube-proxy(说不定你接下来要装 Cilium 接管)。
-   要回退到 kube-proxy 加 --restore-kube-proxy。
-
 选项:
-  --apply                     真执行
-  --restore-kube-proxy        恢复 kube-proxy(传统模式回退)
-  --apiserver-host=HOST       恢复 kube-proxy 时用,默认从 kubeadm-config 探测
-  --calico-version=VER        Calico 版本(必须跟装时一致),默认 v3.28.2
-  --force                     残留资源剥 finalizer
-  -h, --help                  显示帮助
+  --apply                 真执行
+  --calico-version=VER    Calico 版本(必须跟装时一致),默认 v3.28.2
+  --force                 残留 CRD 资源剥 finalizer
+  -h, --help              显示帮助
 
-典型用法:
-  bash uninstall.sh                                  # 看计划
-  bash uninstall.sh --apply --restore-kube-proxy     # 卸载并回退到 kube-proxy
-  bash uninstall.sh --apply                          # 卸载,接下来装别的 CNI 接管
+示例:
+  bash uninstall.sh                          # 看计划
+  bash uninstall.sh --apply                  # 真删
+  bash uninstall.sh --apply --force          # CRD 卡 Terminating 时用
 EOF
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --apply) APPLY="true" ;;
-    --restore-kube-proxy) RESTORE_KUBE_PROXY="true" ;;
-    --skip-kube-proxy-restore)
-      warn "--skip-kube-proxy-restore 已废弃(默认就不恢复)。要恢复用 --restore-kube-proxy"
-      ;;
-    --apiserver-host=*) APISERVER_HOST="${1#*=}" ;;
     --calico-version=*) CALICO_VERSION="${1#*=}" ;;
     --force) FORCE="true" ;;
     -h|--help) usage; exit 0 ;;
@@ -83,121 +70,24 @@ run() {
 }
 
 # ============================================================
-# 1/5 现状盘点
+# 1/3 前置检查
 # ============================================================
-log "[1/5] 前置检查 + 现状盘点"
+log "[1/3] 前置检查"
 
 command -v kubectl >/dev/null || { err "kubectl 不存在"; exit 1; }
 
-HAS_CALICO_NODE=false
-HAS_KUBE_PROXY=false
-HAS_FELIX_BPF=false
-
-kubectl -n kube-system get ds calico-node >/dev/null 2>&1 && HAS_CALICO_NODE=true
-kubectl -n kube-system get ds kube-proxy >/dev/null 2>&1 && HAS_KUBE_PROXY=true
-[ "$(kubectl get felixconfiguration default -o jsonpath='{.spec.bpfEnabled}' 2>/dev/null)" = "true" ] && HAS_FELIX_BPF=true
-
-echo
-echo "  当前状态:"
-echo "    calico-node DS (kube-system) : $HAS_CALICO_NODE"
-echo "    kube-proxy DS                : $HAS_KUBE_PROXY"
-echo "    Felix bpfEnabled             : $HAS_FELIX_BPF"
-echo
-
-if [ "$HAS_CALICO_NODE" = "false" ]; then
-  ok "kube-system 没有 calico-node DS,看起来不是 manifest 方式装的"
+if ! kubectl -n kube-system get ds calico-node >/dev/null 2>&1; then
+  ok "kube-system 没有 calico-node DS,看起来已经卸载干净"
   warn "如果是 operator 方式装的,请用 operator/uninstall.sh"
   exit 0
 fi
 
-if [ "$APPLY" != "true" ]; then
-  warn "DRY-RUN 模式,只打印不执行"
-fi
-
-# 决策恢复 kube-proxy(默认不恢复)
-RESTORE_DECISION="no"
-if [ "$HAS_KUBE_PROXY" = "true" ]; then
-  ok "kube-proxy 仍在,无需处理"
-elif [ "$RESTORE_KUBE_PROXY" = "true" ]; then
-  warn "--restore-kube-proxy:将恢复 kube-proxy"
-  RESTORE_DECISION="yes"
-else
-  echo
-  warn "═══════════════════════════════════════════════════════════════════"
-  warn " kube-proxy 已被删除,且未指定 --restore-kube-proxy"
-  warn ""
-  warn " 卸载 Calico 后【没有任何组件做 Service DNAT】,集群所有 ClusterIP"
-  warn " 流量立即失败,业务 Pod 互通断、CoreDNS 不可达"
-  warn ""
-  warn " 你接下来必须:"
-  warn "   1. 立即装 Cilium / 其他 eBPF CNI 接管"
-  warn "   2. 实验环境直接 kubeadm reset"
-  warn "   3. Ctrl-C 中止,加 --restore-kube-proxy 重新跑"
-  warn ""
-  warn " 10 秒后继续..."
-  warn "═══════════════════════════════════════════════════════════════════"
-  echo
-  [ "$APPLY" = "true" ] && sleep 10
-fi
+[ "$APPLY" != "true" ] && warn "DRY-RUN 模式,只打印不执行"
 
 # ============================================================
-# 2/5 切回 iptables dataplane(关键!不切的话恢复 kube-proxy 会失败)
-# Calico BPF 模式会主动清理 kube-proxy iptables 规则,必须先关 BPF
+# 2/3 反向 delete calico.yaml + ConfigMap
 # ============================================================
-log "[2/5] 切回 iptables dataplane"
-
-if [ "$HAS_FELIX_BPF" = "true" ]; then
-  run "kubectl patch felixconfiguration default --type=merge -p '{\"spec\":{\"bpfEnabled\": false}}'"
-  if [ "$APPLY" = "true" ]; then
-    log "  重启 calico-node 让 BPF 程序 detach"
-    kubectl -n kube-system rollout restart ds/calico-node
-    kubectl -n kube-system rollout status ds/calico-node --timeout=300s
-    ok "已切回 iptables 模式,BPF 程序已卸载"
-  fi
-else
-  ok "FelixConfiguration.bpfEnabled 已是 false,跳过"
-fi
-
-# 删 kubernetes-services-endpoint ConfigMap(manifest 模式装在 kube-system)
-run "kubectl -n kube-system delete cm kubernetes-services-endpoint --ignore-not-found"
-
-# ============================================================
-# 3/5 恢复 kube-proxy
-# ============================================================
-log "[3/5] 恢复 kube-proxy"
-
-if [ "$RESTORE_DECISION" = "yes" ]; then
-  if [ -z "$APISERVER_HOST" ]; then
-    APISERVER_HOST=$(kubectl -n kube-system get cm kubeadm-config -o yaml 2>/dev/null \
-      | grep -oE 'controlPlaneEndpoint: [^[:space:]]+' | head -1 | awk '{print $2}' | cut -d: -f1 || true)
-    [ -z "$APISERVER_HOST" ] && APISERVER_HOST=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)
-  fi
-  [ -z "$APISERVER_HOST" ] && { err "无法探测 API server,请 --apiserver-host=<HOST>"; exit 1; }
-
-  if ! command -v kubeadm >/dev/null 2>&1; then
-    err "本机没有 kubeadm,无法自动恢复 kube-proxy"
-    warn "在 master 节点跑:"
-    echo "    kubeadm init phase addon kube-proxy --apiserver-advertise-address=$APISERVER_HOST"
-    exit 1
-  fi
-
-  POD_CIDR=$(kubectl -n kube-system get cm kubeadm-config -o yaml 2>/dev/null \
-    | grep -oE 'podSubnet: [0-9./,]+' | awk '{print $2}' | head -1)
-
-  run "kubeadm init phase addon kube-proxy --apiserver-advertise-address=$APISERVER_HOST --pod-network-cidr=$POD_CIDR"
-
-  if [ "$APPLY" = "true" ]; then
-    kubectl -n kube-system rollout status ds/kube-proxy --timeout=180s
-    ok "kube-proxy 已恢复"
-  fi
-else
-  log "  跳过"
-fi
-
-# ============================================================
-# 4/5 反向 delete calico.yaml
-# ============================================================
-log "[4/5] 反向 delete calico.yaml"
+log "[2/3] 反向 delete calico.yaml"
 
 NEXUS_RAW="${NEXUS_RAW:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent}"
 CALICO_URL="${NEXUS_RAW}/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
@@ -212,9 +102,9 @@ if [ "$APPLY" = "true" ]; then
     echo "    kubectl -n kube-system delete deploy calico-kube-controllers"
     echo "    kubectl delete crd \$(kubectl get crd -o name | grep -E 'projectcalico|tigera')"
     echo "    kubectl delete clusterrole,clusterrolebinding -l app=calico 2>/dev/null || true"
-  else
-    run "kubectl delete -f $TMP_YAML --ignore-not-found --timeout=180s"
+    exit 1
   fi
+  run "kubectl delete -f $TMP_YAML --ignore-not-found --timeout=180s"
 else
   warn "[dry-run] 会下载 $CALICO_URL 后反向 delete"
 fi
@@ -228,10 +118,13 @@ if [ "$FORCE" = "true" ] && [ "$APPLY" = "true" ]; then
   done
 fi
 
+# eBPF 模式装的辅助 ConfigMap,calico-node 删完之后删它才安全
+run "kubectl -n kube-system delete cm kubernetes-services-endpoint --ignore-not-found"
+
 # ============================================================
-# 5/5 节点残留清理提示
+# 3/3 节点残留清理提示
 # ============================================================
-log "[5/5] 节点残留清理(每个 node 手动执行)"
+log "[3/3] 节点残留清理(每个 node 手动执行)"
 
 NODES=$(kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "")
 
@@ -251,15 +144,13 @@ cat <<EOF
   # 4. Calico 数据目录
   rm -rf /var/lib/calico /var/log/calico /var/run/calico
 
-  # 5. BPF 程序(如果开过 eBPF)
-  bpftool prog list | grep -B1 calico && echo "有残留,建议重启节点"
+  # 5. BPF 程序(开过 eBPF 才有)
+  bpftool prog list 2>/dev/null | grep -B1 calico && echo "有残留,建议重启节点"
 
 节点列表:
 EOF
 
-if [ -n "$NODES" ]; then
-  for ip in $NODES; do echo "  - $ip"; done
-fi
+[ -n "$NODES" ] && for ip in $NODES; do echo "  - $ip"; done
 
 cat <<EOF
 
@@ -267,8 +158,6 @@ cat <<EOF
 
 EOF
 
-if [ "$APPLY" != "true" ]; then
-  warn "以上是 DRY-RUN,确认后跑: bash $0 --apply"
-fi
+[ "$APPLY" != "true" ] && warn "以上是 DRY-RUN,确认后跑: bash $0 --apply"
 
 log "==== 完成 ===="
