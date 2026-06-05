@@ -1,58 +1,78 @@
-local-path是一个Kubernetes StorageClass的插件，它可以将PV（PersistentVolume）绑定到工作节点上的本地磁盘上，从而为应用程序提供本地存储。在Rancher Kubernetes Engine（RKE）中安装local-path非常简单，您可以按照以下步骤进行操作：
+# local-path-provisioner 安装
 
-1. 在您的Kubernetes集群中创建一个名为“local-path-storage”的命名空间：
+> 源: https://github.com/sxxpqp/linux/blob/main/kubernetes/local-path/local-path-storage.md
+> 状态: 验证过
 
-   ```
-   kubectl create namespace local-path-storage
-   ```
+`local-path` 是一个 Kubernetes StorageClass 插件,把 PV 直接绑到**工作节点本地磁盘**,给应用提供本地存储。Rancher RKE 集群常用。
 
-2. 在该命名空间中创建local-path-storage的deployments和service：
+## 适用场景
 
-   ```
-   kubectl apply -f local-path-storage.yaml
-   ```
+- 单节点 / 小集群,不想引入 Ceph / Longhorn 等分布式存储
+- 测试 / 开发环境
+- 应用本身有数据副本能力(如 etcd / Kafka),不依赖存储层做冗余
 
-3. 等待local-path-storage pod变为“Running”状态：
+## 安装步骤
 
-   ```
-   kubectl get pods -n local-path-storage
-   ```
+### 1. 创建命名空间
 
-   您应该会看到一个名为“local-path-provisioner”的pod，它的状态应该为“Running”。
-4. 查看stroageclass：
+```bash
+kubectl create namespace local-path-storage
+```
 
-   ```
-   kubectl get storageclass
-   ```
+### 2. 部署 local-path-provisioner
 
-   您应该会看到一个名为“local-path”的storageclass。
+```bash
+kubectl apply -f local-path-storage.yaml
+```
 
+### 3. 等 Pod ready
 
+```bash
+kubectl get pods -n local-path-storage
+```
 
-   ```
-   kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
-   ```
-5. 创建测试pvc：
+期望看到 `local-path-provisioner-xxx` Pod 状态为 `Running`。
 
-   ```
+### 4. 查看 StorageClass
+
+```bash
+kubectl get storageclass
+```
+
+应该看到名为 `local-path` 的 StorageClass。
+
+### 5. 设为默认 StorageClass(可选)
+
+```bash
+kubectl patch storageclass local-path \
+  -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+```
+
+## 测试
+
+### 创建测试 PVC
+
+```bash
 kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/rancher/local-path-provisioner/blob/master/examples/pvc/pvc.yaml
-   ```
-6. 创建测试pod：
+```
 
-   ```
-   kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/rancher/local-path-provisioner/blob/master/examples/pod/pod.yaml
-   ```
-7. 查看pod：
+### 创建测试 Pod
 
-   ```  
-    kubectl get pods
-   ```
-    您应该会看到一个名为“volume-test”的pod，它的状态应该为“Running”。
+```bash
+kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/rancher/local-path-provisioner/blob/master/examples/pod/pod.yaml
+```
 
-    > **注意：**
-    >
-    > 1. 请确保您的Kubernetes集群中的所有节点都有本地磁盘。
-    > 2. 请确保您的Kubernetes集群中的所有节点都有相同的本地磁盘路径。
-    > 3. 请确保您的Kubernetes集群中的所有节点都有相同的本地磁盘路径。
+### 验证
 
+```bash
+kubectl get pods
+```
 
+应该看到 `volume-test` Pod 状态为 `Running`。
+
+## 注意事项
+
+> ⚠ 使用 `local-path` 前请确认:
+> 1. 所有节点都有本地磁盘
+> 2. 所有节点的本地磁盘路径一致(默认 `/opt/local-path-provisioner`,可改 `ConfigMap`)
+> 3. **PV 绑定到具体节点之后,Pod 不能再调度到别的节点** — 跨节点的高可用要靠应用层自己做副本
