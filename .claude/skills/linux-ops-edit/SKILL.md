@@ -50,16 +50,9 @@ grep -rl "v3.28.2" kubernetes/calico/  # 先列
 | **改完目录立刻 `grep` 一遍根 README** | 看有没有死链 |
 | **加新状态(如 🟡 已弃用)同步更新图例段** | README 顶部图例段要跟正文一致 |
 
-## macOS 大小写敏感踩坑
+## macOS 用户 git 操作
 
-如果用户在 macOS 上 pull 这个 Linux 仓库:**case-insensitive 文件系统**会让 `README.md` 和 `readme.md` 这种双跟踪文件只能存一份(inode 复用)。
-
-```bash
-# 现象:git status 显示 modified 但 git add 静默失败
-# 修法:
-git update-index --add <path>        # 强行 stage 不存在的引用
-git rm --cached <小写名>             # 长期清理,保留大写
-```
+如果在 macOS 上 pull 本仓库,**case-insensitive 文件系统**会让大小写双跟踪文件(`README.md` + `readme.md`)只能存一份,`git add` 静默失败。修法见 **skill: `script-pitfalls` #shell-4**(完整命令)。
 
 ## 项目特有 shell 脚本规范
 
