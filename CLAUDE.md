@@ -1,5 +1,6 @@
 # Linux Ops Notes — AI 协作上下文
 
+> 项目: https://github.com/sxxpqp/linux
 > 这是给 Claude 看的。人类索引见 [README.md](README.md)。
 > 任何关于本仓库的对话,先读这里,再读对应子目录的 CLAUDE.md / README.md。
 

@@ -1,5 +1,6 @@
 # Kubernetes — AI 协作上下文
 
+> 项目: https://github.com/sxxpqp/linux
 > 完整索引见 [README.md](README.md), 这里是 Claude 快速上下文。
 
 ## 集群参数(每次操作都要用)

@@ -5,6 +5,7 @@ description: Apply this repo's editing conventions when modifying production con
 
 # 本仓库编辑约定
 
+> 项目: https://github.com/sxxpqp/linux
 > **核心**:这不是一个"代码项目",是个人运维知识库 + **生产环境真实配置归档**。改文件 ≠ 改生产,但很多 IP / 密码 / 订阅 URL 是真实值,**修改门槛比写代码高**。
 
 ## 改之前必须做的 3 件事

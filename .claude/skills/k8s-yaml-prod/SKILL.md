@@ -5,6 +5,7 @@ description: Production-grade Kubernetes YAML standards calibrated to this repo'
 
 # K8s 生产 YAML 标准
 
+> 项目: https://github.com/sxxpqp/linux
 > **不是教科书,是本仓库实际在跑的标准**。模板提取自 `devops/java/host-cluster/saas/pod-saas.yaml` 等真实生产 yaml,补上常被遗漏的项。
 
 ## 必查清单(写完前自查 8 项)

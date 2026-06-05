@@ -5,6 +5,7 @@ description: Living catalog of script bugs and antipatterns hit in this repo —
 
 # 脚本踩坑清单(本仓库踩过的)
 
+> 项目: https://github.com/sxxpqp/linux
 > **使用方式**:写新脚本之前 grep 一遍这里有没有相关条目;写完跑前再过一遍"通用检查清单"。每个条目都是真实付出代价学来的,不要再交一次学费。
 
 ## 通用检查清单(每次写脚本都过一遍)

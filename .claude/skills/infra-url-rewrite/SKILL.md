@@ -5,6 +5,7 @@ description: Rewrite public registry / source URLs to the user's internal proxie
 
 # 公网 URL → 自建代理改写
 
+> 项目: https://github.com/sxxpqp/linux
 > 项目 CLAUDE.md "已知踩坑 #1-#2":GitHub raw 直连基本不通,镜像直连看运气。**默认改走自建代理**。
 
 ## 改写映射表(权威源)

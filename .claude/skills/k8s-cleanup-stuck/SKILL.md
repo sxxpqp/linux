@@ -5,6 +5,7 @@ description: Diagnose and safely clean up stuck Kubernetes resources — Termina
 
 # K8s 卡死 / 残留清理
 
+> 项目: https://github.com/sxxpqp/linux
 > 来自实战:operator 模式 Calico 卸载 → 重装翻车,逐项 debug 出来的完整 playbook。
 
 ## 核心思路

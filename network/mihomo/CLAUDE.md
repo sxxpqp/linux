@@ -1,5 +1,7 @@
 # mihomo 代理 — AI 协作上下文
 
+> 项目: https://github.com/sxxpqp/linux
+
 ## 基本信息
 
 | 项 | 值 |

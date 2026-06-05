@@ -1,5 +1,6 @@
 # Calico — AI 协作上下文
 
+> 项目: https://github.com/sxxpqp/linux
 > 完整文档见各子目录 README.md, 这里是 Claude 快速上下文。
 
 ## 三模式选型
