@@ -19,7 +19,8 @@
 |---|---|
 | **写或改任何脚本前**:K8s/Shell/iptables/网络类脚本踩坑清单 | **skill: script-pitfalls**(自动触发) |
 | **写或改 K8s yaml**:Deployment/Service/Ingress/HPA/CronJob 等生产模板 + 反模式 | **skill: k8s-yaml-prod**(自动触发) |
-| 公网 URL 改写成自建代理(Harbor / Nexus / chfs / 阿里 ACR) | **skill: infra-url-rewrite**(自动触发) |
+| 公网**非镜像** URL 改写(raw / release / Helm chart → Nexus / chfs) | **skill: infra-url-rewrite**(自动触发) |
+| 镜像走代理(**唯一改动点**:每节点跑一次 `bash docker/containerd/mirrors.sh`) | [docker/containerd/](docker/containerd/) |
 | K8s 资源卡 Terminating / RBAC 残留 / webhook 拦 API | **skill: k8s-cleanup-stuck**(自动触发) |
 | 改 yaml / patch 生产配置 / 改 devops 文件 | **skill: linux-ops-edit**(自动触发) |
 | 完整 Harbor / Nexus URL 表 + 历史弃用地址 + Docker hosts.toml 模板 | [docs/infra-reference.md](docs/infra-reference.md) |
@@ -29,12 +30,20 @@
 
 ## 共享基础设施 — 核心入口(每次都要用)
 
-> **核心原则**:任何要走公网的 URL,优先用自建代理。完整改写规则见 `infra-url-rewrite` skill。
+> **核心原则**(必读):
+> 1. **镜像加速配置就在 2 个脚本里**(每节点一次,**就这俩,不要再加 sed**):
+>    - `bash docker/containerd/install.sh`:装 containerd + sed config.toml 3 处(`SystemdCgroup=true` / `sandbox_image → registry.aliyuncs.com/google_containers/pause`(bootstrap 走阿里 direct,无 Harbor 依赖) / `config_path = /etc/containerd/certs.d`)
+>    - `bash docker/containerd/mirrors.sh`:写齐 5 份 `/etc/containerd/certs.d/<host>/hosts.toml`
+> 2. **其他任何地方一律不改 image**:YAML `image:` / Dockerfile `FROM` / 业务安装脚本 / `kubectl set image` —— 全保持上游 `registry.k8s.io/xxx` / `docker.io/xxx`,kubelet/containerd 自动走 mirror。**不要**写 `IMG_REGISTRY` 变量、**不要** sed 替换 image。
+> 3. **非镜像**公网 URL(raw / release / Helm chart)走 Nexus / chfs 改写,详见 `infra-url-rewrite` skill。
 
 | 项 | 值 |
 |---|---|
-| **镜像拉取入口(Harbor)** | `dockerhub.ihome.sxxpqp.top:8443`(纯代理,不接受 push) |
-| **镜像推送目标(阿里 ACR)** | `registry.cn-hangzhou.aliyuncs.com/sxxpqp/` |
+| **节点 containerd 安装(每节点一次,顺序固定)** | ① `bash docker/containerd/install.sh` ② `bash docker/containerd/mirrors.sh` ③ `systemctl restart containerd` |
+| **install.sh 改 config.toml 的全部 3 处 sed(完整列表)** | ① `SystemdCgroup = true`(kubelet 必需) ② `sandbox_image → registry.aliyuncs.com/google_containers/pause:x.x`(bootstrap fallback 走阿里 direct) ③ `config_path = "/etc/containerd/certs.d"`(开 hosts.toml lookup) |
+| **mirrors.sh 配置的全部 5 条 hosts.toml(完整列表)** | ① `docker.io` → `dockerhub.ihome.sxxpqp.top:8443` ② `ghcr.io` → `ghcr.ihome.sxxpqp.top:8443` ③ `quay.io` → `quay.ihome.sxxpqp.top:8443` ④ `registry.k8s.io` → `k8s.ihome.sxxpqp.top:8443` ⑤ `registry.cn-hangzhou.aliyuncs.com` → direct(server 直配,不走 Harbor) |
+| **其他 registry**(`gcr.io` / `mcr.microsoft.com` / 业务自建...) | **不在 mirror 表里 = 走直连,不改 image,也不要往 mirrors.sh 里加**(除非真有节点拉不下来) |
+| **镜像推送目标(阿里 ACR,YAML 显式写)** | `registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>` |
 | MinIO S3 API | `https://ihome.sxxpqp.top:8443` |
 | Nexus 私服(raw / helm / 二进制) | `https://nexus.ihome.sxxpqp.top:8443` |
 | 个人文件中转(chfs) | `https://chfs.sxxpqp.top:8443/chfs/shared/` |
@@ -42,7 +51,7 @@
 | **测试集群** | kh(172.16.150.128), node1-4(172.16.150.129-131), Pod CIDR=10.244.0.0/16 |
 | **测试集群 BGP 参数** | AS=64500, LB CIDR=172.16.150.200/29, 路由器 peer=172.16.150.131:64500 |
 
-> Harbor 多前端域名(`ghcr.ihome` / `quay.ihome` / `k8s.ihome`)+ 内部 rewrite 规则 + 推镜像命令 → 见 skill `infra-url-rewrite`。
+> 完整 mirror 映射 + 验证命令 → [docker/containerd/mirrors.sh](docker/containerd/mirrors.sh);非镜像 URL 改写规则 → skill `infra-url-rewrite`。
 
 ## 子目录优先级 / 当前活跃区域
 
@@ -123,7 +132,11 @@
 
 ## 已知踩坑(每次都要 top-of-mind)
 
-- **公网拉取常失败**:GitHub raw / release zip / docker hub 直连基本不通 → 永远走自建代理(`infra-url-rewrite` skill 自动改写)
+- **公网拉取常失败**:
+  - **镜像**:GitHub / docker hub / quay 直连看运气 → 装节点时跑一次 `bash docker/containerd/mirrors.sh`,之后 **YAML `image:` 字段保持上游不动**,kubelet/containerd 自动走 Harbor mirror
+  - **节点 Pod 卡 ImagePullBackOff 第一步**:不是改 YAML,是 ssh 到节点 `ls /etc/containerd/certs.d/<host>/hosts.toml`,没配就跑 mirrors.sh + `systemctl restart containerd`
+  - **非镜像**(raw / release / Helm chart):直连基本不通 → 走 Nexus / chfs(`infra-url-rewrite` skill 自动改写)
+  - **常见误操作**:写脚本时手贱 `sed -i 's|registry.k8s.io|k8s.ihome.sxxpqp.top:8443|g'` —— 不要做,污染 yaml 可移植性,且 mirror 已经在节点层透明转发
 - **CentOS / RHEL 网络排障**:第一步先 `systemctl status firewalld` + `getenforce`(默认带 firewalld + SELinux)
 - **Ubuntu DNS 端口**:跑 DNS 类服务前先 `systemctl status systemd-resolved`(占 53)
 - **libvirt virbr0**:测试机常见虚拟网桥,自动检测出口网卡的程序经常误选,跟物理网卡分流时要排除
