@@ -1,7 +1,26 @@
 #!/usr/bin/env bash
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/mirrors.sh
-# 配置 containerd 全部镜像加速源
+# 配置 containerd 全部镜像加速源, 每个节点跑一次。
 # 用法: bash mirrors.sh
+#
+# ============================================================
+#  加速源完整映射(全部 Harbor pull-through proxy)
+# ============================================================
+#
+#  docker.io            → dockerhub.ihome.sxxpqp.top:8443
+#  registry.k8s.io      → k8s.ihome.sxxpqp.top:8443
+#  quay.io              → quay.ihome.sxxpqp.top:8443
+#  ghcr.io              → ghcr.ihome.sxxpqp.top:8443
+#  registry-1.docker.io → dockerhub.ihome.sxxpqp.top:8443
+#
+#  自建服务:
+#  registry.cn-hangzhou.aliyuncs.com/sxxpqp/  → 阿里云 ACR(直连,推送目标)
+#  nexus.ihome.sxxpqp.top:8443               → Nexus 私服(raw/helm/二进制)
+#  chfs.sxxpqp.top:8443                      → 个人文件中转
+#  ihome.sxxpqp.top:8443                     → MinIO S3 API
+#
+#  每个 upstream 对应 /etc/containerd/certs.d/<upstream>/hosts.toml
+# ============================================================
 
 set -euo pipefail
 
@@ -80,11 +99,27 @@ else
 fi
 
 echo ""
-echo "全部加速源已配置, 列出:"
+echo "=================================="
+echo "  加速源映射(全部):"
+echo "=================================="
+echo "  docker.io            → dockerhub.ihome.sxxpqp.top:8443"
+echo "  registry.k8s.io      → k8s.ihome.sxxpqp.top:8443"
+echo "  quay.io              → quay.ihome.sxxpqp.top:8443"
+echo "  ghcr.io              → ghcr.ihome.sxxpqp.top:8443"
+echo "  registry-1.docker.io → dockerhub.ihome.sxxpqp.top:8443"
+echo
+echo "自建服务:"
+echo "  registry.cn-hangzhou.aliyuncs.com/sxxpqp/  (阿里云 ACR 推送)"
+echo "  nexus.ihome.sxxpqp.top:8443               (Nexus raw/helm)"
+echo "  chfs.sxxpqp.top:8443                      (文件中转)"
+echo "  ihome.sxxpqp.top:8443                     (MinIO S3)"
+echo
+echo "配置目录:"
 find "$CERTS_DIR" -name hosts.toml -exec echo "  {}" \;
 
 echo ""
-echo "验证(拉一个镜像测试):"
+echo "验证:"
 echo "  ctr -n k8s.io image pull docker.io/library/nginx:alpine"
 echo "  ctr -n k8s.io image pull registry.k8s.io/pause:3.9"
 echo "  ctr -n k8s.io image pull quay.io/metallb/controller:v0.14.8"
+echo "  ctr -n k8s.io image pull ghcr.io/cloudnativelabs/gobgp:latest"
