@@ -17,6 +17,7 @@
 | 何时需要 | 在哪 |
 |---|---|
 | **写或改任何脚本前**:K8s/Shell/iptables/网络类脚本踩坑清单 | **skill: script-pitfalls**(自动触发) |
+| **写或改 K8s yaml**:Deployment/Service/Ingress/HPA/CronJob 等生产模板 + 反模式 | **skill: k8s-yaml-prod**(自动触发) |
 | 公网 URL 改写成自建代理(Harbor / Nexus / chfs / 阿里 ACR) | **skill: infra-url-rewrite**(自动触发) |
 | K8s 资源卡 Terminating / RBAC 残留 / webhook 拦 API | **skill: k8s-cleanup-stuck**(自动触发) |
 | 改 yaml / patch 生产配置 / 改 devops 文件 | **skill: linux-ops-edit**(自动触发) |
