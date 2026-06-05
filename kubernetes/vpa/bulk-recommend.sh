@@ -19,6 +19,7 @@ NAMESPACE=""
 ALL_NS="false"
 EXCLUDE="$DEFAULT_EXCLUDE"
 MODE="create"
+RAW="false"
 
 usage() {
   cat <<EOF
@@ -26,7 +27,8 @@ usage() {
 
 模式(三选一,默认 create):
   (默认)                给指定 ns 的所有 Deployment 建 VPA(updateMode: Off,打 label)
-  --dump               打印所有 VPA 的 reco(Target / Lower / Upper bound,跨 ns)
+  --dump               打印所有 VPA 的 reco(Target / Lower / Upper bound,跨 ns,内存自动转 Mi/Gi)
+  --raw                给 --dump 用,关掉单位换算,输出原始字节
   --cleanup            删本脚本建过的 VPA(只认 label ${LABEL_KEY}=${LABEL_VAL})
 
 ns 选择(三种,默认当前 context 的 ns):
@@ -58,6 +60,7 @@ while [ $# -gt 0 ]; do
     --all-namespaces|-A) ALL_NS="true" ;;
     --exclude=*) EXCLUDE="${1#*=}" ;;
     --dump) MODE="dump" ;;
+    --raw) RAW="true" ;;
     --cleanup) MODE="cleanup" ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: 未知参数: $1" >&2; usage >&2; exit 1 ;;
@@ -149,8 +152,8 @@ YAML
 # ============================================================
 dump)
   no_reco=0; with_reco=0
-  TMPFILE=$(mktemp /tmp/vpa-dump.XXXXXX)
-  trap "rm -f $TMPFILE" EXIT
+  RAW_FILE=$(mktemp /tmp/vpa-dump.XXXXXX)
+  trap "rm -f $RAW_FILE" EXIT
   {
     printf "VPA\tCONTAINER\tTARGET_CPU\tTARGET_MEM\tLOWER_CPU\tLOWER_MEM\tUPPER_CPU\tUPPER_MEM\n"
     for ns in $NS_LIST; do
@@ -168,15 +171,47 @@ dump)
         fi
       done
     done
-  } > "$TMPFILE"
+  } > "$RAW_FILE"
+
+  # 默认 awk 转 Mi/Gi(只动 4/6/8 三列 — TARGET/LOWER/UPPER 的 memory),--raw 关掉
+  if [ "$RAW" = "true" ]; then
+    OUT_FILE="$RAW_FILE"
+  else
+    FMT_FILE=$(mktemp /tmp/vpa-dump-fmt.XXXXXX)
+    trap "rm -f $RAW_FILE $FMT_FILE" EXIT
+    awk -F'\t' -v OFS='\t' '
+      function fmt_mem(s,   n, b) {
+        if (s == "" || s == "<none>") return "-"
+        n = s
+        if      (sub(/Ki$/, "", n)) b = n * 1024
+        else if (sub(/Mi$/, "", n)) b = n * 1048576
+        else if (sub(/Gi$/, "", n)) b = n * 1073741824
+        else if (sub(/Ti$/, "", n)) b = n * 1099511627776
+        else if (sub(/k$/,  "", n)) b = n * 1000
+        else if (sub(/M$/,  "", n)) b = n * 1000000
+        else if (sub(/G$/,  "", n)) b = n * 1000000000
+        else if (sub(/T$/,  "", n)) b = n * 1000000000000
+        else                        b = s + 0
+        if (b >= 1073741824) return sprintf("%.2fGi", b / 1073741824)
+        if (b >= 10485760)   return sprintf("%.0fMi", b / 1048576)
+        if (b >= 1048576)    return sprintf("%.1fMi", b / 1048576)
+        if (b >= 1024)       return sprintf("%.0fKi", b / 1024)
+        return sprintf("%dB", b)
+      }
+      NR == 1 { print; next }
+      { $4 = fmt_mem($4); $6 = fmt_mem($6); $8 = fmt_mem($8); print }
+    ' "$RAW_FILE" > "$FMT_FILE"
+    OUT_FILE="$FMT_FILE"
+  fi
 
   if command -v column >/dev/null 2>&1; then
-    column -t -s $'\t' "$TMPFILE"
+    column -t -s $'\t' "$OUT_FILE"
   else
-    cat "$TMPFILE"
+    cat "$OUT_FILE"
   fi
   echo
   log "汇总: $with_reco 个 VPA 已出建议,$no_reco 个还没有(等下一轮采样,或 metrics-server 没接通)"
+  [ "$RAW" = "false" ] && log "提示: 内存已自动换算为 Mi/Gi(--raw 看原始字节)"
   ;;
 
 # ============================================================
