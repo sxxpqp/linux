@@ -2,10 +2,10 @@
 # 系统: Kubernetes (K8s 1.25+, 1.28 已验证) — metrics-server v0.7.2
 # 上游: https://github.com/kubernetes-sigs/metrics-server/releases/tag/v0.7.2
 #
-# 走代理:
-#   - YAML  → nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent(raw 直连不通)
-#   - 镜像  → 保持上游 registry.k8s.io/metrics-server/metrics-server:v0.7.2,
-#             由节点 containerd mirror 透明转发(/etc/containerd/certs.d/registry.k8s.io/hosts.toml)
+# YAML: 本地 ship 在脚本同目录的 components.yaml(GitHub release 资产,不在 raw 源里,
+#       仿 ingress-nginx 模式跟脚本一起版本锁定)
+# 镜像: 保持上游 registry.k8s.io/metrics-server/metrics-server:v0.7.2,
+#       由节点 containerd mirror 透明转发(/etc/containerd/certs.d/registry.k8s.io/hosts.toml)
 #
 # 默认:apply 之前给 metrics-server 的 args 加 --kubelet-insecure-tls(kubeadm 自签 kubelet 证书必需),
 #       已经加过的会自动跳过(幂等)。云厂商托管集群(EKS/AKS/GKE)有这个 flag 不影响,留着也行。
@@ -16,7 +16,6 @@ set -euo pipefail
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 
 MS_VERSION="v0.7.2"
-NEXUS_RAW="${NEXUS_RAW:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent}"
 NAMESPACE="kube-system"
 
 DRY_RUN="false"
@@ -33,8 +32,7 @@ usage() {
   -h, --help              显示帮助
 
 环境变量:
-  NEXUS_RAW               Nexus raw 代理前缀
-  MS_VERSION              metrics-server tag(默认 v0.7.2,1.28 验证过)
+  MS_VERSION              metrics-server tag(默认 v0.7.2,1.28 验证过 — 改 tag 要同步换 components.yaml)
 
 示例:
   bash install.sh                  # kubeadm 默认装法
@@ -100,20 +98,24 @@ if kubectl -n ${NAMESPACE} get deploy metrics-server -o jsonpath='{.metadata.del
 fi
 
 # ============================================================
-# 2/5 下载 YAML
+# 2/5 读取本地 components.yaml(脚本同目录)
 # ============================================================
-log "[2/5] 下载 components.yaml(走 Nexus 代理)"
+log "[2/5] 准备 components.yaml(脚本同目录的本地版本)"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_YAML="${SCRIPT_DIR}/components.yaml"
+if [ ! -f "$SRC_YAML" ]; then
+  err "找不到 $SRC_YAML"
+  err "请先在仓库里放好,或者从 chfs 拉:"
+  err "  curl -fsSLk https://chfs.sxxpqp.top:8443/chfs/shared/k8s/metrics-server-${MS_VERSION}-components.yaml -o $SRC_YAML"
+  exit 1
+fi
+ok "源 YAML: $SRC_YAML ($(wc -l < "$SRC_YAML") 行)"
 
 WORK_DIR=$(mktemp -d /tmp/metrics-server-install.XXXXXX)
 trap "rm -rf $WORK_DIR" EXIT
+cp "$SRC_YAML" "${WORK_DIR}/components.yaml"
 ok "工作目录: $WORK_DIR"
-
-URL="${NEXUS_RAW}/kubernetes-sigs/metrics-server/${MS_VERSION}/manifests/release/components.yaml"
-if curl -fsSLk "$URL" -o "${WORK_DIR}/components.yaml"; then
-  ok "components.yaml ($(wc -l < "${WORK_DIR}/components.yaml") 行)"
-else
-  err "下载失败: $URL"; exit 1
-fi
 
 # ============================================================
 # 3/5 改 args(加 --kubelet-insecure-tls)+ 检查 image
