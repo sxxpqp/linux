@@ -10,8 +10,10 @@ gen_ips() {
   local mask="${LB_CIDR#*/}"
   local IFS=.; local o=($base)
   local count=$(( (1 << (32 - mask)) - 2 ))
-  for i in $(seq 1 $count); do
+  local i=1
+  while [ $i -le $count ]; do
     printf '%d.%d.%d.%d\n' "${o[0]}" "${o[1]}" "${o[2]}" "$((o[3] + i))"
+    i=$((i + 1))
   done
 }
 
