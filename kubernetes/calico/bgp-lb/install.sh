@@ -243,12 +243,89 @@ else
   warn "未指定 peer,只开 node mesh(BGP peer 后面加也行)"
 fi
 
-# Calico 不像 MetalLB 有 IPAddressPool CR — LB IP 直接从 BGPConfiguration 宣告。
-# Service type=LoadBalancer 创建后, Calico 自动从 pod CIDR 之外的地址段分配
-# 一个 EXTERNAL-IP(但是 Calico 默认不自动分配 LB IP, 要手动指定 loadBalancerIP)。
-# 这里给个创建 LoadBalancer Service 的例子。
-ok "LB Service 用法: kubectl expose deploy <NAME> --port=80 --type=LoadBalancer \\"
-ok "                --overrides='{\"spec\":{\"loadBalancerIP\":\"<从 $LB_CIDR 里挑>\"}}'"
+# Calico 不自动分配 LB IP — 部署一个 LB Assigner 自动处理
+ASSIGNER="${SCRIPT_DIR}/lb-assigner.sh"
+if [ -f "$ASSIGNER" ]; then
+  log "  部署 LB IP 自动分配器..."
+  cat > /tmp/lb-assigner-deploy.yaml <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lb-assigner
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: lb-assigner
+rules:
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: lb-assigner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: lb-assigner
+subjects:
+- kind: ServiceAccount
+  name: lb-assigner
+  namespace: kube-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lb-assigner
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lb-assigner
+  template:
+    metadata:
+      labels:
+        app: lb-assigner
+    spec:
+      serviceAccountName: lb-assigner
+      containers:
+      - name: assigner
+        image: bitnami/kubectl:latest
+        command: ["/bin/bash", "/scripts/lb-assigner.sh"]
+        env:
+        - name: LB_CIDR
+          value: "${LB_CIDR}"
+        - name: INTERVAL
+          value: "5"
+        volumeMounts:
+        - name: script
+          mountPath: /scripts
+      volumes:
+      - name: script
+        configMap:
+          name: lb-assigner-script
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lb-assigner-script
+  namespace: kube-system
+data:
+  lb-assigner.sh: |
+$(sed 's/^/    /' "$ASSIGNER")
+EOF
+  kubectl apply -f /tmp/lb-assigner-deploy.yaml 2>/dev/null || warn "LB Assigner 部署失败(手动指定 externalIPs 或 loadBalancerIP 即可)"
+  rm -f /tmp/lb-assigner-deploy.yaml
+  ok "LB IP 自动分配器已部署(创建 type=LoadBalancer Service 自动获得 IP)"
+else
+  warn "lb-assigner.sh 不在, 创建 LB Service 时需手动指定 externalIPs:"
+  warn "  kubectl expose deploy <NAME> --port=80 --type=LoadBalancer"
+  warn "  kubectl patch svc <NAME> -p '{\"spec\":{\"externalIPs\":[\"<IP>\"]}}'"
+fi
 
 # ============================================================
 # 6/6 验证
