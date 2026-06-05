@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# 系统: Kubernetes (K8s) — ingress-nginx v1.15.1 DaemonSet + hostNetwork
-# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/ingress/install.sh
+# 系统: Kubernetes (K8s) — ingress-nginx v1.15.1 DaemonSet + hostNetwork + LoadBalancer
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/ingress-nginx/install.sh
 # 用法: curl -sL <URL> -o install.sh && bash install.sh [选项]
 #
-# 基于官方 cloud/deploy.yaml 改造:
-#   Deployment → DaemonSet, 加 hostNetwork/ClusterFirstWithHostNet/nodeSelector
-#   详见 deploy-guide.md
+# 生产默认 ✓+✓:hostNetwork=true(节点 80/443 直绑)+ Service LoadBalancer(配 Calico BGP-LB 拿单 VIP + ECMP)
+#   - 配套 ../calico/bgp-lb/ 装好 → 路由器 ECMP 多路径分流到多 ingress 节点 → 本机终结
+#   - 没装 BGP-LB:加 --service-type=NodePort,纯 hostNetwork 模式(节点 IP:80 入口)
+# 改造思路详见 deploy-guide.md
 
 set -euo pipefail
 
 INGRESS_VERSION="v1.15.1"
 LABEL_NODES=""
+SERVICE_TYPE=""          # 空 = 用 deploy.yaml 默认(LoadBalancer);可改 NodePort
 DRY_RUN="false"
 
 usage() {
@@ -20,15 +22,18 @@ usage() {
 可选:
   --label-nodes=N1,N2       打 ingress=true 标签的节点(逗号分隔)
   --label-nodes=all          所有 linux worker 节点都打标签
+  --service-type=TYPE        覆盖 Service.type,默认走 deploy.yaml 的 LoadBalancer
+                             可选 LoadBalancer / NodePort / ClusterIP
+                             没装 Calico BGP-LB / 公有云 LB → 用 NodePort
   --dry-run                  只检查不打标签不 apply
   -h, --help                 显示帮助
 
 示例:
-  # 给 node1/node2 打标签并安装
+  # 生产默认:hostNetwork + BGP-LB(LB IP + ECMP)
   bash install.sh --label-nodes=node1,node2
 
-  # 所有节点都跑 ingress(测试环境)
-  bash install.sh --label-nodes=all
+  # 没装 BGP-LB:纯 hostNetwork 模式(DNS 轮询节点 IP)
+  bash install.sh --label-nodes=node1,node2 --service-type=NodePort
 
   # 节点已打好标签,直接装
   bash install.sh
@@ -38,6 +43,7 @@ EOF
 while [ $# -gt 0 ]; do
   case "$1" in
     --label-nodes=*) LABEL_NODES="${1#*=}" ;;
+    --service-type=*) SERVICE_TYPE="${1#*=}" ;;
     --dry-run) DRY_RUN="true" ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: 未知参数: $1" >&2; usage >&2; exit 1 ;;
@@ -72,6 +78,24 @@ ok "deploy.yaml: $DEPLOY_YAML ($(wc -l < "$DEPLOY_YAML") 行)"
 if kubectl get ns ingress-nginx >/dev/null 2>&1; then
   if kubectl -n ingress-nginx get ds ingress-nginx-controller >/dev/null 2>&1; then
     warn "ingress-nginx 已安装(kubectl -n ingress-nginx get ds),脚本将走 apply 幂等"
+  fi
+fi
+
+# 检测 Calico BGP-LB(deploy.yaml 默认 Service type=LoadBalancer,没 BGP-LB 会 pending)
+HAS_BGPLB=false
+if kubectl -n kube-system get deploy lb-assigner >/dev/null 2>&1; then
+  HAS_BGPLB=true
+  ok "检测到 Calico BGP-LB(lb-assigner Deployment 在),Service LoadBalancer 会自动分配 LB IP"
+elif kubectl get deploy -A 2>/dev/null | grep -q metallb-controller; then
+  HAS_BGPLB=true
+  ok "检测到 MetalLB,Service LoadBalancer 会自动分配 LB IP"
+else
+  # 没装 LB controller,且用户没指定 --service-type — 只警告,不中止
+  if [ -z "$SERVICE_TYPE" ]; then
+    warn "未检测到 Calico BGP-LB / MetalLB / 云 LB Controller"
+    warn "  → Service type=LoadBalancer 会一直 pending(hostNetwork 模式不影响 80/443 直绑)"
+    warn "  → 想要 LB IP:bash ../calico/bgp-lb/install.sh --apiserver-host=<IP> --my-asn=64500 --lb-cidr=<CIDR>"
+    warn "  → 想要 NodePort:重跑加 --service-type=NodePort"
   fi
 fi
 
@@ -118,8 +142,15 @@ log "[3/5] apply deploy.yaml"
 
 if [ "$DRY_RUN" = "true" ]; then
   warn "[dry-run] 会 kubectl apply -f $DEPLOY_YAML"
+  [ -n "$SERVICE_TYPE" ] && warn "[dry-run] 然后 patch Service.type=$SERVICE_TYPE"
 else
   kubectl apply -f "$DEPLOY_YAML"
+  # 覆盖 Service.type(如果用户指定)
+  if [ -n "$SERVICE_TYPE" ]; then
+    log "  覆盖 Service.type → $SERVICE_TYPE"
+    kubectl -n ingress-nginx patch svc ingress-nginx-controller \
+      --type=merge -p "{\"spec\":{\"type\":\"$SERVICE_TYPE\"}}"
+  fi
 fi
 ok "deploy.yaml 已 apply"
 
@@ -159,14 +190,35 @@ fi
 
 kubectl -n ingress-nginx get pods -o wide
 
-# 取一个 ingress 节点的 IP 测试 80 端口
+# 取一个 ingress 节点的 IP 测试 80 端口(hostNetwork 直绑)
 INGRESS_NODE=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/component=controller -o jsonpath='{.items[0].status.hostIP}' 2>/dev/null)
 if [ -n "$INGRESS_NODE" ]; then
-  log "  测试节点 $INGRESS_NODE:80..."
+  log "  测试节点 $INGRESS_NODE:80(hostNetwork 直绑)..."
   if curl -sI --max-time 5 "http://$INGRESS_NODE:80" 2>/dev/null | grep -q 'HTTP'; then
     ok "节点 $INGRESS_NODE:80 可达(ingress-nginx controller 在 listen)"
   else
-    warn "节点 $INGRESS_NODE:80 不可达(可能是防火墙/端口冲突,也可能是网络限制)"
+    warn "节点 $INGRESS_NODE:80 不可达(防火墙 / 端口冲突 / 网络限制)"
+  fi
+fi
+
+# Service 类型检查 + LB IP 状态
+SVC_TYPE=$(kubectl -n ingress-nginx get svc ingress-nginx-controller -o jsonpath='{.spec.type}')
+log "  Service type = $SVC_TYPE"
+if [ "$SVC_TYPE" = "LoadBalancer" ]; then
+  LB_IP=$(kubectl -n ingress-nginx get svc ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  if [ -n "$LB_IP" ]; then
+    ok "LB IP 已分配:$LB_IP"
+    if curl -sI --max-time 5 "http://$LB_IP:80" 2>/dev/null | grep -q 'HTTP'; then
+      ok "LB IP $LB_IP:80 可达 — BGP-LB + ECMP 链路验证通过 🎉"
+    else
+      warn "LB IP $LB_IP:80 不通,检查:"
+      warn "  ① Calico BGP peer 状态:kubectl -n calico-system exec ds/calico-node -- birdcl show protocols"
+      warn "  ② 路由器侧 ECMP:ip route show $LB_IP/32(期望多 nexthop)"
+    fi
+  else
+    warn "Service 是 LoadBalancer 但 EXTERNAL-IP <pending>"
+    warn "  → 没装 Calico BGP-LB / MetalLB:加 --service-type=NodePort 重跑"
+    warn "  → 或装 BGP-LB:bash ../calico/bgp-lb/install.sh ..."
   fi
 fi
 
@@ -174,8 +226,9 @@ log "==== 安装完成 ===="
 echo
 echo "验证 Ingress:"
 echo "  kubectl -n ingress-nginx get pods -o wide"
+echo "  kubectl -n ingress-nginx get svc ingress-nginx-controller   # 看 EXTERNAL-IP"
 echo "  kubectl get ingressclass nginx"
-echo "  curl -H 'Host: demo.local' http://<ingress-node-ip>/"
+echo "  bash $(dirname "$0")/test.sh   # 端到端测试"
 echo
 echo "卸载:"
 echo "  bash $(dirname "$0")/uninstall.sh --apply"

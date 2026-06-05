@@ -332,6 +332,16 @@ metadata:
   name: ingress-nginx-controller
   namespace: ingress-nginx
 ---
+# ============================================================
+# Controller Service — 生产模式 ✓+✓:hostNetwork=true + type: LoadBalancer
+# ----------------------------------------------------------------------
+# 配套 Calico BGP-LB(见 ../calico/bgp-lb/):
+#   lb-assigner 自动分配 LB IP(本环境 172.16.150.200/29 池)
+#   Calico BIRD 向路由器宣告 LB_IP/32,路由器 ECMP 多 nexthop 分流到多 ingress 节点
+#   externalTrafficPolicy: Local + hostNetwork=true → 流量直接落本节点 nginx,零跨节点 SNAT
+#
+# 没装 Calico BGP-LB?把 type 改成 NodePort,客户端走节点 IP:80/443(纯 hostNetwork 模式)
+# ============================================================
 apiVersion: v1
 kind: Service
 metadata:
@@ -344,7 +354,7 @@ metadata:
   name: ingress-nginx-controller
   namespace: ingress-nginx
 spec:
-  externalTrafficPolicy: Local
+  externalTrafficPolicy: Local      # ★ 保留客户端真实 IP + ECMP 路径数 = DS 实例数,本机终结
   ipFamilies:
   - IPv4
   ipFamilyPolicy: SingleStack
@@ -363,7 +373,7 @@ spec:
     app.kubernetes.io/component: controller
     app.kubernetes.io/instance: ingress-nginx
     app.kubernetes.io/name: ingress-nginx
-  type: LoadBalancer
+  type: LoadBalancer                # ★ 配 BGP-LB:拿 LB IP 被 BGP 宣告;无 BGP-LB:改 NodePort
 ---
 apiVersion: v1
 kind: Service
