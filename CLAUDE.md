@@ -38,20 +38,42 @@
 | Nexus 私服(raw / helm / 二进制) | `https://nexus.ihome.sxxpqp.top:8443` |
 | 个人文件中转(chfs) | `https://chfs.sxxpqp.top:8443/chfs/shared/` |
 | 常用测试主机 | `node02` (192.168.150.253, enp1s0) |
+| **测试集群** | kh(172.16.150.128), node1-4(172.16.150.129-131), Pod CIDR=10.244.0.0/16 |
+| **测试集群 BGP 参数** | AS=64500, LB CIDR=172.16.150.200/29, 路由器 peer=172.16.150.131:64500 |
 
 > Harbor 多前端域名(`ghcr.ihome` / `quay.ihome` / `k8s.ihome`)+ 内部 rewrite 规则 + 推镜像命令 → 见 skill `infra-url-rewrite`。
 
 ## 子目录优先级 / 当前活跃区域
 
-| 子目录 | 用途 | 是否有 CLAUDE.md |
+| 子目录 | 用途 | 是否有 CLAUDE.md / README |
 |---|---|---|
+| `kubernetes/` | **K8s 全栈**, 先读 [kubernetes/README.md](kubernetes/README.md) 定位 | ✅ README(含完整索引) |
+| `kubernetes/calico/` | Calico CNI(BPF / BGP / BGP-LB 三模式) | ✅ 每个子目录有 README |
+| `kubernetes/calico/bgp-lb/` | **生产推荐**: BGP + 内置 LB + 自动分配 | ✅ README + deploy-guide |
+| `kubernetes/ingress-nginx/` | 入口: DS+hostNetwork, 安装/卸载/验证 | ✅ README |
+| `kubernetes/metallb/` | MetalLB(L2 + BGP), 可被 Calico BGP-LB 替代 | ✅ README |
 | `network/mihomo/` | mihomo 代理(裸核 + TUN,跑在 node02) | ✅ 有专用 |
-| `clash/` | clash 客户端配置(已被 mihomo 取代,留作参考) | 无 |
-| `kubernetes/` | K8s 生产配置归档,内容最多最杂,问之前先看子目录 README | 无 |
+| `docker/` | docker-compose 模板 + nerdctl 安装 | 无 |
+| `devops/` | Jenkins 流水线 + Pod 模板(多集群) | 无 |
+| `clash/` | clash 配置(已被 mihomo 取代) | 无 |
 | `docker/docker-compose/` | docker-compose 服务模板(mysql / nginx / redis 等) | 无 |
 | `devops/` | Jenkins 流水线 + 各业务 K8s Pod 模板(多集群:saas / sd / test / tsl / tzj / whrr / ztwx / huawei-saas 等) | 无 |
 
 需要在某个子目录建立独立上下文时,在那里加一份 CLAUDE.md(参考 `network/mihomo/CLAUDE.md`)。
+
+## K8s 常见操作入口(自动加载对应 README)
+
+| 操作 | 入口脚本/文档 |
+|---|---|
+| 装 Calico BPF | `bash kubernetes/calico/onpremises/operator/install.sh --apiserver-host=<IP> --delete-kube-proxy` |
+| 装 Calico BGP-LB | `bash kubernetes/calico/bgp-lb/install.sh --apiserver-host=<IP> --my-asn=64500 --lb-cidr=<CIDR>` |
+| 装 ingress-nginx | `bash kubernetes/ingress-nginx/install.sh --label-nodes=n1,n2` |
+| 装 MetalLB | `bash kubernetes/metallb/install.sh` |
+| 验证网络 | `bash kubernetes/calico/test-connectivity.sh` |
+| 验证 ingress | `bash kubernetes/ingress-nginx/test.sh` |
+| Calico BPF→BGP 迁移 | `bash kubernetes/calico/switch-to-bgp.sh --my-asn=64500 --peer-asn=64501 --peer-address=<IP>` |
+
+> **读我顺序**: 用户提到某个目录 → 先 `Read` 该目录的 README.md → 再看具体脚本/文件。
 
 ## 跨项目约定
 
