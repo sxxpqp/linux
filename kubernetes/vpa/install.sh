@@ -67,15 +67,16 @@ log "[1/5] 前置检查"
 command -v kubectl >/dev/null || { err "kubectl 不存在"; exit 1; }
 ok "kubectl: $(kubectl version --client -o json 2>/dev/null | grep -o '"gitVersion":"v[^"]*' | head -1 | cut -d'"' -f4)"
 
-K8S_VER=$(kubectl version -o json 2>/dev/null | grep -o '"gitVersion":"v[0-9]*\.[0-9]*[^"]*' | tail -1 | cut -d'"' -f4 || true)
+# 用 /version API 比 `kubectl version -o json` 解析稳(后者不同 kubectl 版本字段顺序 / 格式有变)
+K8S_VER=$(kubectl get --raw /version 2>/dev/null | grep -o '"gitVersion":"[^"]*' | cut -d'"' -f4 || true)
 if [ -n "$K8S_VER" ]; then
-  K8S_MINOR=$(echo "$K8S_VER" | sed 's/^v//' | cut -d. -f2)
+  K8S_MINOR=$(echo "$K8S_VER" | sed -E 's/^v?([0-9]+)\.([0-9]+).*/\2/')
   if [ "$K8S_MINOR" -lt 25 ] 2>/dev/null; then
     err "集群版本 $K8S_VER 低于 1.25,VPA v1.0.0 不支持"; exit 1
   fi
   ok "集群版本: $K8S_VER (VPA v1.0.0 支持 1.25+,1.28 已验证)"
 else
-  warn "无法读取集群版本,跳过版本检查"
+  warn "无法读取集群版本(kubectl get --raw /version 失败),跳过版本检查"
 fi
 
 # metrics-server(recommender 默认数据源)
