@@ -7,7 +7,7 @@
 #   BPF: linuxDataplane=BPF, VXLAN 封包, 替换 kube-proxy
 #   BGP: linuxDataplane=Iptables, BIRD BGP 路由, kube-proxy 保留
 #
-# 需要上游路由器配 BGP neighbor(3 行).
+# 默认只开 node mesh, 上游路由器 peer 可选。
 
 set -euo pipefail
 
@@ -22,15 +22,15 @@ DRY_RUN="false"
 
 usage() {
   cat <<'EOF'
-用法: bash install.sh --apiserver-host=<HOST> --my-asn=<ASN> --peer-asn=<ASN> --peer-address=<IP> [选项]
+用法: bash install.sh --apiserver-host=<HOST> --my-asn=<ASN> [选项]
 
 必填:
   --apiserver-host=HOST     API server 地址(LB / master IP)
   --my-asn=ASN              集群侧 AS 号(私有 AS 64512-65534)
-  --peer-asn=ASN            上游路由器 AS 号
-  --peer-address=IP         上游路由器 BGP 邻居 IP
 
 可选:
+  --peer-asn=ASN            上游路由器 AS 号(不传则只开 node mesh)
+  --peer-address=IP         上游路由器 BGP 邻居 IP(不传则只开 node mesh)
   --apiserver-port=PORT     API server 端口,默认 6443
   --pod-cidr=CIDR           Pod CIDR,默认自动探测
   --calico-version=VER      版本,默认 v3.28.2
@@ -38,11 +38,12 @@ usage() {
   -h, --help                显示帮助
 
 示例:
-  bash install.sh \
-    --apiserver-host=172.16.150.128 \
-    --my-asn=64500 \
-    --peer-asn=64501 \
-    --peer-address=172.16.150.1
+  # 只开 node mesh(等路由器就绪后再加 peer)
+  bash install.sh --apiserver-host=172.16.150.128 --my-asn=64500
+
+  # 一步到位(路由器已配好)
+  bash install.sh --apiserver-host=172.16.150.128 --my-asn=64500 \
+    --peer-asn=64501 --peer-address=172.16.150.1
 EOF
 }
 
@@ -68,11 +69,12 @@ if [ -z "$APISERVER_HOST" ]; then
   echo "WARN: 自动探测 API server: $APISERVER_HOST"
 fi
 
-if [ -z "$MY_ASN" ] || [ -z "$PEER_ASN" ] || [ -z "$PEER_ADDRESS" ]; then
-  echo "ERROR: --my-asn / --peer-asn / --peer-address 必填" >&2
+if [ -z "$MY_ASN" ]; then
+  echo "ERROR: --my-asn 必填" >&2
   usage >&2
   exit 1
 fi
+# peer 参数可选: 不传就只开 node mesh, 路由器 peer 后面再加
 
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 
@@ -234,8 +236,9 @@ spec:
   nodeToNodeMeshEnabled: true
 EOF
 
-# BGPPeer(上游路由器)
-kubectl apply -f - <<EOF
+# BGPPeer(上游路由器,可选)
+if [ -n "$PEER_ASN" ] && [ -n "$PEER_ADDRESS" ]; then
+  kubectl apply -f - <<EOF
 apiVersion: crd.projectcalico.org/v1
 kind: BGPPeer
 metadata:
@@ -244,29 +247,47 @@ spec:
   peerIP: ${PEER_ADDRESS}
   asNumber: ${PEER_ASN}
 EOF
-ok "BGP peer 已配置"
+  ok "BGP peer 已配置(上游路由器 AS=$PEER_ASN @ $PEER_ADDRESS)"
+else
+  warn "未指定 --peer-asn/--peer-address,跳过上游 peer(只有 node mesh)"
+  warn "  后续加 peer: kubectl apply -f - <<< 'apiVersion: crd.projectcalico.org/v1 ...'"
+fi
 
 # 等 BIRD 建 BGP session
-log "  等 BGP peer 收敛..."
+log "  等 BGP session 收敛..."
 sleep 15
 NODE_POD=$(kubectl -n calico-system get pod -l k8s-app=calico-node -o name | head -1)
 if kubectl -n calico-system exec "$NODE_POD" -- birdcl show protocols 2>/dev/null | grep -q "Established\|Up\|Start\|Active"; then
   ok "BIRD BGP 进程运行中"
 else
-  warn "BIRD 状态待确认(可能路由器还没配 neighbor)"
+  warn "BIRD 状态待确认"
   warn "  kubectl -n calico-system exec $NODE_POD -- birdcl show protocols"
 fi
 
 echo
 log "==== BGP 安装完成 ===="
 echo
-echo "路由器侧配置:"
-NODE_IPS=$(kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}')
-echo "  router bgp $PEER_ASN"
-for ip in $NODE_IPS; do
-  echo "    neighbor $ip remote-as $MY_ASN"
-done
-echo
+if [ -n "$PEER_ASN" ] && [ -n "$PEER_ADDRESS" ]; then
+  echo "路由器侧配置:"
+  NODE_IPS=$(kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}')
+  echo "  router bgp $PEER_ASN"
+  for ip in $NODE_IPS; do
+    echo "    neighbor $ip remote-as $MY_ASN"
+  done
+  echo
+else
+  echo "后续加路由器 peer:"
+  echo "  kubectl apply -f - <<EOF"
+  echo "  apiVersion: crd.projectcalico.org/v1"
+  echo "  kind: BGPPeer"
+  echo "  metadata:"
+  echo "    name: upstream-router"
+  echo "  spec:"
+  echo "    peerIP: <ROUTER_IP>"
+  echo "    asNumber: <ROUTER_ASN>"
+  echo "  EOF"
+  echo
+fi
 echo "验证:"
 echo "  kubectl -n calico-system exec ds/calico-node -- birdcl show protocols"
 echo "  kubectl get bgppeer,bgpconfiguration,ippools"
