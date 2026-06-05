@@ -67,24 +67,34 @@ spec:
             limits:                    # 上限,memory 超了会 OOMKill
               cpu: 4000m
               memory: 4000Mi
+          # 推荐 httpGet — 验证到应用层(业务真能响应),比 tcpSocket(只测 TCP 监听)更准
+          # 业务必须暴露 /actuator/health/{liveness,readiness}(Spring Boot)或 /healthz(nodejs)
+          # 没有健康端点时再退回 tcpSocket(见下方"探针选型"段)
           livenessProbe:
-            tcpSocket: { port: $PORT } # 本仓库标准:tcpSocket(简单粗暴)
-            initialDelaySeconds: 60    # Java 启动慢,nodejs 30 即可
+            httpGet:
+              path: /actuator/health/liveness   # nodejs 用 /healthz 或 /live
+              port: $PORT
+              scheme: HTTP                       # HTTPS 接口用 HTTPS + httpHeaders
+            initialDelaySeconds: 60              # Java 启动慢,nodejs 30 即可
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 5
           readinessProbe:
-            tcpSocket: { port: $PORT }
+            httpGet:
+              path: /actuator/health/readiness   # nodejs 用 /ready
+              port: $PORT
             initialDelaySeconds: 60
-            periodSeconds: 20          # readiness 比 liveness 稀疏点 OK
+            periodSeconds: 20                    # readiness 比 liveness 稀疏点 OK
             timeoutSeconds: 3
             failureThreshold: 5
           # ★ 建议补:Pod 启动期间不让 liveness 误杀(K8s 1.16+)
           startupProbe:
-            tcpSocket: { port: $PORT }
+            httpGet:
+              path: /actuator/health/liveness    # 与 liveness 同端点即可
+              port: $PORT
             initialDelaySeconds: 30
             periodSeconds: 10
-            failureThreshold: 30       # 最多 30*10=300s 启动窗口
+            failureThreshold: 30                 # 最多 30*10=300s 启动窗口
           # ★ 建议补:优雅停机(配合 terminationGracePeriodSeconds)
           lifecycle:
             preStop:
@@ -110,6 +120,40 @@ spec:
             matchLabels:
               app: $APP_NAME
 ```
+
+## 探针选型(三选一)
+
+| 探针类型 | 何时用 | 例子 | 注意 |
+|---|---|---|---|
+| **`httpGet`(首选)** | 应用暴露了 HTTP 健康端点 | `/actuator/health/{liveness,readiness}`(Spring Boot)/ `/healthz` / `/ready` | 探针 hit 算业务请求,确保端点**不依赖 DB / 下游**;依赖了就只能在 readiness 里检 |
+| **`tcpSocket`(退回)** | 应用没暴露 HTTP 端点(纯 TCP 服务、第三方镜像不让改) | `tcpSocket: { port: $PORT }` | 只能验证端口在 listen,不能验证业务真在工作 |
+| **`exec`** | 进程内独立健康脚本(如 redis-cli ping) | `exec: { command: ["redis-cli", "ping"] }` | 频繁 exec 有性能代价,probe 间隔别太密 |
+
+### Spring Boot Actuator 健康端点推荐
+
+```yaml
+# application.yml(业务镜像里配,不在 k8s yaml 里)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      probes:
+        enabled: true   # ★ 开启 /actuator/health/liveness 和 /readiness
+      show-details: never   # 不要泄漏内部状态
+  health:
+    db:
+      enabled: false  # ★ readiness 别带 DB 检查,DB 抖一下整个 Pod 被摘流
+```
+
+### 端点设计原则
+
+- **liveness**:**只检查进程本身**(JVM 没死、事件循环没死)。**不要查 DB / Redis / 下游**,否则 DB 一抖业务 Pod 就被重启,雪崩
+- **readiness**:可以查关键依赖(自己的 DB 连接池、必备的下游),但要谨慎 — 一旦失败 Service 摘流,业务流量打到剩下的 Pod
+- **startup**:Pod 启动慢(Java / 加载模型)时必加,给业务足够时间初始化,避免被 liveness 误杀
 
 ## 各 kind 关键字段速查
 
@@ -292,7 +336,9 @@ spec:
 | `image: $APP_NAME:latest` | `image: $APP_NAME:v1.2.3` 或 `:SNAPSHOT-$BUILD_NUMBER` | latest 没版本约束,回滚没目标 |
 | 没 `resources` 段 | requests + limits 都写 | 没 requests 调度不准;没 limits 一个 Pod 吃光节点 |
 | 只 `readinessProbe` 不要 `livenessProbe` | 都要 | 假死时永远不重启 |
-| `liveness` 用 HTTP `/` 探活 | 用专门 `/healthz` 或 `tcpSocket` | `/` 可能依赖业务 → 业务慢就误杀 |
+| 探针用 `tcpSocket` 当首选 | 优先 `httpGet` 接 `/actuator/health/{liveness,readiness}` 或 `/healthz`;没端点才退回 tcpSocket | tcpSocket 只测端口在 listen,业务死循环 / 内存泄漏 / DB 连接池满 完全测不出 |
+| `liveness` 用 HTTP `/`(业务主页)探活 | 用专门 `/actuator/health/liveness` 或 `/healthz`(轻量端点) | `/` 可能依赖业务 → 业务慢 / DB 抖就误杀 |
+| `liveness` 端点查 DB / 下游 | liveness **只测进程自己**;依赖检查放 readiness | DB 一抖整个 Pod 被重启 → 雪崩 |
 | `liveness` 比 `readiness` 严格 | liveness 要**宽松**,readiness 才严格 | 一旦 liveness 失败直接杀 Pod;readiness 失败只是摘流 |
 | 无 `imagePullSecrets`,从 Harbor 拉 | `imagePullSecrets: [{ name: harbor-repository }]` | 私有 Harbor 拉不到 |
 | `replicas: 1` 还不配 PDB | ≥2 副本 + PodDisruptionBudget | 节点重启时业务断 |
