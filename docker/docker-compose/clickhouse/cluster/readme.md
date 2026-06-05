@@ -1,6 +1,11 @@
-**完全正确！** 👍 你理解得很准！
+# ClickHouse 集群三套配置的关系(Keeper / config.xml / users.xml)
 
-让我详细解释这三个配置的作用和区别：
+> 源: https://github.com/sxxpqp/linux/blob/main/docker/docker-compose/clickhouse/cluster/readme.md
+> 状态: 验证过
+
+**完全正确!** 👍 你理解得很准!
+
+让我详细解释这三个配置的作用和区别:
 
 ---
 

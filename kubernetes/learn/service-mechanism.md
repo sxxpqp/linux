@@ -1,120 +1,154 @@
----
-### 八种服务类型 
+# Kubernetes Service 暴露机制 — 八种类型
 
-##### 1. ClusterIP：默认类型，只能在集群内部访问，通过集群内部的IP地址访问
-##### 2. NodePort：通过集群内部的IP地址和端口访问
-##### 3. LoadBalancer：通过云服务商提供的负载均衡器访问
-##### 4. ExternalName：通过CNAME记录访问
-##### 5. Headless：不创建ClusterIP，只创建Endpoints
-##### 6. ExternalIPs：通过外部IP访问
-##### 7. hostPort：通过宿主机IP和端口访问 通过iptables转发到pod 
-##### 8. hostNetwork：通过宿主机IP和端口访问 通过修改pod的网络命名空间，让pod的网络命名空间和宿主机共享，让pod的网络直接使用宿主机的网络，pod的ip地址就是宿主机的ip地址。
-#### ClusterIP创建服务 通过selector选择器创建服务，通过label标签选择器选择pod,并创建endpoint。
+> 源: https://github.com/sxxpqp/linux/blob/main/kubernetes/learn/service-mechanism.md
+> 状态: 学习笔记
+
+K8s 把 Pod 暴露给客户端的所有方式。8 种各有适用场景,**不全是 Service**(`hostPort`/`hostNetwork` 是 Pod 字段),但实践里都属于"暴露 Pod"这件事的方案。
+
+## TL;DR 选型表
+
+| 方式 | 集群内可达 | 集群外可达 | 占节点端口 | 典型场景 |
+|---|---|---|---|---|
+| **ClusterIP** | ✓ | ✗ | ✗ | 集群内 RPC、服务间调用(默认) |
+| **NodePort** | ✓ | ✓(`NodeIP:port`) | ✓ 30000-32767 | 临时对外暴露 / 没 Ingress 时 |
+| **LoadBalancer** | ✓ | ✓(LB IP) | ✗ | 公有云、MetalLB 自动分 IP |
+| **ExternalName** | ✓(CNAME) | — | ✗ | 集群内引用外部服务,只做 DNS 别名 |
+| **Headless** (`clusterIP: None`) | ✓(直返 Pod IP 列表) | ✗ | ✗ | StatefulSet 配套、自己做服务发现 |
+| **ExternalIPs** | ✓ | ✓(指定节点 IP) | 任意端口 | 用宿主机 IP + 任意端口对外 |
+| **`hostPort`**(Pod 字段) | — | ✓ | ✓(指定端口) | DaemonSet 偶尔用,常被替代 |
+| **`hostNetwork`**(Pod 字段) | — | ✓(直接用宿主机网络栈) | 整个 Pod 共享宿主网络 | 网络插件 / 日志采集 / 性能关键 |
+
+---
+
+## 1. ClusterIP — 默认类型,集群内 IP
+
+通过 `selector` + label 自动选 Pod 并建 endpoint。
+
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: nginx-service
 spec:
-    selector:  #通过label标签选择器选择pod,并创建endpoint
-        app: nginx
-    ports:
+  selector:               # 通过 label 选择 Pod,自动建 endpoint
+    app: nginx
+  ports:
     - protocol: TCP
       port: 80
       targetPort: 80
 ```
 
-#### ClusterIP创建服务 通过endpoints指定服务的endpoint
-```
+### 变体:手动指定 Endpoints(不走 selector)
+
+适用于"指向集群外的某台机器"或"自定义后端"。
+
+```yaml
 apiVersion: v1
 kind: Endpoints
 metadata:
   name: my-service-manual-endpoints
 subsets:
   - addresses:
-      - ip: 192.168.1.54 #手动指定endpoint的ip地址可以是pod的ip地址，也可以是宿主机的ip地址或者外部ip地址
+      - ip: 192.168.1.54   # 手动指定的 endpoint IP — Pod IP / 宿主 IP / 外部 IP 都行
     ports:
-      - name: http #指定端口名称跟service的端口名称一致
+      - name: http         # 端口名要跟下面 Service 一致
         port: 80
         protocol: TCP
-```
-```yaml
+---
 apiVersion: v1
 kind: Service
 metadata:
   name: my-service-manual-endpoints
-spec:
-    ports:
+spec:                       # 注意:没有 selector
+  ports:
     - protocol: TCP
       port: 80
-      name: http #指定端口名称跟service的端口名称一致
+      name: http
 ```
-#### nodePort创建服务 LoadBalancer创建服务
+
+## 2. NodePort — 占节点端口
+
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: nginx-service-nodeport
 spec:
-    type: NodePort #指定服务类型为NodePort、LoadBalancer、ClusterIP
-    ports:
+  type: NodePort
+  ports:
     - protocol: TCP
       port: 80
       targetPort: 80
-      nodePort: 30080  
+      nodePort: 30080        # 不指定就在 30000-32767 随机分
 ```
-#### ExternalName创建服务 通过CNAME记录访问
+
+## 3. LoadBalancer — 云 LB / MetalLB 分配外部 IP
+
+公有云会自动建 LB,自建集群用 MetalLB / kube-vip。yaml 同 NodePort,改 `type: LoadBalancer`。
+
+## 4. ExternalName — DNS 别名,只解析不代理
+
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: nginx-service-externalname
 spec:
-    type: ExternalName #指定服务类型为ExternalName
-    externalName: www.baidu.com
-    ports:
+  type: ExternalName
+  externalName: www.baidu.com   # K8s DNS 会把这个 Service 解析成 CNAME → www.baidu.com
+  ports:
     - port: 443
       targetPort: 443
 ```
-#### Headless创建服务 不创建ClusterIP，只创建Endpoints
+
+集群内 Pod 访问 `nginx-service-externalname` → DNS 返回 CNAME `www.baidu.com`,流量**不走 kube-proxy**,直接出集群。
+
+## 5. Headless — `clusterIP: None`,直返 Pod IP 列表
+
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: nginx-service-headless
 spec:
-    clusterIP: None #指定服务类型为Headless
-    ports:
+  clusterIP: None              # ★ 关键:声明 Headless
+  ports:
     - protocol: TCP
       port: 80
       targetPort: 80
-    selector:
-        app: nginx    
+  selector:
+    app: nginx
 ```
-#### ExternalIPs创建服务 通过外部IP访问
+
+DNS 查 `nginx-service-headless` 返回所有 Pod 的 IP 列表(A 记录),客户端自己挑。StatefulSet 配套用得最多。
+
+## 6. ExternalIPs — 用宿主机 IP 对外
+
 ```yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: nginx-service-exrernalips
 spec:
-    externalIPs:
-    - 192.168.1.100 #指定外部IP 就是宿主机IP,创建kube-ipvs0网卡.
-    ports:
+  externalIPs:
+    - 192.168.1.100             # 宿主机 IP;会建 kube-ipvs0 网卡
+  ports:
     - protocol: TCP
       port: 80
       targetPort: 80
-    selector:
-        app: nginx    
+  selector:
+    app: nginx
 ```
-#### hostPort创建服务 通过宿主机IP和端口访问
+
+## 7. `hostPort` — Pod 字段,绑宿主机端口
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: 2 #副本不可以大于宿主机端口的数量
+  replicas: 2                  # ⚠ 副本数不能 > 节点数(端口冲突)
   selector:
     matchLabels:
       app: nginx
@@ -124,28 +158,30 @@ spec:
         app: nginx
     spec:
       containers:
-      - name: nginx
-        image: nginx:1.7.9
-        ports:
-        - containerPort: 80
-          name: ngpt
-          hostPort: 31200
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 200m
-            memory: 256Mi   
+        - name: nginx
+          image: nginx:1.7.9
+          ports:
+            - containerPort: 80
+              name: ngpt
+              hostPort: 31200    # 绑宿主机 31200 端口,iptables 转发到 Pod 80
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: 200m, memory: 256Mi }
 ```
-#### hostNetwork创建deployment
+
+## 8. `hostNetwork` — Pod 共享宿主机网络
+
+Pod 的 IP **就是宿主机 IP**,没有独立 netns。
+
+### Deployment
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nginx-deployment
 spec:
-  replicas: 2 #副本不可以大于宿主机端口的数量
+  replicas: 2                    # ⚠ 副本数不能 > 节点数(端口冲突)
   selector:
     matchLabels:
       app: nginx
@@ -154,23 +190,21 @@ spec:
       labels:
         app: nginx
     spec:
-      dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，clusterFirstWithHostNet表示使用宿主机的dns，clusterFirst表示先使用k8s的dns.
-      hostNetwork: true #指定hostNetwork为true，通过宿主机IP访问 80端口可以访问到pod的80端口 使用hostNetwork时，pod的ip地址就是宿主机的ip地址。 
+      dnsPolicy: ClusterFirstWithHostNet   # ★ hostNetwork 必配 — 否则解析不到 cluster DNS
+      hostNetwork: true                    # ★ Pod IP = 宿主 IP
       containers:
-      - name: nginx
-        image: nginx:1.7.9
-        ports:
-        - containerPort: 80
-          name: ngpt
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 200m
-            memory: 256Mi 
+        - name: nginx
+          image: nginx:1.7.9
+          ports:
+            - containerPort: 80
+              name: ngpt
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: 200m, memory: 256Mi }
 ```
-#### hostNetwork创建daemonset 
+
+### DaemonSet(每节点一个,常用)
+
 ```yaml
 apiVersion: apps/v1
 kind: DaemonSet
@@ -185,31 +219,29 @@ spec:
       labels:
         app: nginx
     spec:
-      dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，clusterFirstWithHostNet表示使用宿主机的dns，clusterFirst表示先使用k8s的dns.
-      hostNetwork: true #指定hostNetwork为true，通过宿主机IP访问 80端口可以访问到pod的80端口 使用hostNetwork时，pod的ip地址就是宿主机的ip地址。 
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
       containers:
-      - name: nginx
-        image: nginx:1.7.9
-        ports:
-        - containerPort: 80
-          name: ngpt
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 200m
-            memory: 256Mi 
+        - name: nginx
+          image: nginx:1.7.9
+          ports:
+            - containerPort: 80
+              name: ngpt
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: 200m, memory: 256Mi }
 ```
-#### hostNetwork创建statefulset
+
+### StatefulSet
+
 ```yaml
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: nginx-statefulset
 spec:
-  serviceName: nginx-service-headless #指定服务名称 
-  replicas: 1 #副本不可以大于宿主机端口的数量
+  serviceName: nginx-service-headless    # ★ 配套 Headless Service
+  replicas: 1
   selector:
     matchLabels:
       app: nginx
@@ -218,19 +250,26 @@ spec:
       labels:
         app: nginx
     spec:
-      dnsPolicy: ClusterFirstWithHostNet #指定dnsPolicy为ClusterFirstWithHostNet，clusterFirstWithHostNet表示使用宿主机的dns，clusterFirst表示先使用k8s的dns.
-      hostNetwork: true #指定hostNetwork为true，通过宿主机IP访问 80端口可以访问到pod的80端口 使用hostNetwork时，pod的ip地址就是宿主机的ip地址。 
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
       containers:
-      - name: nginx
-        image: nginx:1.7.9
-        ports:
-        - containerPort: 80
-          name: ngpt
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 200m
-            memory: 256Mi 
+        - name: nginx
+          image: nginx:1.7.9
+          ports:
+            - containerPort: 80
+              name: ngpt
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: 200m, memory: 256Mi }
 ```
+
+---
+
+## `dnsPolicy` 速查(配 `hostNetwork` 时必须改)
+
+| 值 | 含义 |
+|---|---|
+| `ClusterFirst`(默认) | 先查 cluster DNS(coredns),失败 fallback 宿主 `/etc/resolv.conf` — **但 hostNetwork 模式下解析不到 cluster DNS** |
+| `ClusterFirstWithHostNet` | 同上但 hostNetwork 模式下也能查 cluster DNS — **hostNetwork 必配这个** |
+| `Default` | 用宿主 `/etc/resolv.conf` |
+| `None` | 完全自定义,需配 `dnsConfig` |

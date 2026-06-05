@@ -72,6 +72,21 @@ export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 
 完整脚本质量标准、`curl | bash` 死锁、`mktemp + bash <file> </dev/null` 模式见 `docs/script-conventions.md`。
 
+## Markdown 笔记顶部约定
+
+跟 `.sh` 三件套对齐,每个非 README 的 `.md` 笔记顶部加源链接 + 状态:
+
+```markdown
+# <Title>
+
+> 源: https://github.com/sxxpqp/linux/blob/main/<path>
+> 状态: ✅ 生产验证 / 验证过 / 学习笔记
+
+<TL;DR or intro>
+```
+
+子目录 README 不需要(本身就是入口)。完整模板与变体见 `docs/script-conventions.md` "Markdown 笔记顶部约定"段。
+
 ## 提交流程
 
 **修改完直接 push,不询问**(用户偏好,见 CLAUDE.md "对话风格偏好"):
