@@ -57,13 +57,14 @@ GitLab CI 推 Harbor 镜像 → 改 git manifest → ArgoCD 监听 git → sync 
 
 ## 文件清单(本模板包含什么)
 
-| 文件 | 用途 |
-|---|---|
-| [templates/namespace.yaml](templates/namespace.yaml) | 业务 ns + imagePullSecret 注释说明(Harbor Public 时不要 secret) |
-| [templates/deployment.yaml](templates/deployment.yaml) | Deployment + Service + Ingress + PDB 一站式(4 个 K8s 资源单文件) |
-| [templates/argocd-application.yaml](templates/argocd-application.yaml) | ArgoCD Application CR,装 argocd ns,watch git 业务 repo |
-| [templates/argocd-repo-secret.yaml.example](templates/argocd-repo-secret.yaml.example) | git repo 凭据(声明式),`.gitignore` 忽略真值文件 |
-| [gitlab-ci-snippet.yml](gitlab-ci-snippet.yml) | `.gitlab-ci.yml` 的 `update-manifest` stage + 顶部 variables + build-image rules |
+| 文件 | 用途 | 放业务 repo 哪里 |
+|---|---|---|
+| [.gitlab-ci.yml.example](.gitlab-ci.yml.example) | **完整 `.gitlab-ci.yml`**(install/build/scan/build-image/update-manifest 5 段),从 vue3-demo 脱敏。前端栈直接用,Java/Go/Python 改前 2 段 install/build 即可 | 业务 repo **根目录**`.gitlab-ci.yml` |
+| [gitlab-ci-snippet.yml](gitlab-ci-snippet.yml) | 同上但只是 `update-manifest` stage 片段(给已有 .gitlab-ci.yml 的项目增量贴) | 贴到现有 .gitlab-ci.yml 末尾 |
+| [templates/namespace.yaml](templates/namespace.yaml) | 业务 ns + imagePullSecret 注释说明(Harbor Public 时不要 secret) | `k8s/namespace.yaml` |
+| [templates/deployment.yaml](templates/deployment.yaml) | Deployment + Service + Ingress + PDB 一站式(4 个 K8s 资源单文件) | `k8s/deployment.yaml` |
+| [templates/argocd-application.yaml](templates/argocd-application.yaml) | ArgoCD Application CR,装 argocd ns,watch git 业务 repo | `k8s/argocd-application.yaml` |
+| [templates/argocd-repo-secret.yaml.example](templates/argocd-repo-secret.yaml.example) | git repo 凭据(声明式),`.gitignore` 忽略真值文件 | `k8s/argocd-repo-secret.yaml.example` |
 
 ---
 
@@ -72,13 +73,20 @@ GitLab CI 推 Harbor 镜像 → 改 git manifest → ArgoCD 监听 git → sync 
 熟悉本模板后,新项目接入按这 3 步走,详细解释见下面 § 接入流程。
 
 ```bash
-# ① 拷模板
-cp -r /path/to/linux/kubernetes/argocd/app-onboarding/templates/* /path/to/your-app/k8s/
+APP=/path/to/linux/kubernetes/argocd/app-onboarding
+DEST=/path/to/your-app
 
-# ② sed 改占位符(myapp → 你的应用名,如 vue3-demo)
-sed -i 's/myapp/<your-app-name>/g' /path/to/your-app/k8s/*.yaml /path/to/your-app/k8s/*.yaml.example
+# ① 拷 K8s 模板 → 业务 repo 的 k8s/ 目录
+mkdir -p ${DEST}/k8s
+cp -r ${APP}/templates/* ${DEST}/k8s/
 
-# ③ 手动改 3 处 + GitLab UI 配 3 挂钩 + kubectl apply Application
+# ② 拷 .gitlab-ci.yml 完整模板 → 业务 repo 根目录
+cp ${APP}/.gitlab-ci.yml.example ${DEST}/.gitlab-ci.yml
+
+# ③ sed 改占位符(myapp → 你的应用名,如 vue3-demo)
+sed -i 's/myapp/<your-app-name>/g' ${DEST}/k8s/*.yaml ${DEST}/k8s/*.yaml.example ${DEST}/.gitlab-ci.yml
+
+# ④ 手动改 3 处 + GitLab UI 配 3 挂钩 + kubectl apply Application
 #    见 § 接入流程 第 1-5 步
 ```
 
@@ -110,17 +118,28 @@ kubectl apply -f k8s/argocd-application.yaml    # Application CR
 
 ```bash
 cd /path/to/your-business-repo
+APP=/path/to/linux/kubernetes/argocd/app-onboarding
+
+# ① K8s 模板 → k8s/
 mkdir -p k8s
-cp /path/to/linux/kubernetes/argocd/app-onboarding/templates/*.yaml k8s/
-cp /path/to/linux/kubernetes/argocd/app-onboarding/templates/*.yaml.example k8s/
+cp ${APP}/templates/*.yaml k8s/
+cp ${APP}/templates/*.yaml.example k8s/
+
+# ② 完整 .gitlab-ci.yml → 根目录(已有的话先备份)
+[ -f .gitlab-ci.yml ] && cp .gitlab-ci.yml .gitlab-ci.yml.bak
+cp ${APP}/.gitlab-ci.yml.example .gitlab-ci.yml
 
 # 全文替换占位符 myapp → 实际应用名(假设 = vue3-demo)
-sed -i 's/myapp/vue3-demo/g' k8s/*.yaml k8s/*.yaml.example
+sed -i 's/myapp/vue3-demo/g' k8s/*.yaml k8s/*.yaml.example .gitlab-ci.yml
 
 # 手动改这几处:
 #   k8s/deployment.yaml      → image 行的 Harbor 项目 / 初始 tag / Ingress host
 #   k8s/argocd-application.yaml → source.repoURL 改成你的 GitLab repo URL
+#   .gitlab-ci.yml           → 按业务栈替换 install / build 两段(Node/Java/Go/Python)
+#                             → variables.HARBOR_PROJECT 改成实际 Harbor 项目名
 ```
+
+> 如果是已有 `.gitlab-ci.yml` 的项目,**不要直接覆盖**,只需把 [gitlab-ci-snippet.yml](gitlab-ci-snippet.yml) 里的 `update-manifest` stage 贴到现有文件末尾即可。
 
 ### 第 2 步:加 `.gitignore` 防真 secret 入 git
 
@@ -169,11 +188,12 @@ EOF
 | **Protected** | **✅ Yes**(master protected 强制要求) |
 | **Masked** | ✅ Yes |
 
-### 第 4 步:加 update-manifest stage
+### 第 4 步:`.gitlab-ci.yml` update-manifest 段就绪
 
-把 [gitlab-ci-snippet.yml](gitlab-ci-snippet.yml) 里的 `update-manifest` 段贴到你 `.gitlab-ci.yml` 末尾,顶部 `stages:` 加上 `update-manifest`。
+- 如果第 1 步**直接 cp 了完整 `.gitlab-ci.yml.example` → `.gitlab-ci.yml`**,这步已经做完,跳过。
+- 如果是**已有 `.gitlab-ci.yml` 的项目**,只把 [gitlab-ci-snippet.yml](gitlab-ci-snippet.yml) 里的 `update-manifest` 段贴到现有文件末尾,且顶部 `stages:` 加上 `update-manifest`。两边都需要 `rules:variables` 双轨段,见 § IMAGE_TAG 双轨。
 
-参考完整版:`D:\code\vue3-demo\.gitlab-ci.yml`。
+参考实战项目:`D:\code\vue3-demo\.gitlab-ci.yml`。
 
 ### 第 5 步:配 ArgoCD repo 凭据 + apply Application
 
