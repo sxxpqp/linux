@@ -1,0 +1,166 @@
+# namespace: litellm
+# type: app (LiteLLM Proxy)
+# last-updated: 2026-06-09
+#
+# 依赖:postgres.yaml(同 ns 的 litellm-postgres Service + postgres-secret)
+# 镜像:docker.litellm.ai 不在节点 containerd mirror 列表(docker.io/ghcr.io/quay.io/registry.k8s.io
+#       + 阿里 ACR direct),会走直连。拉不动时手工 docker pull + push 到
+#       registry.cn-hangzhou.aliyuncs.com/sxxpqp/litellm:main-stable,改下面 image 即可。
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-env
+  namespace: litellm
+data:
+  STORE_MODEL_IN_DB: "True"
+  # DATABASE_URL_READ_REPLICA: "postgresql://..."   # 有读库才填,单库留空
+---
+# 业务真正的密钥(master key / openai key / anthropic key 等)放这里
+# 实际部署前推荐:
+#   kubectl -n litellm create secret generic litellm-env-secret \
+#     --from-literal=LITELLM_MASTER_KEY=sk-xxx \
+#     --from-literal=LITELLM_SALT_KEY=$(openssl rand -hex 32) \
+#     --from-literal=OPENAI_API_KEY=sk-xxx \
+#     --dry-run=client -o yaml | kubectl apply -f -
+# 下面这份只是占位
+apiVersion: v1
+kind: Secret
+metadata:
+  name: litellm-env-secret
+  namespace: litellm
+type: Opaque
+stringData:
+  LITELLM_MASTER_KEY: "sk-replace-me"
+  # LITELLM_SALT_KEY: ""
+  # OPENAI_API_KEY: ""
+  # ANTHROPIC_API_KEY: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: litellm
+  labels:
+    app: litellm
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: litellm
+  template:
+    metadata:
+      labels:
+        app: litellm
+    spec:
+      containers:
+        - name: litellm
+          image: docker.litellm.ai/berriai/litellm:main-stable
+          imagePullPolicy: Always    # main-stable 是滚动 tag,Always 拉新版本
+          ports:
+            - containerPort: 4000
+              name: http
+              protocol: TCP
+          # 拼 DATABASE_URL:先注入 POSTGRES_* 再 $(VAR) 引用,顺序不能反
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_DB
+            - name: DATABASE_URL
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@litellm-postgres:5432/$(POSTGRES_DB)"
+          envFrom:
+            - configMapRef:
+                name: litellm-env
+            - secretRef:
+                name: litellm-env-secret
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          startupProbe:
+            httpGet:
+              path: /health/liveliness
+              port: 4000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 24     # 最多 24*10=240s 启动窗口
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: 4000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 4000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+      terminationGracePeriodSeconds: 30
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: litellm
+spec:
+  type: ClusterIP                    # ★ 内部访问;外暴露走下面 Ingress 或换 NodePort
+  selector:
+    app: litellm
+  ports:
+    - name: http
+      port: 4000
+      targetPort: 4000
+      protocol: TCP
+---
+# 可选:外部访问走 ingress-nginx,按需取消注释 + 改 host
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: litellm
+#   namespace: litellm
+#   annotations:
+#     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+#     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"   # LLM 调用慢,放大超时
+#     nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+# spec:
+#   ingressClassName: nginx
+#   rules:
+#     - host: litellm.ihome.sxxpqp.top
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: litellm
+#                 port:
+#                   number: 4000

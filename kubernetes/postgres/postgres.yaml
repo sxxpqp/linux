@@ -1,0 +1,113 @@
+# namespace: litellm
+# type: db (PostgreSQL 16, LiteLLM 后端)
+# last-updated: 2026-06-09
+#
+# 单副本 + PVC + Recreate;数据持久化在 PVC,strategy=Recreate 避免新旧 Pod 同时挂同一块 RWO PVC。
+# 升级 / 重启时业务会断几十秒,做 HA 要换 KubeBlocks / CNPG operator。
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: litellm
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: litellm
+type: Opaque
+stringData:
+  POSTGRES_DB: litellm
+  POSTGRES_USER: llmproxy
+  POSTGRES_PASSWORD: dbpassword9090   # ★ 上生产前改,或换 Sealed Secrets
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: litellm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # storageClassName: longhorn       # ★ 按集群可用 SC 选;不写就用 default SC
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm-postgres
+  namespace: litellm
+  labels:
+    app: litellm-postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate                   # ★ 单 PVC RWO,必须 Recreate,不能 RollingUpdate
+  selector:
+    matchLabels:
+      app: litellm-postgres
+  template:
+    metadata:
+      labels:
+        app: litellm-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+              name: postgres
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: postgres-secret
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-d", "litellm", "-U", "llmproxy"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-d", "litellm", "-U", "llmproxy"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata        # ★ 必须:绕开 PVC 根目录的 lost+found,否则 PG 拒绝 initdb
+          securityContext:
+            allowPrivilegeEscalation: false
+      terminationGracePeriodSeconds: 60
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm-postgres
+  namespace: litellm
+spec:
+  type: ClusterIP
+  selector:
+    app: litellm-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
