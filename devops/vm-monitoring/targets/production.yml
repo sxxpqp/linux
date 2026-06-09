@@ -1,0 +1,26 @@
+# Prometheus file_sd 目标定义
+# 由 CMDB / Ansible / Terraform 自动生成
+- targets:
+    - "192.168.1.10:9100"
+    - "192.168.1.11:9100"
+    - "192.168.1.12:9100"
+  labels:
+    group: production
+    datacenter: dc-wh
+    role: web-server
+
+- targets:
+    - "192.168.1.20:9100"
+    - "192.168.1.21:9100"
+  labels:
+    group: production
+    datacenter: dc-wh
+    role: database
+
+- targets:
+    - "172.16.0.10:9100"
+    - "172.16.0.11:9100"
+  labels:
+    group: production
+    datacenter: dc-sh
+    role: web-server

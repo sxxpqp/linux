@@ -1,0 +1,58 @@
+groups:
+  - name: vm-alerts
+    rules:
+      - alert: NodeDown
+        expr: up{job=~"vm-node.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} 已离线"
+          description: "{{ $labels.instance }} (job={{ $labels.job }}) 已离线超过 1 分钟"
+
+      - alert: HighCpuUsage
+        expr: (1 - avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} CPU 使用率 > 90%"
+          description: "当前值: {{ $value | humanizePercentage }}"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} 内存使用率 > 90%"
+
+      - alert: DiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"})) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} 磁盘使用率 > 85%"
+
+      - alert: LoadHigh
+        expr: node_load1 / count by(instance) (node_cpu_seconds_total{mode="idle"}) > 4
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} 负载过高 (load1={{ $value }})"
+
+      - alert: OOMKillDetected
+        expr: increase(node_vmstat_oom_kill[1m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} 发生 OOM Kill"
+
+      - alert: DiskWillFillIn7Days
+        expr: predict_linear(node_filesystem_free_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}[7d], 86400 * 7) < 0
+        labels:
+          severity: info
+        annotations:
+          summary: "{{ $labels.instance }} 磁盘预计 7 天内写满"

@@ -1,0 +1,42 @@
+# VM 监控 — Prometheus 配置示例
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  scrape_timeout:      10s
+
+  external_labels:
+    monitor: 'vm-monitor'
+
+# 告警管理（可选）
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []  # 配置 AlertManager 地址
+
+rule_files:
+  - "alerts/*.yml"
+
+scrape_configs:
+  # 监控 Prometheus 自身
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # VM 节点监控 — 静态
+  - job_name: 'vm-node'
+    static_configs:
+      - targets:
+          - 'host.docker.internal:9100'  # Docker for Mac 的本机
+          - '192.168.1.10:9100'          # 替换为实际 VM
+          - '192.168.1.11:9100'
+        labels:
+          group: production
+          datacenter: dc-wh
+
+  # VM 节点监控 — file_sd（自动发现）
+  - job_name: 'vm-file-sd'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/targets/*.json'
+          - '/etc/prometheus/targets/*.yml'
+        refresh_interval: 30s
