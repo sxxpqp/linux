@@ -39,21 +39,30 @@ K8s 1.31 + ArgoCD v3.1+               ← arglcdinstall.yaml(v3.3.0)派上用场
 ## TL;DR
 
 ```bash
-# 1. 安装
+# 一键装(默认 ClusterIP,port-forward 暴露)
+bash kubernetes/argocd/install.sh
+
+# 内网快速暴露
+bash kubernetes/argocd/install.sh --service-type=NodePort
+
+# 配 Calico BGP-LB / MetalLB
+bash kubernetes/argocd/install.sh --service-type=LoadBalancer
+
+# 验证 + 卸载
+bash kubernetes/argocd/test.sh
+bash kubernetes/argocd/uninstall.sh --apply
+```
+
+`install.sh` 自动:建 ns / apply yaml / 等 6 Deploy + 1 STS ready / 输出初始密码 + 入口 URL。
+
+手动 4 步等价版(不推荐,仅供排错时单步重做):
+
+```bash
 kubectl create namespace argocd
 kubectl apply -n argocd -f kubernetes/argocd/install-v2.13.3.yaml
-
-# 2. 等所有组件 ready(6 个 Deploy + 1 个 StatefulSet)
 kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=300s
-kubectl -n argocd wait --for=condition=available deploy --all --timeout=300s
-
-# 3. 拿初始 admin 密码(一次性,登完应改掉)
 kubectl -n argocd get secret argocd-initial-admin-secret \
   -o jsonpath='{.data.password}' | base64 -d; echo
-
-# 4. 本地访问 UI(开发 / 临时用)
-kubectl -n argocd port-forward svc/argocd-server 8080:443
-# 浏览器: https://localhost:8080  用户 admin / 上面那个密码
 ```
 
 生产暴露走 Ingress / LoadBalancer,见下面 [访问方式](#访问方式) 段。
@@ -90,10 +99,11 @@ kubectl -n argocd port-forward svc/argocd-server 8080:443
 
 | 文件 | 状态 | 说明 |
 |---|---|---|
+| [install.sh](install.sh) | ✅ | 5 段式安装:前置检查 / ns / apply yaml / 等 rollout / 出登录信息。`--service-type` / `--yaml` / `--dry-run` |
+| [uninstall.sh](uninstall.sh) | ✅ | dry-run 默认,加 `--apply` 才真删。处理 Application finalizer + CRD + ns Terminating。`--keep-crd` / `--keep-ns` |
+| [test.sh](test.sh) | ✅ | 不依赖外网。验 7 组件 ready + 3 CRD + 初始密码 + 集群内 HTTPS 可达 |
 | [install-v2.13.3.yaml](install-v2.13.3.yaml) | ✅ 默认 | **ArgoCD v2.13.3 完整 manifest**(CRD + RBAC + 7 组件,~24000 行)。K8s 1.28 用这个 |
 | [arglcdinstall.yaml](arglcdinstall.yaml) | 🟡 暂留 | 历史下载的 v3.3.0 manifest。**K8s 1.28 不要用**,留到集群升 1.31+ 后作参考。文件名拼错了(应为 `argocdinstall.yaml`),暂不动 |
-
-> 目前**没有 install.sh / uninstall.sh / test.sh**。需要按本仓库 calico / ingress-nginx 的风格补一套?
 
 ---
 
