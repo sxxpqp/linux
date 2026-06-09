@@ -1,0 +1,151 @@
+# GitLab CI — update-manifest stage 片段
+#
+# 这是一个 stage 片段,不是完整 .gitlab-ci.yml。
+# 把这段拷到你项目的 .gitlab-ci.yml,放在 build-image 之后(GitOps push-back 模式)。
+#
+# 完整一份 vue3-demo 实战示例见:
+#   D:\code\vue3-demo\.gitlab-ci.yml(对照该项目阅读最易理解)
+#
+# ═════════════════════════════════════════════════════════════════
+# 模式说明:CI 不直接 kubectl 部署,只改 git 里 k8s/deployment.yaml 的 image tag,
+# 然后 push 回 master,ArgoCD 监听到 commit 自动 sync 集群。这是 ArgoCD GitOps 标准做法。
+# ═════════════════════════════════════════════════════════════════
+
+# ───────────────────────────────────────
+# 顶部 variables(片段)
+# ───────────────────────────────────────
+# variables:
+#   APP_NAME: myapp
+#   HARBOR_REGISTRY: hub.wishfoxs.com:6443
+#   HARBOR_PROJECT: library
+#   # IMAGE_TAG 双轨策略:默认 branch-sha,job 级 rules:variables 在 tag pipeline 时 override 成 git tag
+#   # ⚠ 不要写 "${CI_COMMIT_TAG:-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}}",
+#   #    GitLab CI variables 段不解析 bash 默认值语法,结果是空字符串(踩过坑)
+#   IMAGE_TAG: "${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}"
+#   IMAGE_NAME: "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${APP_NAME}:${IMAGE_TAG}"
+
+# ───────────────────────────────────────
+# build-image 段(片段)
+# ───────────────────────────────────────
+# build-image:
+#   stage: image
+#   image:
+#     name: hub.wishfoxs.com:6443/middleware/executor:debug
+#     entrypoint: [""]
+#   needs:
+#     - job: build
+#       artifacts: true
+#   # rules:variables 双轨切换 IMAGE_TAG:
+#   #   tag pipeline   → IMAGE_TAG = $CI_COMMIT_TAG(如 v1.0.0)
+#   #   branch master  → IMAGE_TAG = 顶部默认(branch-sha)
+#   rules:
+#     - if: '$CI_COMMIT_TAG'
+#       variables:
+#         IMAGE_TAG: "${CI_COMMIT_TAG}"
+#     - if: '$CI_COMMIT_BRANCH == "master"'
+#   script:
+#     - mkdir -p /kaniko/.docker
+#     - |
+#       cat > /kaniko/.docker/config.json << EOF
+#       {"auths":{"${HARBOR_REGISTRY}":{"username":"${HARBOR_USERNAME}","password":"${HARBOR_PASSWORD}"}}}
+#       EOF
+#     - /kaniko/executor --context "${CI_PROJECT_DIR}" --dockerfile "${CI_PROJECT_DIR}/Dockerfile" --destination "${IMAGE_NAME}" --cache=true --verbosity=info
+
+# ───────────────────────────────────────
+# update-manifest 段(完整,把这段贴到项目 .gitlab-ci.yml 末尾)
+# ───────────────────────────────────────
+#
+# 前置(GitLab 项目设置,一次性,详见 README 第 § 3 步):
+#   ① 创建 Project Access Token
+#      Settings → Access Tokens → Add new token
+#        Role     = Maintainer       (master 是 protected branch,Developer 推不上去)
+#        Scopes   = write_repository (只勾这一个,不要给 api)
+#        Expire   = 90 天后,到期前轮换
+#      复制 token + 记下自动建的 bot username: project_<id>_bot_<hash>
+#
+#   ② master Protected branch 加 bot user
+#      Settings → Repository → Protected branches → master 行
+#        Allowed to push and merge 已含 Maintainers → 自动覆盖
+#        否则 Add member 显式加 project_<id>_bot_<hash>
+#
+#   ③ 加 CI/CD Variable
+#      Settings → CI/CD → Variables → Add variable
+#        Key       = GITLAB_PUSH_TOKEN
+#        Value     = ① 步 token
+#        Type      = Variable
+#        Protected = ✅ Yes   (master protected 强制要求,不勾 pipeline 拿不到值)
+#        Masked    = ✅ Yes
+#
+# 撞 commit 风险:如果在 build-image 跑的同时 master 被人推了新 commit,update-manifest push 会被 GitLab 拒
+# (non-fast-forward)。脚本里加了 pull --rebase + retry 一次。
+
+update-manifest:
+  stage: update-manifest
+  image: hub.wishfoxs.com:6443/middleware/alpine:latest
+  needs:
+    - job: build-image
+      artifacts: false
+  # rules:variables 双轨切换 IMAGE_TAG(必须跟 build-image 段一致,否则改的 tag 跟实际推的镜像对不上)
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      variables:
+        IMAGE_TAG: "${CI_COMMIT_TAG}"
+    - if: '$CI_COMMIT_BRANCH == "master"'
+  variables:
+    GIT_STRATEGY: clone   # 干净 clone,避免 CI cache 把 manifest 状态弄脏
+    MANIFEST_FILE: k8s/deployment.yaml
+  before_script:
+    - apk add --no-cache git sed bash
+    - git config --global user.email "gitlab-ci@myapp"
+    - git config --global user.name  "GitLab CI"
+  script:
+    - |
+      set -eu
+
+      # token 必须有,否则一上来就报错而不是 push 到一半才 401
+      [ -n "${GITLAB_PUSH_TOKEN:-}" ] || {
+        echo "ERROR: GITLAB_PUSH_TOKEN 未注入"
+        echo "       master 是 protected branch → CI Variable 必须勾 Protected=Yes"
+        echo "       检查路径:Settings → CI/CD → Variables → GITLAB_PUSH_TOKEN"
+        exit 1
+      }
+
+      # IMAGE_TAG 不能空(空字符串会把 manifest 写成 myapp: 空 tag,ArgoCD 解析炸)
+      # 历史事故:bash 默认值语法 ${VAR:-fb} 在 variables 段不解析,导致 IMAGE_TAG=""
+      [ -n "${IMAGE_TAG:-}" ] || {
+        echo "ERROR: IMAGE_TAG 空,不能改 manifest"
+        echo "       检查 .gitlab-ci.yml variables 段 IMAGE_TAG 表达式"
+        exit 1
+      }
+
+      echo "更新 ${MANIFEST_FILE} 镜像 tag → ${IMAGE_TAG}"
+
+      # sed 替换 image 那一行(只动 myapp: 后面的 tag,不动别的镜像)
+      sed -i "s|\(myapp:\)[^\"' ]\+|\1${IMAGE_TAG}|" "${MANIFEST_FILE}"
+
+      # 校验:替换后必须能 grep 到新 tag
+      grep -q "myapp:${IMAGE_TAG}" "${MANIFEST_FILE}" || {
+        echo "ERROR: image tag 替换失败,manifest 没改动"; exit 1; }
+
+      # 没改动就跳过(同一个 sha 重跑,tag 相同)
+      if git diff --quiet "${MANIFEST_FILE}"; then
+        echo "manifest 已是目标 tag,跳过 push"
+        exit 0
+      fi
+
+      git add "${MANIFEST_FILE}"
+      git commit -m "chore(deploy): bump image tag → ${IMAGE_TAG} [skip ci]"
+
+      # push 用 oauth2 + token,协议走 ${CI_SERVER_PROTOCOL} 自动取(自托管可能是 http)
+      # ⚠ 不要写死 https://,GitLab CE 自托管常跑 http,会 connection refused
+      AUTH_URL="${CI_SERVER_PROTOCOL}://oauth2:${GITLAB_PUSH_TOKEN}@${CI_SERVER_HOST}:${CI_SERVER_PORT}/${CI_PROJECT_PATH}.git"
+
+      # 撞 commit 重试一次:pull --rebase 再 push
+      git push "${AUTH_URL}" HEAD:${CI_COMMIT_REF_NAME} || {
+        echo "push 撞 commit,pull --rebase 重试"
+        git pull --rebase "${AUTH_URL}" "${CI_COMMIT_REF_NAME}"
+        git push "${AUTH_URL}" HEAD:${CI_COMMIT_REF_NAME}
+      }
+
+      echo "manifest 已 push,ArgoCD 会在轮询周期(默认 3 分钟)内 sync"
+      echo "立即触发:argocd app sync myapp  或 ArgoCD UI 点 REFRESH"

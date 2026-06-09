@@ -1,0 +1,68 @@
+# ArgoCD Application 模板
+#
+# 这个 CR 装在 argocd ns,声明"ArgoCD 要管哪个 git repo 的哪个目录"。
+# Application 自己不属于业务应用,**人工 apply 一次**,后续不动;
+# 业务 yaml(deployment/svc/ingress)改完 push,ArgoCD 自动 sync,不动这个文件。
+#
+# 用法:
+#   cp argocd-application.yaml /path/to/your-repo/k8s/
+#   sed -i 's/myapp/<your-app-name>/g' /path/to/your-repo/k8s/argocd-application.yaml
+#   改 source.repoURL 为你的 GitLab repo URL
+#   改 source.targetRevision(默认 master,可改 main)
+#   一次性 apply: kubectl apply -f k8s/argocd-application.yaml
+#
+# 前置:ArgoCD 要先认得这个 git repo(私有 GitLab 必须配凭据)
+#   ★ 推荐方式:templates/argocd-repo-secret.yaml.example 模板
+#     cp argocd-repo-secret.yaml.example argocd-repo-secret.yaml  # 真值文件被 .gitignore 忽略
+#     vim 改 stringData 里 url / username / password
+#     kubectl apply -f argocd-repo-secret.yaml
+#
+#   备选 CLI: argocd repo add <URL> --username <U> --password <P>
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: myapp
+  namespace: argocd
+  # 删 Application 时级联删集群资源;不要级联就注释掉这段
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: http://192.168.150.252:9980/<group>/myapp.git   # ← 改成你的 GitLab repo
+    targetRevision: master
+    path: k8s
+    # 排除自己,避免 ArgoCD 试图把 Application 自身 apply 进业务 ns
+    directory:
+      recurse: false
+      exclude: argocd-application.yaml
+
+  destination:
+    server: https://kubernetes.default.svc   # in-cluster(ArgoCD 装在哪管哪)
+    namespace: myapp
+
+  syncPolicy:
+    automated:
+      prune: true          # 删 yaml 文件自动删集群资源
+      selfHeal: true       # 集群被手改自动撤回
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true              # ns 不存在自动建
+      - PrunePropagationPolicy=foreground # 按依赖顺序删,避免 Service 先没了导致 Ingress 短暂 404
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+      - ServerSideApply=true              # 大资源 / 含 CRD 用 SSA,避免 last-applied annotation 超 256KB
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas   # 接 HPA 时,replicas 由 HPA 管,ArgoCD 不要撤回

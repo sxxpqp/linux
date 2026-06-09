@@ -1,0 +1,145 @@
+# 业务应用 — Deployment + Service + Ingress + PDB 通用模板
+#
+# 用法:
+#   cp deployment.yaml /path/to/your-repo/k8s/
+#   sed -i 's/myapp/<your-app-name>/g' /path/to/your-repo/k8s/deployment.yaml
+#   改 image 行的 registry / project / 初始 tag
+#   改 ingress host 为你的实际域名
+#
+# 镜像 tag 由 GitLab CI 在 update-manifest 阶段 sed 改 ↓ 这一行,
+# 改完 git push 回 master,ArgoCD watch 到 commit 自动 sync。
+# 调副本数 / 改资源 / 改域名 → 直接改本文件 push,ArgoCD 自动滚动。
+# 改 image tag 不要手工改,让 CI 改;手工改和 CI 改会撞 commit。
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  namespace: myapp
+  labels:
+    app: myapp
+    app.kubernetes.io/name: myapp
+    app.kubernetes.io/part-of: myapp
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0          # 配 PDB minAvailable=1 → 升级期间零空窗
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+        app.kubernetes.io/name: myapp
+    spec:
+      # Harbor 项目 Public 时不要 imagePullSecrets;改 Private 时加回:
+      # imagePullSecrets:
+      #   - name: harbor-creds
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway   # 副本数 ≤ 节点数时不阻止调度
+          labelSelector:
+            matchLabels:
+              app: myapp
+      containers:
+        - name: myapp
+          image: hub.wishfoxs.com:6443/library/myapp:v1.0.0   # ← CI 改这一行的 tag
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          # tcpSocket 探活够用;有 /healthz 业务端点可改 httpGet
+          startupProbe:
+            tcpSocket:
+              port: 80
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            tcpSocket:
+              port: 80
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false   # nginx 要写 /var/cache/nginx;改 true 要 emptyDir 几个挂载点
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp
+  namespace: myapp
+  labels:
+    app: myapp
+spec:
+  type: ClusterIP
+  selector:
+    app: myapp
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: myapp
+  namespace: myapp
+  annotations:
+    # SPA 路由 fallback 在容器内 nginx.conf try_files 接住,Ingress 不做
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: myapp.ihome.sxxpqp.top
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: myapp
+                port:
+                  number: 80
+  # TLS 暂不开,有证书 / cert-manager 签的后加 tls: 段并 secretName 引用
+
+---
+# 2 副本 + minAvailable=1 → 节点维护 evict 时永远留 1 个 Pod
+# ⚠ 单副本不要配 PDB(drain 节点会卡死)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: myapp
+  namespace: myapp
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: myapp

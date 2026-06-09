@@ -1,0 +1,21 @@
+# 业务应用命名空间模板
+#
+# 用法:
+#   cp namespace.yaml /path/to/your-repo/k8s/
+#   sed -i 's/myapp/<your-app-name>/g' /path/to/your-repo/k8s/namespace.yaml
+#
+# 关于 imagePullSecret:
+#   ① Harbor 项目 Public(默认推荐)→ 不需要 secret,本文件不动
+#   ② Harbor 项目 Private → 部署前手动建 secret(不入 git,避免泄密):
+#      kubectl -n myapp create secret docker-registry harbor-creds \
+#        --docker-server=hub.wishfoxs.com:6443 \
+#        --docker-username=<U> --docker-password=<P>
+#      然后 deployment.yaml 加 `imagePullSecrets: [name: harbor-creds]`
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: myapp
+  labels:
+    app.kubernetes.io/name: myapp
+    app.kubernetes.io/part-of: myapp

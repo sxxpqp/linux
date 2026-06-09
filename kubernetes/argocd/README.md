@@ -102,6 +102,7 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
 | [install.sh](install.sh) | ✅ | 5 段式安装:前置检查 / ns / apply yaml / 等 rollout / 出登录信息。`--service-type` / `--yaml` / `--dry-run` |
 | [uninstall.sh](uninstall.sh) | ✅ | dry-run 默认,加 `--apply` 才真删。处理 Application finalizer + CRD + ns Terminating。`--keep-crd` / `--keep-ns` |
 | [test.sh](test.sh) | ✅ | 不依赖外网。验 7 组件 ready + 3 CRD + 初始密码 + 集群内 HTTPS 可达 |
+| [app-onboarding/](app-onboarding/) | ✅ 生产验证 | **业务应用接入 ArgoCD 完整模板**(deployment / svc / ingress / pdb / Application CR / repo secret + GitLab CI update-manifest stage + 12 条踩坑表 + 回退方法)。新项目接入直接 cp templates/ + sed 改 myapp |
 | [install-v2.13.3.yaml](install-v2.13.3.yaml) | ✅ 默认 | **ArgoCD v2.13.3 完整 manifest**(CRD + RBAC + 7 组件,~24000 行)。K8s 1.28 用这个 |
 | [arglcdinstall.yaml](arglcdinstall.yaml) | 🟡 暂留 | 历史下载的 v3.3.0 manifest。**K8s 1.28 不要用**,留到集群升 1.31+ 后作参考。文件名拼错了(应为 `argocdinstall.yaml`),暂不动 |
 
