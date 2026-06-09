@@ -218,48 +218,98 @@ ip_vs_wrr
 ip_vs_sh
 nf_conntrack
 EOF
+    # nf_conntrack hashsize 不能通过 sysctl 改,必须走 modprobe options
+    # 默认 hashsize 太小(通常 16384),大集群 + BGP 节点必调
+    cat > /etc/modprobe.d/nf_conntrack.conf << 'EOF'
+options nf_conntrack hashsize=262144
+EOF
+    # 已加载的模块改 hashsize 走 /sys(modprobe options 下次开机生效)
+    [[ -w /sys/module/nf_conntrack/parameters/hashsize ]] && \
+        echo 262144 > /sys/module/nf_conntrack/parameters/hashsize 2>/dev/null || true
     ok "内核模块已加载"
 
-    info "配置 sysctl..."
-    cat > /etc/sysctl.d/k8s.conf << 'EOF'
-# ── K8s 网络必需 ──────────────────────────────
-net.ipv4.ip_forward                 = 1
-net.bridge.bridge-nf-call-iptables  = 1
-net.bridge.bridge-nf-call-ip6tables = 1
-net.ipv6.conf.all.forwarding        = 1
-net.ipv6.conf.all.disable_ipv6      = 0
-net.ipv6.conf.default.disable_ipv6  = 0
-net.ipv6.conf.lo.disable_ipv6       = 0
+    info "配置 sysctl(K8s + BGP + 大集群)..."
+    # 删除旧的 k8s.conf 避免双份冲突(老节点升级时,文件名按字典序 99-* 会赢但残留键会污染日志)
+    rm -f /etc/sysctl.d/k8s.conf
+    cat > /etc/sysctl.d/99-k8s.conf << 'EOF'
+# ── K8s 网络转发(必需) ──────────────────────
+net.ipv4.ip_forward                  = 1
+net.ipv6.conf.all.forwarding         = 1
+net.bridge.bridge-nf-call-iptables   = 1
+net.bridge.bridge-nf-call-ip6tables  = 1
+net.bridge.bridge-nf-call-arptables  = 1
 
-# ── 连接跟踪 ─────────────────────────────────
-net.netfilter.nf_conntrack_max      = 2310720
+# ── 反向路径过滤:Calico BPF/VXLAN/BGP 必须关 ──
+# default 必须同步,否则新建 cali*/tunl* 继承 1 会丢包
+net.ipv4.conf.all.rp_filter            = 0
+net.ipv4.conf.default.rp_filter        = 0
+net.ipv4.conf.all.accept_redirects     = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.all.send_redirects       = 0
+net.ipv4.conf.default.send_redirects   = 0
 
-# ── TCP 性能 ──────────────────────────────────
-net.ipv4.tcp_keepalive_time         = 600
-net.ipv4.tcp_keepalive_probes       = 3
-net.ipv4.tcp_keepalive_intvl        = 15
-net.ipv4.tcp_max_tw_buckets         = 36000
-net.ipv4.tcp_tw_reuse               = 1
-net.ipv4.tcp_max_orphans            = 327680
-net.ipv4.tcp_orphan_retries         = 3
-net.ipv4.tcp_syncookies             = 1
-net.ipv4.tcp_max_syn_backlog        = 16384
-net.ipv4.tcp_timestamps             = 0
-net.core.somaxconn                  = 32768
+# ── IPv6(集群不用 IPv6 也别 disable,避免 kubelet 报错) ──
+net.ipv6.conf.all.disable_ipv6       = 0
+net.ipv6.conf.default.disable_ipv6   = 0
+net.ipv6.conf.lo.disable_ipv6        = 0
 
-# ── 文件系统 ──────────────────────────────────
-fs.may_detach_mounts                = 1
-fs.inotify.max_user_watches         = 1048576
-fs.inotify.max_user_instances       = 8192
-fs.file-max                         = 52706963
-fs.nr_open                          = 52706963
+# ── 连接跟踪 ────────────────────────────────
+net.netfilter.nf_conntrack_max                     = 2310720
+net.netfilter.nf_conntrack_tcp_timeout_established = 86400
+net.netfilter.nf_conntrack_buckets                 = 524288
 
-# ── 内存 ─────────────────────────────────────
-vm.overcommit_memory                = 1
-vm.panic_on_oom                     = 0
+# ── TCP keepalive(BGP 快感知断链,K8s apiserver watch 同样受益) ──
+net.ipv4.tcp_keepalive_time          = 60
+net.ipv4.tcp_keepalive_intvl         = 10
+net.ipv4.tcp_keepalive_probes        = 6
+
+# ── TCP 通用 ────────────────────────────────
+net.ipv4.tcp_max_tw_buckets          = 36000
+net.ipv4.tcp_tw_reuse                = 1
+net.ipv4.tcp_max_orphans             = 327680
+net.ipv4.tcp_orphan_retries          = 3
+net.ipv4.tcp_syncookies              = 1
+net.ipv4.tcp_max_syn_backlog         = 16384
+net.ipv4.tcp_timestamps              = 0
+net.ipv4.tcp_mtu_probing             = 1
+
+# ── socket / netdev buffer(BGP + VXLAN + LoadBalancer) ──
+net.core.somaxconn                   = 32768
+net.core.netdev_max_backlog          = 250000
+net.core.rmem_max                    = 134217728
+net.core.wmem_max                    = 134217728
+net.core.rmem_default                = 26214400
+net.core.wmem_default                = 26214400
+
+# ── ARP/邻居表(BGP 节点 cali* veth 多,大集群必调) ──
+net.ipv4.neigh.default.gc_thresh1    = 4096
+net.ipv4.neigh.default.gc_thresh2    = 8192
+net.ipv4.neigh.default.gc_thresh3    = 16384
+net.ipv6.neigh.default.gc_thresh1    = 4096
+net.ipv6.neigh.default.gc_thresh2    = 8192
+net.ipv6.neigh.default.gc_thresh3    = 16384
+
+# ── 文件系统(kubelet / inotify watch 多) ──
+fs.inotify.max_user_watches          = 1048576
+fs.inotify.max_user_instances        = 8192
+fs.file-max                          = 52706963
+fs.nr_open                           = 52706963
+
+# ── 内存(K8s 必须) ────────────────────────
+vm.overcommit_memory                 = 1
+vm.panic_on_oom                      = 0
+vm.swappiness                        = 0
 EOF
+
+    # fs.may_detach_mounts 仅 CentOS 7 / RHEL 7 有,8+ / Ubuntu 无此 key
+    # 单独写入避免 sysctl --system 报 "unknown key" 污染日志
+    if [[ "$OS_ID" =~ ^(centos|rhel)$ ]] && [[ "$OS_VER" == "7" ]]; then
+        echo "fs.may_detach_mounts = 1" >> /etc/sysctl.d/99-k8s.conf
+        ok "已追加 fs.may_detach_mounts(CentOS/RHEL 7)"
+    fi
+
     sysctl --system &>/dev/null
-    ok "sysctl 已应用"
+    ok "sysctl 已应用(/etc/sysctl.d/99-k8s.conf)"
 }
 
 # ══════════════════════════════════════════════
