@@ -67,7 +67,44 @@ GitLab CI 推 Harbor 镜像 → 改 git manifest → ArgoCD 监听 git → sync 
 
 ---
 
-## 接入流程(新项目从 0 到上线)
+## TL;DR — 3 步快速接入
+
+熟悉本模板后,新项目接入按这 3 步走,详细解释见下面 § 接入流程。
+
+```bash
+# ① 拷模板
+cp -r /path/to/linux/kubernetes/argocd/app-onboarding/templates/* /path/to/your-app/k8s/
+
+# ② sed 改占位符(myapp → 你的应用名,如 vue3-demo)
+sed -i 's/myapp/<your-app-name>/g' /path/to/your-app/k8s/*.yaml /path/to/your-app/k8s/*.yaml.example
+
+# ③ 手动改 3 处 + GitLab UI 配 3 挂钩 + kubectl apply Application
+#    见 § 接入流程 第 1-5 步
+```
+
+具体要手动改的 3 处:
+
+| 文件 | 改什么 |
+|---|---|
+| `k8s/deployment.yaml` | image 行的 Harbor 项目 / 初始 tag(默认 `v1.0.0`) / Ingress host(默认 `myapp.ihome.sxxpqp.top`) |
+| `k8s/argocd-application.yaml` | `source.repoURL` 改成你的 GitLab repo URL |
+| `k8s/argocd-repo-secret.yaml.example` | cp 成 `argocd-repo-secret.yaml` 后改 stringData 三字段(明文) |
+
+GitLab UI 配 3 个挂钩点(见 § 接入流程 第 3 步):
+1. Project Access Token(Maintainer + `write_repository`)
+2. master Protected branch 含 bot user
+3. CI/CD Variable `GITLAB_PUSH_TOKEN`(Protected + Masked)
+
+完事一次性 apply:
+```bash
+kubectl apply -f k8s/argocd-repo-secret.yaml    # repo 凭据
+kubectl apply -f k8s/argocd-application.yaml    # Application CR
+# 后续都是 git push 驱动,不再 kubectl
+```
+
+---
+
+## 接入流程(新项目从 0 到上线,细化)
 
 ### 第 1 步:拷模板到业务 repo
 
