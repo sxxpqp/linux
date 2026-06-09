@@ -45,7 +45,7 @@ spec:
     spec:
       containers:
         - name: kafka
-          image: docker.io/bitnami/kafka:4.0
+          image: docker.io/soldevelo/kafka:4.0
           ports:
             - containerPort: 9092 # 内部访问端口（集群内通过 Headless Service 访问）
             - containerPort: 9094 # 外部访问端口
