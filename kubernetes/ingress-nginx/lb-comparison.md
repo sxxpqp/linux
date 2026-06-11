@@ -8,11 +8,11 @@
 
 ## 0. 一句话结论
 
-| 你的情况                             | 选                                                        | 为什么                          |
-| ------------------------------------ | --------------------------------------------------------- | ------------------------------- |
-| 路由器暂不可控、想最快上线           | **方案一**:边缘 nginx 双机 Keepalived + HAProxy     | 纯集群外,不依赖 BGP;公网落边缘 |
-| 有可控路由器、要可扩展/长期生产标准  | **方案二**:公网放路由器 + Calico BGP-LB ECMP        | 路由器 DNAT+ECMP,**无边缘 nginx**;先单机后双机 |
-| 路由器还没就绪                       | 先方案一兜底,BGP 就绪再切方案二                      | 见第 6 节                       |
+| 你的情况                            | 选                                                    | 为什么                                               |
+| ----------------------------------- | ----------------------------------------------------- | ---------------------------------------------------- |
+| 路由器暂不可控、想最快上线          | **方案一**:边缘 nginx 双机 Keepalived + HAProxy | 纯集群外,不依赖 BGP;公网落边缘                       |
+| 有可控路由器、要可扩展/长期生产标准 | **方案二**:公网放路由器 + Calico BGP-LB ECMP    | 路由器 DNAT+ECMP,**无边缘 nginx**;先单机后双机 |
+| 路由器还没就绪                      | 先方案一兜底,BGP 就绪再切方案二                       | 见第 6 节                                            |
 
 (前提需要部署ingrss-nginx下沉到k8s节点中 配置好相关的业务nginx路由配置)。
 
@@ -144,7 +144,8 @@ vrrp_instance VI_PUB {
         auth_pass Edg3VrrP                  # 两台一致,自定义
     }
     virtual_ipaddress {
-        <PUBLIC_IP>/<掩码> dev eth0         # ← VIP 挂到公网网卡;平时 eth0 无 IP
+        <PUBLIC_IP>/<掩码>   dev eth0       # ← 入站:VIP 挂公网网卡;平时 eth0 无 IP
+        192.168.100.254/24   dev eth1       # ← 出站:内网默认网关 VIP(K8s 节点用,详见 3.9)
     }
     track_script {
         chk_haproxy
@@ -273,6 +274,30 @@ ssh nginx2 'ip addr show eth0 | grep <PUBLIC_IP>'   # 应能看到 VIP
 | 故障域清晰,排查直观(HAProxy stats 一目了然) | 多一跳(边缘→节点),时延略增                                |
 | 后端加节点 = 改 backend 一行                | 依赖机房允许 ARP/MAC 漂移(前置确认)                        |
 | 七层能力可选(需要时切 mode http)            | 边缘是有状态网元,需自己运维 keepalived/haproxy             |
+
+### 3.9 内部服务器出口(egress SNAT + HA)—— 别漏
+
+方案一的边缘双机不光管**入站**,通常还得接管内网服务器**出公网**(拉镜像 / 调外部 API / NTP)。现状那台单 nginx 八成同时也是出口 SNAT 网关,换成双机后这条要一起 HA,否则切换/上线时内网集体断网。
+
+做法:**入站公网 VIP(eth0)+ 出站内网网关 VIP(eth1)绑同一个 VRRP 实例一起漂**(上面 3.3 的 `virtual_ipaddress` 已加 `192.168.100.254`)。
+
+**1) 两台边缘开转发 + SNAT**(只有 master 持 VIP,故只有 master 真转发):
+
+```bash
+sysctl -w net.ipv4.ip_forward=1        # 写进 /etc/sysctl.conf 持久化
+iptables -t nat -A POSTROUTING -s 192.168.100.0/24 ! -d 192.168.100.0/24 -o eth0 -j MASQUERADE
+```
+
+**2) K8s 节点默认路由指向内网网关 VIP `192.168.100.254`**:
+
+```bash
+ip route replace default via 192.168.100.254
+# 持久化:改 netplan / ifcfg,网关填 192.168.100.254
+```
+
+> Pod 出站:Calico `natOutgoing: Enabled` 先把 pod IP SNAT 成节点 IP → 节点经 `192.168.100.254` → 边缘 MASQUERADE 成公网 IP 出去,链路通。
+> **平滑迁移**:把 `192.168.100.254` 设成跟现网那台 nginx 的内网网关 IP 一致,节点默认路由就不用改。
+> **长连接无缝切换(可选)**:默认 active→backup 切换时出站 NAT 会话会重置(多数场景可接受);要不断连用 `conntrackd` 在两台间同步 conntrack 表。
 
 ---
 
@@ -411,10 +436,10 @@ ip nat inside source static tcp 192.168.100.200 443 116.211.238.197 443
 
 **入口 HA —— 先单机,后期升双机**:
 
-| 阶段          | 形态                                                                  | 单点情况                                                       |
-| ------------- | --------------------------------------------------------------------- | -------------------------------------------------------------- |
-| 第一步(now)   | **单台路由器** 持公网 IP + DNAT + BGP                                 | 路由器是单点;但已比"单台 nginx"强(后端多节点真分流),可作过渡 |
-| 第二步        | **双路由器/防火墙 HA**:堆叠(IRF/iStack)或双机热备(VRRP/HRP),公网 IP 做 VIP | 入口无单点                                                     |
+| 阶段        | 形态                                                                             | 单点情况                                                     |
+| ----------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| 第一步(now) | **单台路由器** 持公网 IP + DNAT + BGP                                      | 路由器是单点;但已比"单台 nginx"强(后端多节点真分流),可作过渡 |
+| 第二步      | **双路由器/防火墙 HA**:堆叠(IRF/iStack)或双机热备(VRRP/HRP),公网 IP 做 VIP | 入口无单点                                                   |
 
 > 升双机时对集群侧的唯一影响:**堆叠/逻辑一台 → BGPPeer 配 1 条**(指堆叠管理 VIP);**双机独立(VRRP)→ BGPPeer 配 2 条**(分别指两台路由器)。ingress / Calico 其余配置不变。
 
@@ -432,30 +457,32 @@ kubectl uncordon k8swork1
 
 ### 4.7 优缺点
 
-| ✅ 优点                                          | ❌ 缺点                                                 |
-| ------------------------------------------------ | ------------------------------------------------------- |
-| 路由器内核级 ECMP,真·多节点同时分流             | 依赖机房路由器配合(BGP + maximum-paths)                 |
-| 加节点零改动(节点起 ingress pod 自动入 ECMP)     | BGP/ECMP 排障门槛高(birdcl / show ip route)             |
-| 单 BIRD 进程同时管 Pod CIDR + LB IP,无需 MetalLB | ECMP 按 hash 分流,rehash 时长连接可能瞬断               |
+| ✅ 优点                                          | ❌ 缺点                                                |
+| ------------------------------------------------ | ------------------------------------------------------ |
+| 路由器内核级 ECMP,真·多节点同时分流             | 依赖机房路由器配合(BGP + maximum-paths)                |
+| 加节点零改动(节点起 ingress pod 自动入 ECMP)     | BGP/ECMP 排障门槛高(birdcl / show ip route)            |
+| 单 BIRD 进程同时管 Pod CIDR + LB IP,无需 MetalLB | ECMP 按 hash 分流,rehash 时长连接可能瞬断              |
 | 与本仓库生产标准一致,可扩到几十节点;无边缘网元   | 入口 HA 取决于路由器(单台是单点,需升堆叠/双机热备消除) |
+| 出站 egress 路由器原生做(它就是网关),无需额外搭   | BGP/ECMP 排障门槛高,需机房配合                          |
 
 ---
 
 ## 5. 并排 Trade-off 对比
 
-| 维度                      | 方案一 Keepalived+HAProxy          | 方案二 Calico BGP-LB + ECMP                      |
-| ------------------------- | ---------------------------------- | ------------------------------------------------ |
-| 负载发生层级              | L4,在边缘 HAProxy                  | L3,在路由器 ECMP(内核转发)                       |
-| 真·多节点同时分流        | ✅(HAProxy 向多节点轮询)           | ✅(路由器多 nexthop hash)                        |
-| 入口 HA 机制              | VRRP(公网 IP 主备漂移)             | BGP 撤路由剔节点 + 路由器 HA(堆叠/双机热备)     |
-| 故障收敛时间              | VRRP ~1–3s;后端探活 ~2× interval | BGP keepalive/holdtime,默认数秒(可调)            |
-| 客户端真实 IP             | send-proxy-v2 + use-proxy-protocol | externalTrafficPolicy:Local(无边缘,无需 proxy_protocol) |
-| 是否依赖机房路由器        | ❌ 不依赖(只需允许 ARP 漂移)       | ✅ 依赖(可控路由器 + BGP + maximum-paths)        |
-| 额外网络跳数              | +1(边缘→节点)                     | 0(公网→路由器→节点,无额外代理跳)               |
-| 横向扩展(加 ingress 节点) | 改 HAProxy backend 加一行          | 节点起 pod 自动入 ECMP + 路由器加 neighbor       |
-| 运维复杂度                | 低(进程级,stats 直观)              | 中高(BGP/BIRD 概念 + 路由器协同)                 |
+| 维度                      | 方案一 Keepalived+HAProxy          | 方案二 Calico BGP-LB + ECMP                                        |
+| ------------------------- | ---------------------------------- | ------------------------------------------------------------------ |
+| 负载发生层级              | L4,在边缘 HAProxy                  | L3,在路由器 ECMP(内核转发)                                         |
+| 真·多节点同时分流        | ✅(HAProxy 向多节点轮询)           | ✅(路由器多 nexthop hash)                                          |
+| 入口 HA 机制              | VRRP(公网 IP 主备漂移)             | BGP 撤路由剔节点 + 路由器 HA(堆叠/双机热备)                        |
+| 故障收敛时间              | VRRP ~1–3s;后端探活 ~2× interval | BGP keepalive/holdtime,默认数秒(可调)                              |
+| 客户端真实 IP             | send-proxy-v2 + use-proxy-protocol | externalTrafficPolicy:Local(无边缘,无需 proxy_protocol)            |
+| 是否依赖机房路由器        | ❌ 不依赖(只需允许 ARP 漂移)       | ✅ 依赖(可控路由器 + BGP + maximum-paths)                          |
+| 额外网络跳数              | +1(边缘→节点)                     | 0(公网→路由器→节点,无额外代理跳)                                 |
+| 横向扩展(加 ingress 节点) | 改 HAProxy backend 加一行          | 节点起 pod 自动入 ECMP + 路由器加 neighbor                         |
+| 运维复杂度                | 低(进程级,stats 直观)              | 中高(BGP/BIRD 概念 + 路由器协同)                                   |
 | 设备/IP 成本              | 2 台边缘 + 1 个公网 IP(现有)       | 可控路由器(先 1 台后 2 台)+ 公网 IP + 1 段内网 LB VIP,无边缘 nginx |
-| 单点风险                  | 边缘 active-passive,master 扛全量  | 后端多节点无瓶颈;入口单点在路由器(升双机消除)   |
+| 单点风险                  | 边缘 active-passive,master 扛全量  | 后端多节点无瓶颈;入口单点在路由器(升双机消除)                      |
+| 内部服务器出口(egress)   | **需自建**:边缘加内网网关 VIP + SNAT,跟入站一起 HA(见 3.9) | **路由器原生**:它就是网关,出站 SNAT 零额外配置 |
 
 > 每格依据:跳数=链路图实测路径;收敛时间=各协议默认计时器(VRRP advert_int=1s×fall;BGP holdtime 默认 90s 但 BFD/短计时可压到秒级);扩展性=两套"加一个节点"实际改动量。
 
