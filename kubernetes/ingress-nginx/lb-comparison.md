@@ -10,15 +10,19 @@
 
 | 你的情况                            | 选                                                    | 为什么                                               |
 | ----------------------------------- | ----------------------------------------------------- | ---------------------------------------------------- |
-| 路由器暂不可控、想最快上线          | **方案一**:边缘 nginx 双机 Keepalived + HAProxy | 纯集群外,不依赖 BGP;公网落边缘                       |
-| 有可控路由器、要可扩展/长期生产标准 | **方案二**:公网放路由器 + Calico BGP-LB ECMP    | 路由器 DNAT+ECMP,**无边缘 nginx**;先单机后双机 |
-| 路由器还没就绪                      | 先方案一兜底,BGP 就绪再切方案二                       | 见第 6 节                                            |
+**性能排名(吞吐天花板)**:🥇 **方案二**(路由器 ECMP)≫ 🥈 **方案三**(LVS-NAT)> 🥉 **方案一**(HAProxy)。**要高性能直接上方案二**——它没有"汇聚单点",根因见第 6 节。
 
-(前提需要部署ingrss-nginx下沉到k8s节点中 配置好相关的业务nginx路由配置)。
+| 你的情况                                          | 选                                            | 为什么 / 主要代价                                                                          |
+| ------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 有可控路由器、**要高性能 / 可扩展**               | **方案二**:公网放路由器 + Calico BGP-LB ECMP | ASIC 线速 + 无汇聚单点 + 加节点线性扩;**代价:要花钱买/租支持 BGP 的路由器,且依赖机房配合** |
+| 路由器不可用、要**内核态高性能**                  | **方案三**:边缘 Keepalived + **LVS-NAT**     | 内核态 L4,比 HAProxy 省 CPU;**DR 模式在此不适用(出口同设备),只能 NAT;可观测性差**      |
+| 路由器不可用、要**运维简单 / 可观测 / 将来要 L7** | **方案一**:边缘 Keepalived + HAProxy         | 直观、stats 可观测、可切 L7/SSL 卸载;**用户态性能垫底,active 单台扛全量**                  |
+
+(前提:ingress-nginx 已下沉到 K8s 节点(DaemonSet + hostNetwork),业务 nginx 路由配置就绪。)
 
 ---
 
-## 1. 统一规划参数(两方案共用)
+## 1. 统一规划参数(三方案共用)
 
 | 项                                    | 值                                                                                                                                                         |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -35,7 +39,7 @@
 
 ---
 
-## 2. 两条全链路对照
+## 2. 三条全链路对照
 
 ```
 方案一(负载在边缘 L4):
@@ -58,6 +62,17 @@
   · 分流发生在:路由器 ECMP(内核级,按 5 元组 hash)
   · HA 靠:BGP 撤路由(节点挂自动剔除)+ 路由器自身 HA(先单机过渡 → 后期堆叠/双机热备)
   · 真实客户端 IP:externalTrafficPolicy: Local(client 直达节点,真实 IP 天然保留)
+
+方案三(边缘 LVS-NAT,内核态 L4):
+  client ──公网──> [公网VIP] nginx1/nginx2 (Keepalived主备 + IPVS)
+                       │  IPVS NAT:DNAT 到 ingress 节点(内核态转发)
+                       ├──> k8swork1 .11 ┐
+                       └──> k8swork2 .12 ┘ ingress-nginx(hostNetwork)→ svc → pod
+                       ↑  回包经边缘 un-NAT(节点默认网关=边缘,出口也在这)
+  · 分流发生在:边缘 IPVS(内核态,比 HAProxy 省 CPU)
+  · HA 靠:Keepalived VRRP + 管理 IPVS 表 + 探活后端
+  · 真实客户端 IP:NAT 模式天然保留(后端看到 client 真实 IP,无需 proxy_protocol)
+  · 注:DR 模式不用——出口网关在同一台边缘,DR"回包旁路"优势作废
 ```
 
 ---
@@ -275,6 +290,15 @@ ssh nginx2 'ip addr show eth0 | grep <PUBLIC_IP>'   # 应能看到 VIP
 | 后端加节点 = 改 backend 一行                | 依赖机房允许 ARP/MAC 漂移(前置确认)                        |
 | 七层能力可选(需要时切 mode http)            | 边缘是有状态网元,需自己运维 keepalived/haproxy             |
 
+**缺点细看(为什么性能垫底)**:
+
+1. **用户态全代理,性能最低**:每条连接都要内核↔用户态拷贝 + HAProxy 进程上下文,高并发时 master 单台 **CPU 先到瓶颈**(几十万并发就吃满核);开 SSL 卸载/L7 更耗 CPU。
+2. **active-passive,一半设备闲置**:VRRP 主备,平时只有 master 干活,backup 纯待命;**带宽/PPS 上限 = 单台机器**,想更快只能换更猛的单机(纵向扩,有天花板)。
+3. **多一跳 + 必经瓶颈**:`client→边缘→节点`,边缘是所有流量的汇聚点,时延 +1 跳,边缘挂/打满 = 全站受影响。
+4. **真实 IP 依赖 proxy_protocol**:开了 `use-proxy-protocol` 后,**不能再直连节点测试**(握手失败),排查方式受限。
+5. **进 + 出双向都压在边缘**:边缘还要兼出口 SNAT(3.9),master 一台同时扛入站反代 + 出站 NAT 两个方向的带宽。
+6. **依赖机房允许 ARP/MAC 漂移**(VRRP 前提);切换时出站长连接默认重置(除非上 conntrackd)。
+
 ### 3.9 内部服务器出口(egress SNAT + HA)—— 别漏
 
 方案一的边缘双机不光管**入站**,通常还得接管内网服务器**出公网**(拉镜像 / 调外部 API / NTP)。现状那台单 nginx 八成同时也是出口 SNAT 网关,换成双机后这条要一起 HA,否则切换/上线时内网集体断网。
@@ -465,35 +489,148 @@ kubectl uncordon k8swork1
 | 与本仓库生产标准一致,可扩到几十节点;无边缘网元   | 入口 HA 取决于路由器(单台是单点,需升堆叠/双机热备消除) |
 | 出站 egress 路由器原生做(它就是网关),无需额外搭   | BGP/ECMP 排障门槛高,需机房配合                          |
 
----
+**缺点细看(主要是钱和依赖,不是性能)**:
 
-## 5. 并排 Trade-off 对比
-
-| 维度                      | 方案一 Keepalived+HAProxy          | 方案二 Calico BGP-LB + ECMP                                        |
-| ------------------------- | ---------------------------------- | ------------------------------------------------------------------ |
-| 负载发生层级              | L4,在边缘 HAProxy                  | L3,在路由器 ECMP(内核转发)                                         |
-| 真·多节点同时分流        | ✅(HAProxy 向多节点轮询)           | ✅(路由器多 nexthop hash)                                          |
-| 入口 HA 机制              | VRRP(公网 IP 主备漂移)             | BGP 撤路由剔节点 + 路由器 HA(堆叠/双机热备)                        |
-| 故障收敛时间              | VRRP ~1–3s;后端探活 ~2× interval | BGP keepalive/holdtime,默认数秒(可调)                              |
-| 客户端真实 IP             | send-proxy-v2 + use-proxy-protocol | externalTrafficPolicy:Local(无边缘,无需 proxy_protocol)            |
-| 是否依赖机房路由器        | ❌ 不依赖(只需允许 ARP 漂移)       | ✅ 依赖(可控路由器 + BGP + maximum-paths)                          |
-| 额外网络跳数              | +1(边缘→节点)                     | 0(公网→路由器→节点,无额外代理跳)                                 |
-| 横向扩展(加 ingress 节点) | 改 HAProxy backend 加一行          | 节点起 pod 自动入 ECMP + 路由器加 neighbor                         |
-| 运维复杂度                | 低(进程级,stats 直观)              | 中高(BGP/BIRD 概念 + 路由器协同)                                   |
-| 设备/IP 成本              | 2 台边缘 + 1 个公网 IP(现有)       | 可控路由器(先 1 台后 2 台)+ 公网 IP + 1 段内网 LB VIP,无边缘 nginx |
-| 单点风险                  | 边缘 active-passive,master 扛全量  | 后端多节点无瓶颈;入口单点在路由器(升双机消除)                      |
-| 内部服务器出口(egress)   | **需自建**:边缘加内网网关 VIP + SNAT,跟入站一起 HA(见 3.9) | **路由器原生**:它就是网关,出站 SNAT 零额外配置 |
-
-> 每格依据:跳数=链路图实测路径;收敛时间=各协议默认计时器(VRRP advert_int=1s×fall;BGP holdtime 默认 90s 但 BFD/短计时可压到秒级);扩展性=两套"加一个节点"实际改动量。
+1. **要花钱买/租设备**:需要一台**支持 BGP + ECMP(`maximum-paths`)的路由器或三层交换机**。带 BGP 的企业级设备不便宜;机房租用的上联设备通常**不开放给你配 BGP**,要自购或加钱租。**要消除入口单点还得再来一台做堆叠/双机热备 → 设备成本翻倍**,堆叠/HA 有的型号还要 license。
+2. **依赖机房配合(可能也要钱)**:公网 IP 要能落到你的路由器(改公网线接入点 / 解除 IP-MAC 绑定),机房不一定配合,或按"增值服务"收费;跨团队/跨厂商协作周期长。
+3. **BGP/ECMP 排障门槛高**:AS、路由收敛、`birdcl show protocols`、`show ip route` 多 nexthop——不是普通运维都会,出问题定位慢,强依赖网络工程能力。
+4. **单机过渡期路由器是单点(且更致命)**:第一步单台路由器时,它挂 = **进 + 出全断**(因为它同时是入口和出口网关),比"单台 nginx"故障面更大。
+5. **ECMP rehash 瞬断**:节点增减时 hash 桶重算,部分**长连接被重分到别的节点而瞬断**(除非路由器支持一致性哈希 / resilient ECMP)。
+6. **改配置要碰核心网络设备**:动路由器影响面大,变更窗口/审批比改一台边缘 Linux 严格。
 
 ---
 
-## 6. 选型建议 + 落地路径
+## 5. 方案三 —— 边缘 Keepalived + LVS-NAT(内核态 L4)
 
-**明确推荐**:
+**定位**:边缘双机,**用内核态 IPVS 做 L4 转发**(比 HAProxy 用户态省 CPU)。Keepalived 一身二职:VRRP 做 VIP HA + 直接管理 IPVS 表 + 探活后端。**只用 NAT 模式**——DR 模式的"回包旁路 director"优势,在"出口网关也在这台 director"的拓扑下完全作废(回包反正要经它),白搭 DR 的 `lo:VIP`+arp 复杂度,故弃用 DR。
 
-- **有可控路由器 → 方案二**。公网放路由器,DNAT + BGP ECMP,**无边缘 nginx**;内核级 ECMP 无瓶颈、加节点零改动、与集群生命周期绑定(pod 在哪流量到哪),是裸金属 K8s 生产标准。
-- **路由器暂不可控 / 机房 BGP 没落实 → 先方案一**。边缘 nginx 双机兜公网入口,不碰路由器,半天能上。
+### 5.1 拓扑与前置
+
+- 同方案一:公网 IP 作 VRRP VIP,边缘双机(这里是 LVS director,不跑 nginx/haproxy)。**ARP/MAC 漂移前提同 3.1**。
+- 后端 = ingress 节点 `.11/.12` 的 `:80/:443`。
+- **NAT 模式硬要求**:后端(ingress 节点)默认网关必须指向 director 的内网 VIP `192.168.100.254`(回包才能经 director un-NAT)——**正好和 3.9 的出口网关 VIP 复用同一个**,拓扑自洽。
+
+### 5.2 安装
+
+```bash
+yum install -y ipvsadm keepalived          # 或 apt install -y ipvsadm keepalived
+modprobe ip_vs ip_vs_wrr ip_vs_rr
+echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf && sysctl -p
+```
+
+### 5.3 Keepalived 配置(VRRP + IPVS virtual_server)
+
+**MASTER**(`/etc/keepalived/keepalived.conf`):
+
+```conf
+vrrp_instance VI_PUB {
+    state MASTER
+    interface eth1
+    virtual_router_id 51
+    priority 100
+    advert_int 1
+    unicast_src_ip 192.168.100.241
+    unicast_peer { 192.168.100.242 }
+    authentication { auth_type PASS; auth_pass Edg3VrrP }
+    virtual_ipaddress {
+        <PUBLIC_IP>/<掩码>   dev eth0       # 入站 VIP
+        192.168.100.254/24   dev eth1       # 出站 + LVS 回包网关 VIP(同 3.9)
+    }
+}
+
+# ---- IPVS:NAT 模式,80/443 各一个 virtual_server ----
+virtual_server <PUBLIC_IP> 443 {
+    delay_loop 3
+    lb_algo wrr                 # 加权轮询(wlc 也可)
+    lb_kind NAT                 # ← NAT 模式(非 DR)
+    protocol TCP
+    real_server 192.168.100.11 443 { weight 1; TCP_CHECK { connect_timeout 3; connect_port 443 } }
+    real_server 192.168.100.12 443 { weight 1; TCP_CHECK { connect_timeout 3; connect_port 443 } }
+}
+virtual_server <PUBLIC_IP> 80 {
+    delay_loop 3
+    lb_algo wrr
+    lb_kind NAT
+    protocol TCP
+    real_server 192.168.100.11 80 { weight 1; TCP_CHECK { connect_timeout 3; connect_port 80 } }
+    real_server 192.168.100.12 80 { weight 1; TCP_CHECK { connect_timeout 3; connect_port 80 } }
+}
+```
+
+**BACKUP**:`state BACKUP` / `priority 90` / `unicast_src_ip`/`unicast_peer` 对调;`virtual_server` 段两台**完全相同**。启动:`systemctl enable --now keepalived`。
+
+### 5.4 ingress-nginx 安装(方案三)
+
+```bash
+bash install.sh --label-nodes=k8swork1,k8swork2 --service-type=ClusterIP
+```
+
+**不需要 proxy_protocol**:NAT 模式 director 只改目的地址,源 IP 保留,后端直接看到真实 client IP(前提是回包经 director,已由"节点默认网关=`192.168.100.254`"保证)。
+
+### 5.5 出口 egress
+
+同 3.9(出口网关 VIP + MASQUERADE)。方案三里这条**和 LVS 回包路径天然共用**:节点默认网关本来就指 director,回包 un-NAT 和出站 SNAT 都在这一台完成。
+
+### 5.6 验证
+
+```bash
+ipvsadm -Ln          # virtual server + real server + 各后端连接数 + 权重
+ipvsadm -Lnc         # 活动连接明细
+systemctl stop keepalived    # VIP + IPVS 表应漂到 backup
+```
+
+### 5.7 优缺点
+
+| ✅ 优点                                   | ❌ 缺点                                                       |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| 内核态 IPVS,比 HAProxy 省 CPU、并发能力强 | NAT 模式双向都过 director,**没有 DR 的回包旁路**,吞吐不如 DR |
+| NAT 模式天然保留真实 client IP,无需 proxy_protocol | 可观测性差(只有 ipvsadm,无 stats 页)                  |
+| 不依赖机房路由器,公网落边缘自己可控        | 纯 L4,不能 SSL 卸载 / Host 路由(ingress 已做 L7,影响小)    |
+| keepalived 一体管 VRRP + IPVS + 探活        | 仍 active-passive 单点 + 多一跳 + 依赖 ARP 漂移               |
+
+**缺点细看**:
+
+1. **NAT 模式 = 双向单点汇聚**:进站 DNAT、回包 un-NAT 都在 director,**director 单机扛进 + 出双向流量**;省了 HAProxy 的用户态开销(内核转发),但仍是 active 单台,**带宽上限 = 单机**,横向扩不了。
+2. **DR 模式在此不可用**:出口网关与 director 同设备,DR 的回包旁路优势归零——所以拿不到 LVS 最强形态,只能退而求其次用 NAT。
+3. **可观测性 / 健康检查弱**:只有 `ipvsadm -Ln` 看连接数,没有 HAProxy stats 那种 per-backend 延迟/错误率;探活靠 keepalived `TCP_CHECK`/`HTTP_GET`,粒度不如 HAProxy。
+4. **纯 L4**:做不了 SSL 卸载、按 Host/路径分流、改 header(本场景 ingress 已做 L7,影响有限,但少了边缘兜底能力)。
+5. **高并发要调内核**:`ip_vs_conn_tab_bits`、`nf_conntrack_max`、conntrack 表大小都要按量级调,有学习/调优成本。
+6. **切换丢状态**:VRRP 切换时 IPVS 连接表 + conntrack 不同步,**长连接重置**(同方案一,可上 conntrackd 缓解,但 IPVS 同步更繁琐)。
+7. **出口 SNAT 仍要自建**(同 3.9),边缘依旧是有状态网元要运维。
+
+---
+
+## 6. 并排 Trade-off 对比
+
+| 维度                      | 方案一 HAProxy                     | 方案二 路由器 BGP ECMP                          | 方案三 LVS-NAT                          |
+| ------------------------- | ---------------------------------- | ----------------------------------------------- | --------------------------------------- |
+| 负载层级 / 空间           | L4+L7,边缘**用户态**              | L3,路由器 **ASIC/内核**                         | L4,边缘 **内核态 IPVS**                 |
+| **性能档位(吞吐)**       | 🥉 最低(用户态全代理)             | 🥇 最高(ASIC 线速)                              | 🥈 中(内核态,比 HAProxy 省 CPU)        |
+| **有无汇聚单点**          | 有(active 单台扛全量)             | **无**(流量直达多节点)                          | 有(active 单台扛全量)                  |
+| 入口 HA 机制              | VRRP 主备                          | BGP 撤路由剔节点 + 路由器 HA(堆叠/双机热备)     | VRRP 主备 + keepalived 管 IPVS          |
+| 客户端真实 IP             | send-proxy-v2 + proxy_protocol     | externalTrafficPolicy:Local                     | **NAT 天然保留**,无需 proxy_protocol    |
+| 是否依赖机房路由器        | ❌ 不依赖                          | ✅ 依赖**可控 BGP 路由器**                       | ❌ 不依赖                               |
+| 额外网络跳数              | +1(边缘→节点)                     | 0(公网→路由器→节点)                            | +1(边缘→节点)                          |
+| 横向扩展                  | 改 backend 一行;**纵向扩有顶**     | **加节点线性扩**(无顶)                          | 改 real_server;**纵向扩有顶**           |
+| 可观测性                  | 强(stats 页)                      | 中(birdcl / 路由表)                            | 弱(仅 ipvsadm)                         |
+| SSL 卸载 / L7 路由        | ✅ 可(切 mode http)               | 不在此层(ingress 做 L7)                        | ❌ 不能(纯 L4)                         |
+| **设备 / 钱**             | 2 台边缘 + 公网 IP(现有,便宜)     | **要买/租支持 BGP 的路由器,HA 再翻倍 + 机房配合费** | 2 台边缘 + 公网 IP(现有,便宜)         |
+| 单点风险                  | 边缘 active-passive 扛全量          | 后端无瓶颈;入口单点在路由器(升双机消除)        | 边缘 active-passive 扛全量              |
+| 内部服务器出口(egress)   | 需自建 SNAT + 网关 VIP(见 3.9)    | **路由器原生**(它就是网关)                     | 需自建,与 LVS 回包共用网关(见 5.5)    |
+
+> 每格依据:性能档位=转发位置(用户态 < 内核态 < ASIC)+ 有无汇聚单点;跳数=链路图实测路径;扩展性="加一个节点"实际改动量(方案二节点起 pod 自动入 ECMP,方案一/三受限于 active 单机带宽)。
+
+---
+
+## 7. 选型建议 + 落地路径
+
+**按"要不要高性能 + 有没有可控路由器"二选一**:
+
+- **要高性能 + 有(或愿意买)可控 BGP 路由器 → 方案二**。ASIC 线速 + 无汇聚单点 + 加节点线性扩,是性能天花板和裸金属生产标准。代价是设备钱 + 机房配合。
+- **要高性能但路由器不可用/不想花钱 → 方案三(LVS-NAT)**。内核态 L4,榨干单台边缘性能,不依赖路由器;但仍是 active 单点(纵向扩有顶),可观测性弱。
+- **不追求极致性能、要运维简单可观测/将来可能要 L7/SSL 卸载 → 方案一(HAProxy)**。stats 直观、能切七层;性能垫底但够大多数中小流量用。
+
+> 一句话:**性能 方案二 ≫ 方案三 > 方案一;省钱省事 方案一/三(用现有边缘);最强且可扩 方案二(花钱买路由器)。**
 
 **方案二分两步走(入口 HA 渐进)**:
 
@@ -504,9 +641,9 @@ kubectl uncordon k8swork1
 
 ---
 
-## 7. 验证清单
+## 8. 验证清单
 
-**方案一**:
+**方案一(HAProxy)**:
 
 ```bash
 # 打公网 VIP(不能直连节点,因为开了 proxy-protocol)
@@ -517,7 +654,7 @@ echo "show stat" | socat stdio /run/haproxy/admin.sock        # 或看 :9000 sta
 systemctl stop haproxy && ssh nginx2 'ip addr show eth0 | grep <PUBLIC_IP>'
 ```
 
-**方案二**:
+**方案二(路由器 ECMP)**:
 
 ```bash
 kubectl -n ingress-nginx get svc ingress-nginx-controller     # EXTERNAL-IP=192.168.100.200
@@ -526,4 +663,18 @@ kubectl -n calico-system exec ds/calico-node -- birdcl show protocols   # BGP Es
 #   show ip route 192.168.100.200        ! 期望多 nexthop
 kubectl drain k8swork1 --ignore-daemonsets --delete-emptydir-data       # 看 ECMP 收敛
 kubectl uncordon k8swork1
+```
+
+**方案三(LVS-NAT)**:
+
+```bash
+# 打公网 VIP
+curl -I -H 'Host: test.example.com' http://<PUBLIC_IP>
+# 看 IPVS 转发表 + 各后端连接分布
+ipvsadm -Ln          # virtual server + real server + 权重 + 连接数
+ipvsadm -Lnc         # 活动连接明细
+# 后端拿到的源 IP 应是 client 真实 IP(NAT 模式)
+kubectl -n ingress-nginx logs ds/ingress-nginx-controller | tail   # 看 access log 源 IP
+# VIP + IPVS 表漂移
+systemctl stop keepalived && ssh nginx2 'ip addr show eth0 | grep <PUBLIC_IP>; ipvsadm -Ln'
 ```
