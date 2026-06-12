@@ -22,20 +22,104 @@
 
 ---
 
-## 2. 前提条件清单(开工前逐项打钩)
+## 2. 容量规划 + IP 规划 + 服务器选型(开工前定下来)
 
-### 2.1 物料(差什么东西)
+### 2.1 高并发演进路径 ⭐(诚实交代天花板)
 
-| 项 | 说明 | 备注 |
+HAProxy 用户态、active-passive、单台扛全量,**性能档位在三方案里垫底**(详见 [lb-comparison.md §6](lb-comparison.md))。所以本方案定位是:**先用最小代价跑起来 + 把演进位置占好**,真要往高并发推时,平滑切到方案二(路由器 BGP ECMP)。
+
+| 阶段 | 形态 | 目标量级(经验值,SSL 透传 `mode tcp`) | 单点 | 何时升下一阶段 |
+|---|---|---|---|---|
+| 0 现状 | 单 nginx | < 1 万 QPS | 边缘单点 | 立刻 |
+| **1 本方案单机** | 单 HAProxy(本方案 §3–§6) | **≈ 5 万 QPS / 10 万并发 / 1 Gbps** | 边缘单点 | 业务稳定 / 流量上量 |
+| **2 本方案双机 HA** | 双 HAProxy + Keepalived(§7) | 容量不变 ≈ 5 万 QPS(active-passive) | 已消除 | 流量超单机峰值 |
+| **3 双活拉伸** | 加第 2 个公网 IP,两台 HAProxy 各持一个,DNS 轮询 | **≈ 10 万 QPS / 双台并行** | 已消除 | 流量继续上 / 要内核态/线速 |
+| **4 切方案二** | 上可控 BGP 路由器,公网 IP 挪到路由器,Calico BGP-LB ECMP | **30 万+ QPS,加节点线性扩** | 路由器双机消除 | 终态 |
+
+> **建议**:服务器选型按"阶段 2 撑得稳"取规格(看 §2.3);IP 规划按"阶段 4 也不用大改"占位(看 §2.4)。
+
+### 2.2 性能经验值(单台 HAProxy,作为容量规划依据)
+
+| 维度 | mode tcp(TLS 透传,推荐) | mode http(L7,SSL 终止) |
 |---|---|---|
-| ☐ **1 个新公网 IP** | 机房新分配,给新 HAProxy 盒子用 | **必须**,不能用现网 116.211.238.197 |
-| ☐ **HAProxy 盒子 ×1**(第一阶段) | 物理机或虚机均可,2 核 4G 起步;网卡 ≥2 | 单机过渡 |
-| ☐ HAProxy 盒子 ×2(第二阶段,做 HA 时再加) | 第二台配置同第一台 | 升 HA 时再说 |
-| ☐ **盒子两块网卡** | eth0 接公网线、eth1 接内网交换机 | 单网卡走 trunk vlan 也行 |
-| ☐ 一段内网空闲 IP | 给 HAProxy 盒子做管理 IP,**与节点同网段** `192.168.100.0/24` | 示例:`192.168.100.241`(单机)/ `.241` + `.242`(双机) |
-| ☐ DNS 控制权 | 业务域名能改 A 记录指向新公网 IP | 全量切流前用得着 |
+| CPU 经验值 | ≈ **2 万 QPS / 核** | ≈ 8 千 QPS / 核(SSL 终止吃 CPU) |
+| 内存 | 每万并发 ≈ 30–60 MB | 每万并发 ≈ 100 MB |
+| 网卡 PPS | 千兆 ≈ 14.8 万 PPS(线速极限) | 同 |
+| 上限信号 | `top` `softirq` 高 / `ksoftirqd` 100% | CPU user 高 |
 
-### 2.2 现有环境必须满足的条件
+> **强烈建议本方案用 `mode tcp` 透传**:省 CPU、不碰证书、ingress 已经在做 L7。
+
+### 2.3 服务器规格选型(按目标量级分档)
+
+> 三档都按 **双网卡(公网 + 内网)** 配置;CPU 选**单核高主频** > 多核低主频(HAProxy 单连接路径短,主频比核数重要)。
+
+| 档位 | 适配阶段 | CPU | 内存 | 网卡 | 适配 QPS / 并发 / 带宽 | 备注 |
+|---|---|---|---|---|---|---|
+| **入门 A** | 阶段 1 起步 | 4C / 3.0GHz+ | 8 GB | 2 × 1 GE | ≤ 5 万 / ≤ 10 万 / ≤ 1 Gbps | 物理机或虚机均可 |
+| **标准 B(推荐起步)** | 阶段 1→2 长期 | **8C / 3.0GHz+** | **16 GB** | **2 × 10 GE** | ≤ 15–20 万 / ≤ 50 万 / ≤ 8 Gbps | 物理机优先,网卡用 Intel X710 / Mellanox CX-4 |
+| **高档 C** | 撑到阶段 3 | 16C / 3.5GHz+ | 32 GB | 2 × 25 GE(SR-IOV / DPDK 可选) | ≤ 30–40 万 / ≤ 100 万 / ≤ 20 Gbps | 已接近 HAProxy 单机天花板,该考虑方案二 |
+
+**不推荐**:虚机 + 低频 CPU(2.x GHz)+ 1Gbps 网卡 → 高并发下 PPS / 中断不够,先撞网卡瓶颈,不是 CPU。
+
+**双机时**:两台规格**完全一致**(VRRP 主备同型号同配,避免切换后性能跳水)。
+
+**容量留 headroom**:按预期峰值的 **2 倍**选规格,日常 < 50% 利用率,留升级/故障腾挪空间。
+
+### 2.4 IP 规划(内外网一次性占好,演进不大改)⭐
+
+#### 公网 IP
+
+| 地址 | 用途 | 阶段 | 说明 |
+|---|---|---|---|
+| `116.211.238.197` | **现网** nginx,继续做现有出口 + 老业务入口 | 全程保留 | **不动** |
+| `<NEW_PUBLIC_IP>` | **本方案新入口**,绑 HAProxy 盒子(单机)或漂在两台间(HA) | 阶段 1–2 | **新申请 1 个** |
+| `<NEW_PUBLIC_IP_2>`(可选) | 阶段 3 双活拉伸第二个公网 IP | 阶段 3 才申请 | 同段更好,做 DNS 双 A 轮询 |
+| 路由器 WAN IP / 公网段 | 阶段 4 公网入口挪到路由器 | 阶段 4 | 现网+新增 IP 可迁过去,无需多申请 |
+
+#### 内网段 `192.168.100.0/24`(按段位划分,留够位置)
+
+| IP 段 | 用途 | 现状 / 阶段 | 备注 |
+|---|---|---|---|
+| `.1` | **网关 / 后期路由器** | 现状是现 nginx 网关;阶段 4 路由器接入 | 保留 |
+| `.2` | 阶段 4 路由器双机第二台 | 阶段 4 | 预留 |
+| `.10` | k8smaster1 | 现状 | |
+| `.11` `.12` | **k8swork1 / k8swork2(ingress 节点)** | 现状 | 打 `ingress=true` |
+| `.21` | k8smaster3 | 现状 | |
+| `.27` `.28` | k8swork3 / k8swork4 | 现状 | 后期可扩 ingress 标签 |
+| `.30` | k8smaster2 | 现状 | |
+| `.31–.39` | K8s 控制面 / worker 扩容预留 | — | |
+| **`.32`** | **现网 nginx**(继续在跑,不动) | 现状 | 保留 |
+| `.33–.39` | 现网 nginx 备机 / 其他基础设施预留 | — | |
+| **`.41`** | **新 HAProxy 盒子 ①(本方案单机)** | **阶段 1** | eth1 管理 IP |
+| **`.42`** | **新 HAProxy 盒子 ②(HA 第二台)** | **阶段 2** | eth1 管理 IP |
+| `.43–.49` | 边缘 LB / 反代盒子扩容预留 | — | 避开 `.32` 段 |
+| `.100–.199` | 业务虚机段(若有) | — | 与基础设施段隔离 |
+| **`.200–.207`(/29)** | **阶段 4 K8s Service LoadBalancer VIP 段** | **预留**(对应 lb-comparison §1) | ingress 用 `.200` |
+| `.208–.249` | 未来 LB VIP 扩容预留 | — | |
+| `.250–.253` | 网络设备管理 IP / 出口设备 | — | |
+| `.254` | 备用网关 VIP(替代网关形态用,本方案不用) | — | 占位别给业务用 |
+
+#### VRRP `virtual_router_id` 规划(避免冲突)
+
+| ID | 用途 |
+|---|---|
+| `71` | **本方案 HAProxy HA**(阶段 2) |
+| 1–70 | 已用 / 留给现网 / 其他 VRRP | 别撞 |
+| 72–99 | 未来其他 VRRP 实例预留 |
+
+> **关键原则**:`.41/.42` 落在和 ingress 节点同段,这样回包走 L2 直达 HAProxy(本方案的核心);`.200/29` 提前留好,阶段 4 切方案二时 Calico BGP-LB CIDR 直接用,不动 IP 规划。
+
+### 2.5 物料清单(按上面规划具体化)
+
+| 项 | 数量 | 备注 |
+|---|---|---|
+| ☐ 新公网 IP `<NEW_PUBLIC_IP>` | 1 | 阶段 1 必需 |
+| ☐ HAProxy 服务器(规格按 §2.3 标准档 B) | **阶段 1: 1 台;阶段 2: 2 台** | 双网卡 |
+| ☐ 内网 IP `192.168.100.41`(阶段 2 再加 `.42`) | 1–2 | 按 §2.4 占位 |
+| ☐ DNS 控制权(改业务域 A 记录) | — | 灰度必需 |
+| ☐ 后期可控 BGP 路由器(阶段 4) | 1(后期 2 台) | **阶段 4 才采购**,本方案不阻塞 |
+
+### 2.6 现有环境必须满足的条件
 
 | 条件 | 验证命令 | 不满足后果 |
 |---|---|---|
@@ -44,16 +128,20 @@
 | ☐ HAProxy 盒子内网网卡能 ping 通 ingress 节点 | `ping 192.168.100.11` | 同上 |
 | ☐ 节点上 `:80 / :443` **未被占用** | 节点上 `ss -lntp \| grep -E ':80\|:443'` | 占用了 ingress hostNetwork 起不来 |
 | ☐ ingress 节点 **未做 IP-MAC 绑定限制** 收外部连接 | 跨网段时常见 | 影响 HAProxy 反代 |
-| ☐ K8s 节点默认网关、路由表、iptables **都不需要改** | `ip route; iptables -t nat -S` | 本方案天然零改动,只是先记录现状方便后续比对 |
+| ☐ K8s 节点默认网关、路由表、iptables **都不需要改** | `ip route; iptables -t nat -S` | 本方案天然零改动,先记录现状方便后续比对 |
+| ☐ 内网交换机端口能承载 §2.3 选的网卡速率 | 看交换机端口型号 | 10GE HAProxy 接千兆口 = 浪费规格 |
 
-### 2.3 机房 / 网络部门确认事项(发起申请时一并问)
+### 2.7 机房 / 网络部门确认事项(发申请时一并问)
 
 ```
 1) 新公网 IP 分配:能否分配 1 个独立公网 IP,不与现网 116.211.238.197 同 VLAN/子网也可
-2) 接入方式:公网线接 HAProxy 盒子 eth0 是直连(独立 ARP)还是与现 nginx 共用接入交换机
-3) 安全组/ACL:新公网 IP 默认放行 80/443 入站
-4) 互不干扰确认:新公网 IP 故障不会影响 116.211.238.197 的可用性(双 IP 应彼此独立)
-5) [后期升 HA 用] 同段空闲 IP 一个,用作 VRRP VIP(可选,见 §7)
+2) 接入方式:公网线接新 HAProxy 盒子 eth0 是独立直连还是与现网 nginx 共用接入交换机
+3) 安全组/ACL:新公网 IP 默认放行 80/443 入站,其余 drop
+4) 互不干扰确认:新公网 IP 故障不会影响 116.211.238.197 的可用性(双 IP 物理/逻辑独立)
+5) [阶段 2 HA] 公网 IP <NEW_PUBLIC_IP> 是否允许在两台设备间做 ARP/MAC 漂移(VRRP 必需)
+6) [阶段 3 双活] 是否可再申请第 2 个公网 IP,用于 DNS 双 A 轮询
+7) [阶段 4 终态] 机房上联路由器能否做 BGP peering(为切方案二预热)
+8) 内网交换机给 HAProxy 盒子提供端口的速率(必须匹配 §2.3 选的网卡)
 ```
 
 ---
@@ -68,7 +156,7 @@
    ┌──────────────────────┐
    │ HAProxy 盒子 (新增)   │
    │ eth0: <NEW_PUBLIC_IP> │── 公网侧
-   │ eth1: 192.168.100.241 │── 内网侧
+   │ eth1: 192.168.100.41 │── 内网侧
    └──────────┬───────────┘
               │ 走内网交换机
      ┌────────┼────────┐
@@ -82,7 +170,7 @@
 ```
 
 **关键点(决定为什么"不影响现业务")**:
-- HAProxy 盒子 eth1 内网 IP 和 ingress 节点 **同二层**,后端回包是 `ingress 节点 → 192.168.100.241`,**走 L2 直达,不经任何网关**。
+- HAProxy 盒子 eth1 内网 IP 和 ingress 节点 **同二层**,后端回包是 `ingress 节点 → 192.168.100.41`,**走 L2 直达,不经任何网关**。
 - HAProxy 盒子**不开 `ip_forward`、不当网关、不做 SNAT** —— 它纯代理,不转发任何过路流量。
 - K8s 节点默认网关、出口、其他业务的所有路径 **零改动**。
 
@@ -140,7 +228,7 @@ ONBOOT=yes
 # eth1 内网
 DEVICE=eth1
 BOOTPROTO=static
-IPADDR=192.168.100.241
+IPADDR=192.168.100.41
 NETMASK=255.255.255.0
 # !!! 不要在 eth1 配 GATEWAY !!!,只配 IP,默认路由走 eth0
 ONBOOT=yes
@@ -214,7 +302,7 @@ backend bk_ingress_https
 # ===== 本地状态页(只绑内网,公网不暴露)=====
 listen stats
     mode http
-    bind 192.168.100.241:9000
+    bind 192.168.100.41:9000
     stats enable
     stats uri /
     stats refresh 5s
@@ -335,12 +423,12 @@ for i in $(seq 1 10); do curl -s -H 'Host: test-ingress.example.com' http://<NEW
 
 # 4) 查 HAProxy 后端状态
 echo "show stat" | socat stdio /run/haproxy/admin.sock | column -ts,
-#   或浏览器内网访问 http://192.168.100.241:9000/
+#   或浏览器内网访问 http://192.168.100.41:9000/
 
 # 5) 真实客户端 IP 透传验证(在外网某机器上)
 curl -H 'Host: test-ingress.example.com' http://<NEW_PUBLIC_IP>/
 kubectl -n ingress-nginx logs ds/ingress-nginx-controller --tail=20 | grep -i 'remote'
-# 期望 access log 里 client IP 是外网真实 IP,不是 192.168.100.241
+# 期望 access log 里 client IP 是外网真实 IP,不是 192.168.100.41
 
 # 6) 反向验证:确认现有业务零影响
 #    - 现有公网 IP 116.211.238.197 业务功能正常
@@ -374,7 +462,7 @@ kubectl -n ingress-nginx logs ds/ingress-nginx-controller --tail=20 | grep -i 'r
 | ⚠️ 1 | 双网卡配两个 GATEWAY → 路由混乱 | 只在 eth0 配默认网关,eth1 只配 IP |
 | ⚠️ 2 | HAProxy 盒子开了 `ip_forward` → 意外当网关 | **保持 `ip_forward=0`**,本方案纯代理不转发 |
 | ⚠️ 3 | `bind *:80` 而非 `bind <NEW_PUBLIC_IP>:80` → 把内网 9000 状态页暴露 | 显式绑公网 IP |
-| ⚠️ 4 | stats 页绑 `0.0.0.0:9000` 且无密码 → 公网可访问 | 绑 `192.168.100.241:9000` + `stats auth` 强密码 |
+| ⚠️ 4 | stats 页绑 `0.0.0.0:9000` 且无密码 → 公网可访问 | 绑 `192.168.100.41:9000` + `stats auth` 强密码 |
 | ⚠️ 5 | 防火墙规则没放行内网 :9000(管理用) | iptables/security group 放行运维 IP 段 |
 | ⚠️ 6 | 公网 IP 路由黑洞 — 机房交给你之前没配下一跳 | 上线前 `ping` 自身公网 IP 网关 + 外网测试 |
 
@@ -421,7 +509,7 @@ kubectl -n ingress-nginx logs ds/ingress-nginx-controller --tail=20 | grep -i 'r
 
 单机跑稳后(建议 ≥ 1 周)再升 HA。前提:**机房允许 `<NEW_PUBLIC_IP>` 的 ARP/MAC 在两台之间漂移**(VRRP 必需,见 lb-comparison.md §3.1)。
 
-### 7.1 加一台 HAProxy 盒子(nginx-new2, 内网 192.168.100.242)
+### 7.1 加一台 HAProxy 盒子(nginx-new2, 内网 192.168.100.42)
 
 - 系统初始化 §4.2、装 HAProxy §4.4、HAProxy 配置 §4.5 **完全一样**(同一份 cfg)。
 - eth0 网卡**不配**公网 IP(平时无 IP,由 keepalived 动态挂)。
@@ -452,8 +540,8 @@ vrrp_instance VI_INGRESS {
     virtual_router_id 71                # 同网段唯一,别和现网 VRRP 撞
     priority 100
     advert_int 1
-    unicast_src_ip 192.168.100.241
-    unicast_peer { 192.168.100.242 }
+    unicast_src_ip 192.168.100.41
+    unicast_peer { 192.168.100.42 }
     authentication { auth_type PASS; auth_pass <CHANGE_ME> }
     virtual_ipaddress {
         <NEW_PUBLIC_IP>/<掩码> dev eth0
@@ -462,7 +550,7 @@ vrrp_instance VI_INGRESS {
 }
 ```
 
-BACKUP(nginx-new2)只改:`router_id nginx-new2` / `state BACKUP` / `priority 90` / `unicast_src_ip 192.168.100.242` / `unicast_peer { 192.168.100.241 }`。
+BACKUP(nginx-new2)只改:`router_id nginx-new2` / `state BACKUP` / `priority 90` / `unicast_src_ip 192.168.100.42` / `unicast_peer { 192.168.100.41 }`。
 
 启动:`systemctl enable --now keepalived`(两台都启)。
 
@@ -524,7 +612,7 @@ ip addr show eth0 | grep <NEW_PUBLIC_IP>
 |---|---|
 | `curl <NEW_PUBLIC_IP>` 超时 | ① 公网 IP 路由不通 → 机房 ② iptables 拦了 ③ HAProxy 没起 ④ bind 错误 IP |
 | HAProxy `show stat` 后端 DOWN | ① 节点 :443 不通(防火墙)② ingress pod 没起 ③ proxy-protocol 还没开 ConfigMap → ssl-hello-chk 失败 |
-| 后端日志看到 `192.168.100.241` 不是真实 IP | `use-proxy-protocol` 没开 / 没 reload ingress |
+| 后端日志看到 `192.168.100.41` 不是真实 IP | `use-proxy-protocol` 没开 / 没 reload ingress |
 | 切换 HA 后业务断 | ① 机房锁 MAC ② keepalived `virtual_router_id` 冲突 ③ `unicast_peer` 配反 |
 | 现有业务受影响 | 立刻 `cat /proc/sys/net/ipv4/ip_forward` 看是不是误开了;`ip route` 看默认路由是否被改 |
 
