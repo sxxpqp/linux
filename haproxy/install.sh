@@ -180,14 +180,16 @@ if [ -f "$TARGET_CFG" ] && [ "$DRY_RUN" != "true" ]; then
 fi
 
 # 用 awk 做模板替换,纯 POSIX 工具,避免依赖 python3
-# 占位符设计上互不为子串(__HTTP_BACKENDS__ ≠ __HTTPS_BACKENDS__ 的前缀),
-# 所以这里 gsub 顺序无所谓
+# 关键防护:注释行(可前置空格)原样输出,跳过 gsub —— 否则模板自己的
+# 注释里如果提到占位符名字(说明文档),也会被一起替换,生成的 cfg
+# 会出现游离的 server 行,触发 haproxy "unknown keyword out of section"
 TMP_OUT=$(mktemp)
 awk -v http="$SERVERS_HTTP" \
     -v https="$SERVERS_HTTPS" \
     -v pw="$STATS_PASSWD" \
     -v sp="$STATS_PORT" '
 {
+  if ($0 ~ /^[[:space:]]*#/) { print; next }    # 注释行原样输出
   gsub(/__HTTP_BACKENDS__/,  http)
   gsub(/__HTTPS_BACKENDS__/, https)
   gsub(/STATS_PASSWD/,       pw)
