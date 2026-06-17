@@ -180,14 +180,16 @@ if [ -f "$TARGET_CFG" ] && [ "$DRY_RUN" != "true" ]; then
 fi
 
 # 用 awk 做模板替换,纯 POSIX 工具,避免依赖 python3
+# ⚠ 必须先替换 HTTPS,后替换 HTTP —— 否则前者会被后者的 gsub 当成子串匹配,
+#    把 bk_ingress_https 错指到 80 端口,导致 TLS 透传变 HTTP 端口转发
 TMP_OUT=$(mktemp)
 awk -v http="$SERVERS_HTTP" \
     -v https="$SERVERS_HTTPS" \
     -v pw="$STATS_PASSWD" \
     -v sp="$STATS_PORT" '
 {
-  gsub(/INGRESS_SERVERS_HTTP/,  http)
-  gsub(/INGRESS_SERVERS_HTTPS/, https)
+  gsub(/INGRESS_SERVERS_HTTPS/, https)   # ← 必须先
+  gsub(/INGRESS_SERVERS_HTTP/,  http)    # ← 后做,前缀冲突已被前一步消掉
   gsub(/STATS_PASSWD/,          pw)
   gsub(/:8404/,                 ":" sp)
   print
