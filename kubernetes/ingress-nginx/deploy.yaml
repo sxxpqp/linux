@@ -443,6 +443,9 @@ spec:
         - --validating-webhook=:8443
         - --validating-webhook-certificate=/usr/local/certificates/cert
         - --validating-webhook-key=/usr/local/certificates/key
+        # 该镜像把 enable-metrics 默认值改成了 false(与官方 v1.15.1 不同),
+        # 必须显式开启才会暴露 nginx_ingress_controller_* 业务指标到 :10254/metrics
+        - --enable-metrics=true
         env:
         - name: POD_NAME
           valueFrom:

@@ -1,0 +1,148 @@
+# ============================================================
+# 让"已有的" Prometheus 发现并监控 ingress-nginx
+#   - 适用前提:集群里已经跑着 Prometheus(本文件不装 Prometheus)
+#   - 配套同目录 install.sh + deploy.yaml(v1.15.1 DaemonSet + hostNetwork)
+#
+# 三段内容:
+#   1) Service               —— 把 controller pod 的 10254/metrics 暴露成集群内 Service
+#   2) ServiceMonitor        —— Prometheus Operator(kube-prometheus-stack)用,自动注册
+#   3) PrometheusRule        —— 几条最常用的告警规则
+#
+# 用法:
+#   kubectl apply -f prometheus.yaml
+#
+# ─────────────────────────────────────────────────────────────
+# 你 Prometheus 不是 Operator 装的(没有 monitoring.coreos.com CRD)?
+#   → 删掉本文件里第 2、3 段(ServiceMonitor + PrometheusRule)
+#   → 改去你 Prometheus 的 prometheus.yml(ConfigMap)追加文末 ★ 处的 scrape_configs
+# ============================================================
+
+---
+# ----- 1) Service: 单独把 metrics 端口暴露出来,不动你的 controller Service -----
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingress-nginx-controller-metrics
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/component: controller
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/component: controller
+  ports:
+    - name: metrics
+      port: 10254
+      targetPort: 10254
+      protocol: TCP
+
+---
+# ----- 2) ServiceMonitor: Prometheus Operator 自动注册采集 -----
+# 关键:metadata.labels 要跟你 Prometheus CR 的 spec.serviceMonitorSelector 匹配,
+# kube-prometheus-stack 默认是 release: <helm release 名>
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ingress-nginx
+  namespace: ingress-nginx
+  labels:
+    release: kube-prometheus-stack    # ← 不对的话改成你实际的 selector label
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ingress-nginx
+      app.kubernetes.io/component: controller
+  namespaceSelector:
+    matchNames: [ingress-nginx]
+  endpoints:
+    - port: metrics
+      interval: 30s
+      scheme: http
+      honorLabels: true
+
+---
+# ----- 3) PrometheusRule: 几条最实用的告警 -----
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ingress-nginx
+  namespace: ingress-nginx
+  labels:
+    release: kube-prometheus-stack    # ← 同上,跟 Prometheus CR 的 ruleSelector 匹配
+spec:
+  groups:
+    - name: ingress-nginx
+      rules:
+        - alert: IngressNginxConfigReloadFailed
+          expr: nginx_ingress_controller_config_last_reload_successful == 0
+          for: 1m
+          labels:  { severity: critical }
+          annotations:
+            summary: "ingress-nginx 配置 reload 失败"
+            description: "{{ $labels.pod }} reload 失败,Ingress 改动不会生效"
+
+        - alert: IngressNginx5xxRateHigh
+          expr: |
+            sum(rate(nginx_ingress_controller_requests{status=~"5.."}[2m])) by (ingress)
+              / sum(rate(nginx_ingress_controller_requests[2m])) by (ingress) > 0.05
+          for: 5m
+          labels:  { severity: warning }
+          annotations:
+            summary: "ingress {{ $labels.ingress }} 5xx 占比 > 5%"
+
+        - alert: IngressNginxSslExpirySoon
+          expr: (nginx_ingress_controller_ssl_expire_time_seconds - time()) / 86400 < 14
+          for: 1h
+          labels:  { severity: warning }
+          annotations:
+            summary: "证书 {{ $labels.host }} 剩余 < 14 天"
+
+        - alert: IngressNginxLatencyP99High
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(nginx_ingress_controller_request_duration_seconds_bucket[5m])) by (le, ingress)
+            ) > 2
+          for: 10m
+          labels:  { severity: warning }
+          annotations:
+            summary: "ingress {{ $labels.ingress }} P99 延迟 > 2s"
+
+# ============================================================
+# ★ 裸 Prometheus(无 Operator)方案 —— 不用本文件的 2、3 段
+#   去 Prometheus 的 prometheus.yml ConfigMap,scrape_configs 下追加:
+#
+#   - job_name: ingress-nginx
+#     kubernetes_sd_configs:
+#       - role: pod
+#         namespaces:
+#           names: [ingress-nginx]
+#     relabel_configs:
+#       - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+#         action: keep
+#         regex: ingress-nginx
+#       - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+#         action: keep
+#         regex: controller
+#       # hostNetwork 模式 pod IP = 节点 IP,强制把端口改成 10254
+#       - source_labels: [__address__]
+#         regex: ([^:]+)(?::\d+)?
+#         replacement: $1:10254
+#         target_label: __address__
+#       - source_labels: [__meta_kubernetes_namespace]
+#         target_label: namespace
+#       - source_labels: [__meta_kubernetes_pod_name]
+#         target_label: pod
+#       - source_labels: [__meta_kubernetes_pod_node_name]
+#         target_label: node
+#
+#   改完热重载:
+#     kubectl -n <prom-ns> exec deploy/prometheus -- \
+#       wget -qO- --post-data='' http://localhost:9090/-/reload
+#
+#   并确认 Prometheus 的 ClusterRole 能 list/watch pods 跨命名空间:
+#     - apiGroups: [""]
+#       resources: ["pods","endpoints","services","nodes"]
+#       verbs: ["get","list","watch"]
+# ============================================================
