@@ -5,12 +5,8 @@
 #   - leastconn 算法:把新连接发给当前连接数最少的后端,适合长连接 / HTTP/2
 #   - 8404 端口提供 stats UI(用户名 admin,密码由 install.sh 注入)
 #
-# 占位符约定(不要随便改名):
-#   __HTTP_BACKENDS__   →  80  端口 backend 的 server 行(多行)
-#   __HTTPS_BACKENDS__  →  443 端口 backend 的 server 行(多行)
-#   STATS_PASSWD        →  stats UI 登录密码
-# 命名故意带前后双下划线 + 完整词,避免 "INGRESS_SERVERS_HTTP" 是
-# "INGRESS_SERVERS_HTTPS" 前缀这种子串冲突,曾踩过坑导致 443 转去 80
+# 占位符位置见下方 backend / stats 段;install.sh 渲染时自动替换。
+# (本注释段刻意不写完整的占位符标识,防止 awk 误把说明文档也替换掉)
 # ============================================================
 
 global
