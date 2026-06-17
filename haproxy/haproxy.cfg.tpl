@@ -1,9 +1,16 @@
 # ============================================================
-# HAProxy 配置模板 —— 由 install.sh 通过 sed 替换占位符后生成
+# HAProxy 配置模板 —— 由 install.sh 通过 awk 替换占位符后生成
 # 用途:L4 TCP 模式代理 N 台 ingress-nginx(80/443)
 #   - TLS 透传(passthrough),不在 HAProxy 终结证书,由后端 ingress-nginx 处理
 #   - leastconn 算法:把新连接发给当前连接数最少的后端,适合长连接 / HTTP/2
 #   - 8404 端口提供 stats UI(用户名 admin,密码由 install.sh 注入)
+#
+# 占位符约定(不要随便改名):
+#   __HTTP_BACKENDS__   →  80  端口 backend 的 server 行(多行)
+#   __HTTPS_BACKENDS__  →  443 端口 backend 的 server 行(多行)
+#   STATS_PASSWD        →  stats UI 登录密码
+# 命名故意带前后双下划线 + 完整词,避免 "INGRESS_SERVERS_HTTP" 是
+# "INGRESS_SERVERS_HTTPS" 前缀这种子串冲突,曾踩过坑导致 443 转去 80
 # ============================================================
 
 global
@@ -43,7 +50,7 @@ backend bk_ingress_http
     balance leastconn
     option tcp-check
     # ↓↓↓ ingress 节点列表(install.sh 自动生成)↓↓↓
-INGRESS_SERVERS_HTTP
+__HTTP_BACKENDS__
     # ↑↑↑ 想加机器:照样式追加一行 server ingressN IP:80 check inter 2s fall 3 rise 2 ↑↑↑
 
 # ============================================================
@@ -57,7 +64,7 @@ backend bk_ingress_https
     balance leastconn
     option tcp-check
     # ↓↓↓ ingress 节点列表 ↓↓↓
-INGRESS_SERVERS_HTTPS
+__HTTPS_BACKENDS__
 
 # ============================================================
 # 8404 端口:状态监控页(浏览器开 http://<haproxy-host>:8404/stats)
