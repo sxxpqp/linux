@@ -15,6 +15,8 @@ HTTP_PORT="80"
 HTTPS_PORT="443"
 STATS_PORT="8404"
 STATS_PASSWD=""
+NBTHREAD=""              # 空 = 取 nproc(默认 = CPU 核数)
+SERVER_MAXCONN="5000"    # 每个后端 server 的并发连接上限
 DRY_RUN="false"
 
 usage() {
@@ -30,6 +32,8 @@ usage() {
   --https-port=N            HAProxy 监听 HTTPS 端口,默认 443
   --stats-port=N            stats UI 监听端口,默认 8404
   --stats-passwd=XXX        stats UI 登录密码,默认随机生成 16 位
+  --nbthread=N              HAProxy 工作线程数,默认 = nproc(CPU 核数)
+  --server-maxconn=N        每个后端 server 的并发连接上限,默认 5000
   --dry-run                 只生成 /etc/haproxy/haproxy.cfg,不重启服务
   -h, --help                显示帮助
 
@@ -52,6 +56,8 @@ while [ $# -gt 0 ]; do
     --https-port=*)    HTTPS_PORT="${1#*=}" ;;
     --stats-port=*)    STATS_PORT="${1#*=}" ;;
     --stats-passwd=*)  STATS_PASSWD="${1#*=}" ;;
+    --nbthread=*)      NBTHREAD="${1#*=}" ;;
+    --server-maxconn=*) SERVER_MAXCONN="${1#*=}" ;;
     --dry-run)         DRY_RUN="true" ;;
     -h|--help)         usage; exit 0 ;;
     *) echo "ERROR: 未知参数: $1" >&2; usage >&2; exit 1 ;;
@@ -159,16 +165,22 @@ fi
 # ============================================================
 log "[3/5] 生成配置 $TARGET_CFG"
 
-# 构造 server 行
+# 默认 nbthread = CPU 核数;命令行 --nbthread 优先
+if [ -z "$NBTHREAD" ]; then
+  NBTHREAD=$(nproc 2>/dev/null || echo 4)
+fi
+ok "nbthread = $NBTHREAD  / server maxconn = $SERVER_MAXCONN"
+
+# 构造 server 行(带 maxconn,均匀压力上限)
 SERVERS_HTTP=""
 SERVERS_HTTPS=""
 i=1
 for ip in "${NODES[@]}"; do
-  SERVERS_HTTP+="    server ingress${i} ${ip}:${HTTP_PORT}  check inter 2s fall 3 rise 2"$'\n'
-  SERVERS_HTTPS+="    server ingress${i} ${ip}:${HTTPS_PORT} check inter 2s fall 3 rise 2"$'\n'
+  SERVERS_HTTP+="    server ingress${i} ${ip}:${HTTP_PORT}  check inter 2s fall 3 rise 2 maxconn ${SERVER_MAXCONN}"$'\n'
+  SERVERS_HTTPS+="    server ingress${i} ${ip}:${HTTPS_PORT} check inter 2s fall 3 rise 2 maxconn ${SERVER_MAXCONN}"$'\n'
   i=$((i+1))
 done
-# 去掉末尾换行,避免 sed 处理时多一行空行
+# 去掉末尾换行,避免渲染时多一行空行
 SERVERS_HTTP="${SERVERS_HTTP%$'\n'}"
 SERVERS_HTTPS="${SERVERS_HTTPS%$'\n'}"
 
@@ -187,11 +199,13 @@ TMP_OUT=$(mktemp)
 awk -v http="$SERVERS_HTTP" \
     -v https="$SERVERS_HTTPS" \
     -v pw="$STATS_PASSWD" \
-    -v sp="$STATS_PORT" '
+    -v sp="$STATS_PORT" \
+    -v nt="$NBTHREAD" '
 {
   if ($0 ~ /^[[:space:]]*#/) { print; next }    # 注释行原样输出
   gsub(/__HTTP_BACKENDS__/,  http)
   gsub(/__HTTPS_BACKENDS__/, https)
+  gsub(/__NBTHREAD__/,       nt)
   gsub(/STATS_PASSWD/,       pw)
   gsub(/:8404/,              ":" sp)
   print

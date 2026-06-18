@@ -15,7 +15,7 @@ global
     log /dev/log local0 info
     user  haproxy
     group haproxy
-    nbthread 4                              # 工作线程数,一般等于 CPU 核数
+    nbthread __NBTHREAD__                   # 工作线程数,install.sh 默认按 nproc 注入
     tune.ssl.default-dh-param 2048
     tune.bufsize 32768
     # PID 文件 / chroot,生产可加:
