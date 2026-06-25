@@ -294,7 +294,7 @@ spec:
       serviceAccountName: lb-assigner
       containers:
       - name: assigner
-        image: bitnami/kubectl:latest
+        image: soldevelo/kubectl:latest
         command: ["/bin/bash", "/scripts/lb-assigner.sh"]
         env:
         - name: LB_CIDR

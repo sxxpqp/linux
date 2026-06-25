@@ -2,7 +2,7 @@ version: "3.8"
 services:
   redis:
     container_name: redis
-    image: bitnami/redis:latest
+    image: soldevelo/redis:latest
     restart: unless-stopped
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
