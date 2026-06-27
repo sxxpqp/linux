@@ -54,6 +54,19 @@ kubectl -n kafka get kafka,kafkanodepool,pod -w
 
 集群外连 Kafka 走 nodeport listener(端口 / advertisedHost 在 deploy-nodeport.yaml 里),bootstrap `32092`,各 broker `32093/32095/32096`。改 `advertisedHost` 为节点真实 IP。
 
+## CDC:MySQL → Redis 实时同步
+
+`MySQL binlog → Debezium 源 → Kafka topic → Redis Sink → 每行一个 HASH key`,删除→tombstone→Redis DEL(整行镜像做缓存)。完整步骤(MySQL 前置 / Nexus 上传 / 部署 / 验证 / 踩坑)见 **[cdc-mysql-redis/](cdc-mysql-redis/)**。
+
+组件版本(已钉死、源码核对):
+
+| 组件 | 版本 | 依据 |
+|---|---|---|
+| Strimzi operator | 1.0.1 | helm chart appVersion |
+| Kafka | 4.2.0 | 集群 CR |
+| Debezium MySQL 连接器 | **3.5.2.Final** | maven-metadata 最新 Final,基于 kafka-clients 4.1.2(对 4.2 集群 4.x 内兼容) |
+| Redis Kafka 连接器 | **1.1.0** | redis-field-engineering 最新 release |
+
 ## 监控(可选)
 
 集群 CR 默认**没开** metrics。要监控,在 `spec.kafka` 下加两段(指标只是被**暴露**,还要 Prometheus + PodMonitor 才会被抓):
