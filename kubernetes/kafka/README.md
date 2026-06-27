@@ -17,12 +17,11 @@
 
 | 文件 | 内容 |
 |---|---|
-| [operator/deploy-nodeport.yaml](operator/deploy-nodeport.yaml) | **Strimzi operator 安装清单**(CRD + RBAC + Deployment,helm chart 1.0.1 渲染,watch ns=kafka)。名字误导,这是 operator 本体,跟 nodeport 无关 |
+| [operator/operator-install.yaml](operator/operator-install.yaml) | **Strimzi operator 安装清单**(CRD + RBAC + Deployment,helm chart 1.0.1 渲染,watch ns=kafka)。**先装这个** |
 | [operator/kafka-cluster.yaml](operator/kafka-cluster.yaml) | **Kafka 集群 CR — 标准 internal**(集群内访问,**常用/默认**)。CDC、业务 Pod 等集群内组件用这个 |
-| [operator/deploy.yaml](operator/deploy.yaml) | **Kafka 集群 CR — nodeport 变体**(集群**外**客户端访问才用,特殊情况) |
+| [operator/deploy-nodeport.yaml](operator/deploy-nodeport.yaml) | **Kafka 集群 CR — nodeport 变体**(集群**外**客户端访问才用,特殊情况) |
 
-> ⚠ 选哪个集群 CR:**集群内访问(含 CDC)→ `kafka-cluster.yaml`(标准)**;只有 k8s 集群外的客户端要连才用 `deploy.yaml`(nodeport)。两个二选一,别同时 apply(同名 `kafka-cluster` 会冲突)。
-> ⚠ `deploy-nodeport.yaml` 是 **operator**,不是集群;名字起反了,后续可改名 `operator-install.yaml`。
+> ⚠ 选哪个集群 CR:**集群内访问(含 CDC)→ `kafka-cluster.yaml`(标准)**;只有 k8s 集群外的客户端要连才用 `deploy-nodeport.yaml`(nodeport)。两个同名 `kafka-cluster`,**二选一,别同时 apply**。
 
 ### 安装顺序(operator 先,集群后)
 
@@ -35,28 +34,29 @@ helm install strimzi-cluster-operator oci://quay.io/strimzi-helm/strimzi-kafka-o
 
 # 方式 B:apply 归档清单(离线 / GitOps,跟 A 二选一)
 kubectl create namespace kafka
-kubectl apply -f operator/deploy-nodeport.yaml
+kubectl apply -f operator/operator-install.yaml
 
 # 等 operator ready
 kubectl -n kafka rollout status deploy/strimzi-cluster-operator
 
-# === 第 2 步:先给节点打标签(deploy.yaml 里 nodeSelector kafka=true)===
+# === 第 2 步:先给节点打标签(集群 CR 里 nodeSelector kafka=true)===
 kubectl label node <node> kafka=true --overwrite
 
-# === 第 3 步:建 Kafka 集群 ===
-kubectl apply -f operator/deploy.yaml
+# === 第 3 步:建 Kafka 集群(集群内访问用标准版)===
+kubectl apply -f operator/kafka-cluster.yaml
+# 集群外访问改用:kubectl apply -f operator/deploy-nodeport.yaml
 kubectl -n kafka get kafka,kafkanodepool,pod -w
 ```
 
 > **helm 拉 chart ≠ 走 containerd mirror**:`oci://quay.io/...` 是 helm 自己的 client 直连 quay.io 拉 chart;operator 镜像 `quay.io/strimzi/operator:1.0.1` 才是 kubelet/containerd 拉、走 quay mirror。
 
-### NodePort 接入(deploy.yaml 已配)
+### NodePort 接入(deploy-nodeport.yaml 已配)
 
-集群外连 Kafka 走 nodeport listener(端口 / advertisedHost 在 deploy.yaml 里),bootstrap `32092`,各 broker `32093/32095/32096`。改 `advertisedHost` 为节点真实 IP。
+集群外连 Kafka 走 nodeport listener(端口 / advertisedHost 在 deploy-nodeport.yaml 里),bootstrap `32092`,各 broker `32093/32095/32096`。改 `advertisedHost` 为节点真实 IP。
 
 ## 监控(可选)
 
-`deploy.yaml` 默认**没开** metrics。要监控,在 `spec.kafka` 下加两段(指标只是被**暴露**,还要 Prometheus + PodMonitor 才会被抓):
+集群 CR 默认**没开** metrics。要监控,在 `spec.kafka` 下加两段(指标只是被**暴露**,还要 Prometheus + PodMonitor 才会被抓):
 
 | 加什么 | 暴露端口 | 抓什么 |
 |---|---|---|
