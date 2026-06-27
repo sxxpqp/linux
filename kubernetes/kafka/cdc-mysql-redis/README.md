@@ -22,8 +22,9 @@ Debezium MySQL Source ──► topic mysqlcdc.app_db.users ──► Redis Sink
 
 | 文件 | 内容 |
 |---|---|
-| [kafka-connect.yaml](kafka-connect.yaml) | KafkaConnect 集群(operator 构建镜像,内置 Debezium + Redis 插件)+ 读 Secret 的 RBAC |
+| [kafka-connect.yaml](kafka-connect.yaml) | KafkaConnect 集群(**operator 构建镜像**,内置 Debezium + Redis 插件)+ 读 Secret 的 RBAC |
 | [connectors.yaml](connectors.yaml) | Secret + Debezium 源连接器 + Redis 汇连接器 |
+| [self-build-image.md](self-build-image.md) | **备选**:手动 `docker build` 自打镜像(不走 Strimzi build),版本/transform 已对齐 |
 
 ## 要先填的占位符
 
