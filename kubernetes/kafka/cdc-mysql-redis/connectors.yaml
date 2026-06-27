@@ -1,0 +1,66 @@
+# 凭据 + 两个连接器(Debezium MySQL 源 / Redis Sink)
+# 占位符 <...> 按你环境填:MySQL host、Redis host、库表名、密码
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cdc-creds
+  namespace: kafka
+type: Opaque
+stringData:
+  mysql-password: "<MYSQL_DEBEZIUM_PASSWORD>"
+  redis-password: "<REDIS_PASSWORD>"
+---
+# === 源:MySQL binlog → Kafka topic(mysqlcdc.<db>.<table>)===
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnector
+metadata:
+  name: mysql-source
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: cdc-connect
+spec:
+  class: io.debezium.connector.mysql.MySqlConnector
+  tasksMax: 1
+  config:
+    database.hostname: <MYSQL_HOST>
+    database.port: 3306
+    database.user: debezium
+    database.password: ${secrets:kafka/cdc-creds:mysql-password}
+    database.server.id: 184054                  # 每个 Debezium 连接器唯一,像 MySQL replica id
+    topic.prefix: mysqlcdc                       # 生成 topic 前缀:mysqlcdc.<db>.<table>
+    database.include.list: app_db                # 要同步的库
+    table.include.list: app_db.users            # 要同步的表(逗号分隔多个)
+    schema.history.internal.kafka.bootstrap.servers: kafka-cluster-kafka-bootstrap:9092
+    schema.history.internal.kafka.topic: schema-changes.mysqlcdc
+    snapshot.mode: initial                       # 首次全量快照 + 之后增量
+    # 拆 Debezium 信封:只留 after 行(整行镜像),删除→tombstone(null 值)
+    transforms: unwrap
+    transforms.unwrap.type: io.debezium.transforms.ExtractNewRecordState
+    transforms.unwrap.drop.tombstones: "false"
+    transforms.unwrap.delete.handling.mode: none
+    # ⚠ 上面两个删除项的名字在 Debezium 版本间改过,见 README "踩坑" 第 1 条
+---
+# === 汇:Kafka topic → Redis(每行一个 HASH key)===
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnector
+metadata:
+  name: redis-sink
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: cdc-connect
+spec:
+  class: com.redis.kafka.connect.RedisSinkConnector
+  tasksMax: 1
+  config:
+    topics: mysqlcdc.app_db.users               # 多表用 topics.regex: mysqlcdc\.app_db\..*
+    redis.host: <REDIS_HOST>
+    redis.port: "6379"
+    redis.password: ${secrets:kafka/cdc-creds:redis-password}
+    redis.type: HASH                            # 整行→HASH(每列一个 field);要 JSON 字符串改 STRING
+    redis.keyspace: ${topic}                    # key 前缀=topic 名 → mysqlcdc.app_db.users:<id>
+    redis.separator: ":"
+    redis.key.ttl: "-1"                         # 缓存不过期;要 TTL 填秒数(如 "3600")
+    # 单列主键 → 标量 key;组合主键不适用(见 README "踩坑" 第 2 条)
+    transforms: extractKey
+    transforms.extractKey.type: org.apache.kafka.connect.transforms.ExtractField$Key
+    transforms.extractKey.field: id

@@ -1,0 +1,76 @@
+# Kafka Connect 集群(Strimzi 托管)— 内置 Debezium MySQL 源 + Redis Sink 插件
+# operator 自动构建镜像并推到 ACR;构建用的两个插件包走 Nexus(上传步骤见 README)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnect
+metadata:
+  name: cdc-connect
+  namespace: kafka
+  annotations:
+    strimzi.io/use-connector-resources: "true"   # 开启:用 KafkaConnector CR 管连接器
+spec:
+  version: 4.2.0                                  # 跟 Kafka 集群版本一致
+  replicas: 1
+  bootstrapServers: kafka-cluster-kafka-bootstrap:9092
+  config:
+    group.id: cdc-connect
+    offset.storage.topic: cdc-connect-offsets
+    config.storage.topic: cdc-connect-configs
+    status.storage.topic: cdc-connect-status
+    config.storage.replication.factor: 3
+    offset.storage.replication.factor: 3
+    status.storage.replication.factor: 3
+    # 两端统一 schemaless JSON(source 写什么 sink 就能读什么)
+    key.converter: org.apache.kafka.connect.json.JsonConverter
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+    key.converter.schemas.enable: false
+    value.converter.schemas.enable: false
+    # 从 K8s Secret 注入连接器密码:连接器里写 ${secrets:kafka/cdc-creds:<key>}
+    config.providers: secrets
+    config.providers.secrets.class: io.strimzi.kafka.KubernetesSecretConfigProvider
+  build:
+    output:
+      type: docker
+      image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/kafka-connect-mysql-redis:4.2.0-1
+      pushSecret: acr-push-secret                 # docker-registry 类型,推 ACR 用(见 README)
+    plugins:
+      - name: debezium-mysql
+        artifacts:
+          # 上游(走 Nexus,勿直连):
+          #   https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/<ver>/debezium-connector-mysql-<ver>-plugin.tar.gz
+          - type: tgz
+            url: https://nexus.ihome.sxxpqp.top:8443/repository/raw-hosted/kafka-connect/debezium-connector-mysql-plugin.tar.gz
+      - name: redis-sink
+        artifacts:
+          # 上游:https://github.com/redis-field-engineering/redis-kafka-connect/releases/download/v1.1.0/redis-redis-kafka-connect-1.1.0.zip
+          - type: zip
+            url: https://nexus.ihome.sxxpqp.top:8443/repository/raw-hosted/kafka-connect/redis-redis-kafka-connect-1.1.0.zip
+  template:
+    pod:
+      nodeSelector:
+        kafka: "true"
+---
+# KubernetesSecretConfigProvider 需要 Connect SA 能 get 这个 Secret
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cdc-connect-secrets
+  namespace: kafka
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["cdc-creds"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cdc-connect-secrets
+  namespace: kafka
+subjects:
+  - kind: ServiceAccount
+    name: cdc-connect-connect          # Strimzi 给 KafkaConnect 建的 SA = <cr-name>-connect
+    namespace: kafka
+roleRef:
+  kind: Role
+  name: cdc-connect-secrets
+  apiGroup: rbac.authorization.k8s.io
