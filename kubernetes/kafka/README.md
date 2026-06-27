@@ -17,10 +17,12 @@
 
 | 文件 | 内容 |
 |---|---|
-| [operator/deploy-nodeport.yaml](operator/deploy-nodeport.yaml) | **Strimzi operator 安装清单**(CRD + RBAC + Deployment,helm chart 1.0.1 渲染,watch ns=kafka) |
-| [operator/deploy.yaml](operator/deploy.yaml) | **Kafka 集群 CR**(`kind: Kafka` + `KafkaNodePool`,nodeport listener,持久盘 longhorn,3 broker) |
+| [operator/deploy-nodeport.yaml](operator/deploy-nodeport.yaml) | **Strimzi operator 安装清单**(CRD + RBAC + Deployment,helm chart 1.0.1 渲染,watch ns=kafka)。名字误导,这是 operator 本体,跟 nodeport 无关 |
+| [operator/kafka-cluster.yaml](operator/kafka-cluster.yaml) | **Kafka 集群 CR — 标准 internal**(集群内访问,**常用/默认**)。CDC、业务 Pod 等集群内组件用这个 |
+| [operator/deploy.yaml](operator/deploy.yaml) | **Kafka 集群 CR — nodeport 变体**(集群**外**客户端访问才用,特殊情况) |
 
-> ⚠ 命名注意:`deploy-nodeport.yaml` 是 **operator 本体**,`deploy.yaml` 才是 **Kafka 集群**,跟文件名直觉相反。
+> ⚠ 选哪个集群 CR:**集群内访问(含 CDC)→ `kafka-cluster.yaml`(标准)**;只有 k8s 集群外的客户端要连才用 `deploy.yaml`(nodeport)。两个二选一,别同时 apply(同名 `kafka-cluster` 会冲突)。
+> ⚠ `deploy-nodeport.yaml` 是 **operator**,不是集群;名字起反了,后续可改名 `operator-install.yaml`。
 
 ### 安装顺序(operator 先,集群后)
 
