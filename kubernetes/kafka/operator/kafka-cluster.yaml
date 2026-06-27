@@ -19,7 +19,7 @@ spec:
       - id: 0
         type: persistent-claim
         size: 100Gi
-        class: longhorn
+        # class: longhorn
         kraftMetadata: shared
         deleteClaim: false
   resources:
