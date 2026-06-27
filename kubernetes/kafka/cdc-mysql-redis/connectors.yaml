@@ -33,12 +33,10 @@ spec:
     schema.history.internal.kafka.bootstrap.servers: kafka-cluster-kafka-bootstrap:9092
     schema.history.internal.kafka.topic: schema-changes.mysqlcdc
     snapshot.mode: initial                       # 首次全量快照 + 之后增量
-    # 拆 Debezium 信封:只留 after 行(整行镜像),删除→tombstone(null 值)
+    # 拆 Debezium 信封:只留 after 行(整行镜像),删除→tombstone(null 值)→ Redis DEL key
     transforms: unwrap
     transforms.unwrap.type: io.debezium.transforms.ExtractNewRecordState
-    transforms.unwrap.drop.tombstones: "false"
-    transforms.unwrap.delete.handling.mode: none
-    # ⚠ 上面两个删除项的名字在 Debezium 版本间改过,见 README "踩坑" 第 1 条
+    transforms.unwrap.delete.tombstone.handling.mode: tombstone   # Debezium 3.x 命名(也是默认值);≤2.3 用法见 README 踩坑 #1
 ---
 # === 汇:Kafka topic → Redis(每行一个 HASH key)===
 apiVersion: kafka.strimzi.io/v1beta2

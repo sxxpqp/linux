@@ -35,10 +35,11 @@ spec:
     plugins:
       - name: debezium-mysql
         artifacts:
+          # Debezium 3.5.2.Final(基于 kafka-clients 4.1.2,跑在 Kafka 4.2 Connect 上 4.x 内兼容)
           # 上游(走 Nexus,勿直连):
-          #   https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/<ver>/debezium-connector-mysql-<ver>-plugin.tar.gz
+          #   https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/3.5.2.Final/debezium-connector-mysql-3.5.2.Final-plugin.tar.gz
           - type: tgz
-            url: https://nexus.ihome.sxxpqp.top:8443/repository/raw-hosted/kafka-connect/debezium-connector-mysql-plugin.tar.gz
+            url: https://nexus.ihome.sxxpqp.top:8443/repository/raw-hosted/kafka-connect/debezium-connector-mysql-3.5.2.Final-plugin.tar.gz
       - name: redis-sink
         artifacts:
           # 上游:https://github.com/redis-field-engineering/redis-kafka-connect/releases/download/v1.1.0/redis-redis-kafka-connect-1.1.0.zip

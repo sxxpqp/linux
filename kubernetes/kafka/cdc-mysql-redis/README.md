@@ -61,14 +61,14 @@ FLUSH PRIVILEGES;
 ```bash
 # 1) 下载上游(在能联网的机器)
 curl -fLO https://github.com/redis-field-engineering/redis-kafka-connect/releases/download/v1.1.0/redis-redis-kafka-connect-1.1.0.zip
-# Debezium MySQL 选跟你 Kafka/Connect 兼容的版本(Kafka 4.x → Debezium 3.x),示例:
-curl -fLO https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/<ver>/debezium-connector-mysql-<ver>-plugin.tar.gz
+# Debezium MySQL 3.5.2.Final(基于 kafka-clients 4.1.2,对 Kafka 4.2 集群 4.x 内兼容):
+curl -fLO https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/3.5.2.Final/debezium-connector-mysql-3.5.2.Final-plugin.tar.gz
 
 # 2) 传 Nexus raw-hosted(路径要跟 kafka-connect.yaml 的 url 对上)
 curl -u <user>:<pwd> --upload-file redis-redis-kafka-connect-1.1.0.zip \
   https://nexus.ihome.sxxpqp.top:8443/repository/raw-hosted/kafka-connect/redis-redis-kafka-connect-1.1.0.zip
-curl -u <user>:<pwd> --upload-file debezium-connector-mysql-<ver>-plugin.tar.gz \
-  https://nexus.ihome.sxxpqp.top:8443/repository/raw-hosted/kafka-connect/debezium-connector-mysql-plugin.tar.gz
+curl -u <user>:<pwd> --upload-file debezium-connector-mysql-3.5.2.Final-plugin.tar.gz \
+  https://nexus.ihome.sxxpqp.top:8443/repository/raw-hosted/kafka-connect/debezium-connector-mysql-3.5.2.Final-plugin.tar.gz
 ```
 
 ## 前置 3:建 ACR 推送 secret(给 operator 构建后推镜像)
@@ -115,7 +115,7 @@ redis-cli -h <REDIS_HOST> -a <REDIS_PASSWORD> EXISTS mysqlcdc.app_db.users:1   #
 
 | # | 现象 / 风险 | 原因 | 修法 |
 |---|---|---|---|
-| 1 | 删除不生效 / 连接器报未知配置 | `ExtractNewRecordState` 删除处理项**版本间改过名** | Debezium 2.0-2.3:`delete.handling.mode=none` + `drop.tombstones=false`(本模板默认);**2.4+/3.x 改成** `delete.tombstone.handling.mode=tombstone`。按你装的版本二选一 |
+| 1 | 删除不生效 / 连接器报未知配置 | `ExtractNewRecordState` 删除项**版本间改过名**,旧 `delete.handling.mode`/`drop.tombstones` 在 3.x 已移除 | 本模板已按 **Debezium 3.5.2** 写成 `delete.tombstone.handling.mode=tombstone`(3.x 默认值=删除转 tombstone→下游 DEL)。若硬用 ≤2.3:改回 `delete.handling.mode=none`+`drop.tombstones=false` |
 | 2 | 组合主键写进 Redis key 变怪 | `ExtractField$Key` 只能取**单列** | 组合主键改用 `transforms.extractKey.type: ...HoistField` 或自定义 SMT 拼 key;或 sink 用 `redis.keyspace` 模板 |
 | 3 | Connect 起不来,卡 build | ACR push secret 缺 / Nexus 包路径不对 | `kubectl -n kafka describe kafkaconnect cdc-connect` 看 build Pod 日志;核对前置 2/3 |
 | 4 | 连接器 `RUNNING` 但 Redis 没数据 | 两端 converter 不一致 / key 没拆成标量 | 确认 KafkaConnect `config` 里 schemas.enable=false 两端统一;`kubectl -n kafka logs deploy/cdc-connect-connect` |
