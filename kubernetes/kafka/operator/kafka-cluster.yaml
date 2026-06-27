@@ -34,9 +34,16 @@ spec:
     -Xmx: 4096m
   template:
     pod:
-      nodeSelector:
-        kafka: "true"            # 只调度到打了 kafka=true 的节点
       affinity:
+        # ⚠ Strimzi pod template 没有 nodeSelector 字段,节点选择必须用 nodeAffinity
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kafka
+                    operator: In
+                    values:
+                      - "true"          # 只调度到 kubectl label node ... kafka=true 的节点
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:

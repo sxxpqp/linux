@@ -137,6 +137,7 @@ PodMonitor + 仪表盘见上游 `examples/metrics/`(`prometheus-install/pod-moni
 
 | 现象 | 原因 | 修法 |
 |---|---|---|
+| `KafkaNodePool ... unknown field "spec.template.pod.nodeSelector"` | Strimzi pod template **没有 `nodeSelector`** 字段;`v1` 严格解码直接拒绝未知字段 | 节点选择改用 `affinity.nodeAffinity`(本仓库 yaml 已修)。Kafka CR 可能已先创建成功,改完 `kubectl apply` 重跑即可补上 nodepool |
 | Pod 卡 `ImagePullBackOff`(quay.io/strimzi/operator) | 节点没配 quay mirror | `bash docker/containerd/mirrors.sh` + `systemctl restart containerd`,**别改 image** |
 | operator 起来了但 Kafka CR 不 reconcile | helm 没带 `--namespace kafka`,operator watch 错 ns | 重装带 `--namespace kafka`,或确认 `STRIMZI_NAMESPACE` |
 | broker pod Pending | 标签没打 / `longhorn` storageClass 不存在 / 节点 < 3 | `kubectl get sc`;`kubectl label node ... kafka=true`;3 节点用合并 pool |
