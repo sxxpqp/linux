@@ -17,7 +17,7 @@
 
 | 文件 | 内容 |
 |---|---|
-| [operator/operator-install.yaml](operator/operator-install.yaml) | **Strimzi operator 安装清单**(CRD + RBAC + Deployment,helm chart 1.0.1 渲染,watch ns=kafka)。**先装这个** |
+| [operator/operator-install.yaml](operator/operator-install.yaml) | operator 静态清单(helm chart 1.0.1 渲染)。**备用**:离线 / GitOps 才用;**首选 `helm install`**(见下),失效了用 `helm template ... --include-crds` 重渲染 |
 | [operator/kafka-cluster.yaml](operator/kafka-cluster.yaml) | **Kafka 集群 CR — 标准 internal**(集群内访问,**常用/默认**)。CDC、业务 Pod 等集群内组件用这个 |
 | [operator/deploy-nodeport.yaml](operator/deploy-nodeport.yaml) | **Kafka 集群 CR — nodeport 变体**(集群**外**客户端访问才用,特殊情况) |
 
@@ -27,14 +27,14 @@
 
 ```bash
 # === 第 1 步:装 operator ===
-# 方式 A:在线 helm 直接装(机器能连 quay.io)
+# 【首选】helm 在线直装(机器能连 quay.io)
 helm install strimzi-cluster-operator oci://quay.io/strimzi-helm/strimzi-kafka-operator \
   --namespace kafka --create-namespace
 # ⚠ 必须带 --namespace kafka:operator 默认只 watch 自己所在 ns,否则看不到 kafka ns 里的 Kafka CR
 
-# 方式 B:apply 归档清单(离线 / GitOps,跟 A 二选一)
-kubectl create namespace kafka
-kubectl apply -f operator/operator-install.yaml
+# 【备用】离线 / GitOps 才用静态清单(跟 helm 二选一)
+# kubectl create namespace kafka
+# kubectl apply -f operator/operator-install.yaml
 
 # 等 operator ready
 kubectl -n kafka rollout status deploy/strimzi-cluster-operator
