@@ -1,62 +1,116 @@
-# Kafka
+# Kafka — Strimzi Operator 部署(KRaft,无 ZooKeeper)
 
-两套部署方案,**推荐 Strimzi Operator**(KRaft 模式,无 ZooKeeper):
+> 源: https://github.com/sxxpqp/linux/blob/main/kubernetes/kafka/README.md
+> 状态: 学习笔记(YAML 已落盘,未在集群跑全流程验证)
 
-| 方案 | 目录 | 说明 |
-|---|---|---|
-| **Strimzi Operator**(推荐) | [operator/](operator/) | operator 管理 Kafka CR,KRaft + NodePool,生产用这个 |
-| 手搓 StatefulSet(老) | [one/sts.yaml](one/sts.yaml) | 非 Operator,PVC + Headless Service + STS,学习/参考 |
+Strimzi operator 托管的 Kafka **4.2.0**(KRaft 模式)。operator 装一次,之后集群 / 外部访问 / Connect / Topic 全部用 CR 声明,不手搓 StatefulSet。
 
-应用场景:
-
-| 场景 | 目录 |
-|---|---|
-| **MySQL → Redis 实时同步**(Debezium CDC,整行镜像做缓存) | [cdc-mysql-redis/](cdc-mysql-redis/) |
-
-## Strimzi 部署(operator/)
-
-| 文件 | 内容 |
-|---|---|
-| [operator/operator-install.yaml](operator/operator-install.yaml) | operator 静态清单(helm chart 1.0.1 渲染)。**备用**:离线 / GitOps 才用;**首选 `helm install`**(见下),失效了用 `helm template ... --include-crds` 重渲染 |
-| [operator/kafka-cluster.yaml](operator/kafka-cluster.yaml) | **Kafka 集群 CR — 标准 internal**(集群内访问,**常用/默认**)。CDC、业务 Pod 等集群内组件用这个 |
-| [operator/deploy-nodeport.yaml](operator/deploy-nodeport.yaml) | **Kafka 集群 CR — nodeport 变体**(集群**外**客户端访问才用,特殊情况) |
-
-> ⚠ 选哪个集群 CR:**集群内访问(含 CDC)→ `kafka-cluster.yaml`(标准)**;只有 k8s 集群外的客户端要连才用 `deploy-nodeport.yaml`(nodeport)。两个同名 `kafka-cluster`,**二选一,别同时 apply**。
-
-### 安装顺序(operator 先,集群后)
+## TL;DR
 
 ```bash
-# === 第 1 步:装 operator ===
-# 【首选】helm 在线直装(机器能连 quay.io)
+# 1. 装 operator(首选 helm;必须 --namespace kafka,否则 operator 看不到集群 CR)
 helm install strimzi-cluster-operator oci://quay.io/strimzi-helm/strimzi-kafka-operator \
   --namespace kafka --create-namespace
-# ⚠ 必须带 --namespace kafka:operator 默认只 watch 自己所在 ns,否则看不到 kafka ns 里的 Kafka CR
-
-# 【备用】离线 / GitOps 才用静态清单(跟 helm 二选一)
-# kubectl create namespace kafka
-# kubectl apply -f operator/operator-install.yaml
-
-# 等 operator ready
 kubectl -n kafka rollout status deploy/strimzi-cluster-operator
 
-# === 第 2 步:先给节点打标签(集群 CR 里 nodeSelector kafka=true)===
-kubectl label node <node> kafka=true --overwrite
+# 2. 给 3 个 kafka 节点打标签(集群 CR 用 nodeSelector kafka=true + 反亲和,每节点 1 broker)
+kubectl label node <node1> <node2> <node3> kafka=true --overwrite
 
-# === 第 3 步:建 Kafka 集群(集群内访问用标准版)===
+# 3. 建集群 —— 集群内访问(常用,含 CDC):
 kubectl apply -f operator/kafka-cluster.yaml
-# 集群外访问改用:kubectl apply -f operator/deploy-nodeport.yaml
-kubectl -n kafka get kafka,kafkanodepool,pod -w
+#       集群外客户端访问(特殊):
+# kubectl apply -f operator/deploy-nodeport.yaml
+kubectl -n kafka get kafka,kafkanodepool,pod -w     # kafka-cluster READY=True 即成
+
+# 验证内部可达
+kubectl -n kafka run kcat --rm -it --image=edenhill/kcat:1.7.1 --restart=Never -- \
+  -b kafka-cluster-kafka-bootstrap:9092 -L
 ```
 
-> **helm 拉 chart ≠ 走 containerd mirror**:`oci://quay.io/...` 是 helm 自己的 client 直连 quay.io 拉 chart;operator 镜像 `quay.io/strimzi/operator:1.0.1` 才是 kubelet/containerd 拉、走 quay mirror。
+## 架构
 
-### NodePort 接入(deploy-nodeport.yaml 已配)
+```
+            helm install(首选) / operator-install.yaml(备用)
+                          │
+                          ▼
+              strimzi-cluster-operator        watch ns = kafka
+                          │  reconcile 下面的 CR
+        ┌─────────────────┼──────────────────────┐
+        ▼                 ▼                       ▼
+     Kafka CR        KafkaNodePool          KafkaConnector
+  listener/config   broker+controller     Debezium 源 / Redis 汇
+        │            (KRaft 合并)                 │
+        ▼                                         ▼
+  ┌──────────┐  ┌──────────┐  ┌──────────┐   MySQL→Redis CDC
+  │ node1    │  │ node2    │  │ node3    │   (见 cdc-mysql-redis/)
+  │ broker+  │  │ broker+  │  │ broker+  │
+  │ ctrl     │  │ ctrl     │  │ ctrl     │   kafka=true + 反亲和
+  └──────────┘  └──────────┘  └──────────┘   → 每节点 1 broker
+        └─────────────┬──────────────┘
+                      ▼
+         kafka-cluster-kafka-bootstrap:9092   ← 集群内统一入口
+```
 
-集群外连 Kafka 走 nodeport listener(端口 / advertisedHost 在 deploy-nodeport.yaml 里),bootstrap `32092`,各 broker `32093/32095/32096`。改 `advertisedHost` 为节点真实 IP。
+## 目录 / 文件
+
+| 路径 | 内容 |
+|---|---|
+| [operator/operator-install.yaml](operator/operator-install.yaml) | operator 静态清单(helm chart 1.0.1 渲染)。**备用**:离线 / GitOps 才用,首选 `helm install` |
+| [operator/kafka-cluster.yaml](operator/kafka-cluster.yaml) | **Kafka 集群 CR — 标准 internal**(集群内访问,**常用/默认**) |
+| [operator/deploy-nodeport.yaml](operator/deploy-nodeport.yaml) | Kafka 集群 CR — **nodeport 变体**(集群外客户端访问才用) |
+| [cdc-mysql-redis/](cdc-mysql-redis/) | **MySQL → Kafka → Redis 实时同步**(Debezium CDC,整行镜像做缓存) |
+| [one/sts.yaml](one/sts.yaml) | 老的手搓 StatefulSet 版(非 Operator,仅参考) |
+
+## 安装
+
+### 第 1 步:装 operator
+
+| 方式 | 命令 | 适合 |
+|---|---|---|
+| **helm(首选)** | `helm install strimzi-cluster-operator oci://quay.io/strimzi-helm/strimzi-kafka-operator -n kafka --create-namespace` | 在线、能连 quay.io |
+| 静态清单(备用) | `kubectl create ns kafka && kubectl apply -f operator/operator-install.yaml` | 离线 / GitOps |
+
+> - ⚠ **必须 `--namespace kafka`**:operator 默认只 watch 自己所在 ns,不带就看不到 kafka ns 里的 Kafka CR。
+> - **helm 拉 chart 不走 containerd mirror**:`oci://quay.io/...` 是 helm 自己 client 直连 quay.io;operator 镜像 `quay.io/strimzi/operator:1.0.1` 才是 kubelet 拉、走 quay mirror。
+
+### 第 2 步:打节点标签
+
+```bash
+kubectl label node <node1> <node2> <node3> kafka=true --overwrite
+```
+
+集群 CR 里 `nodeSelector: kafka=true` + 硬反亲和(每节点最多 1 broker)。**3 节点 → KRaft 合并模式**(broker+controller 同 pool):官方分离 pool 是 controller×3 + broker×3 = 6 pod,3 个节点放不下,合并模式才对。
+
+### 第 3 步:建集群(二选一)
+
+| 集群 CR | listener | 何时用 |
+|---|---|---|
+| **`kafka-cluster.yaml`** | internal(plain 9092 / tls 9093) | **集群内访问(默认,含 CDC、业务 Pod)** |
+| `deploy-nodeport.yaml` | internal + **nodeport** | k8s **集群外**的客户端要连才用 |
+
+> 两个集群同名 `kafka-cluster`,**二选一,别同时 apply**。nodeport 变体里 `advertisedHost` 要填节点真实 IP,bootstrap `32092` / broker `32093/32095/32096`。
+
+## 验证
+
+```bash
+# 1. 组件 ready
+kubectl -n kafka get kafka,kafkanodepool,pod
+# kafka-cluster READY=True;每节点 1 个 kafka-cluster-kafka-<n> pod
+
+# 2. 集群内连通 + 列元数据
+kubectl -n kafka run kcat --rm -it --image=edenhill/kcat:1.7.1 --restart=Never -- \
+  -b kafka-cluster-kafka-bootstrap:9092 -L
+
+# 3. 收发测试
+kubectl -n kafka run kcat --rm -it --image=edenhill/kcat:1.7.1 --restart=Never -- \
+  -b kafka-cluster-kafka-bootstrap:9092 -P -t test    # 输入几行后 Ctrl-D
+kubectl -n kafka run kcat --rm -it --image=edenhill/kcat:1.7.1 --restart=Never -- \
+  -b kafka-cluster-kafka-bootstrap:9092 -C -t test -e
+```
 
 ## CDC:MySQL → Redis 实时同步
 
-`MySQL binlog → Debezium 源 → Kafka topic → Redis Sink → 每行一个 HASH key`,删除→tombstone→Redis DEL(整行镜像做缓存)。完整步骤(MySQL 前置 / Nexus 上传 / 部署 / 验证 / 踩坑)见 **[cdc-mysql-redis/](cdc-mysql-redis/)**。
+`MySQL binlog → Debezium 源 → Kafka topic → Redis Sink → 每行一个 HASH key`,删除→tombstone→Redis DEL(整行镜像做缓存)。完整步骤见 **[cdc-mysql-redis/](cdc-mysql-redis/)**。
 
 组件版本(已钉死、源码核对):
 
@@ -69,14 +123,27 @@ kubectl -n kafka get kafka,kafkanodepool,pod -w
 
 ## 监控(可选)
 
-集群 CR 默认**没开** metrics。要监控,在 `spec.kafka` 下加两段(指标只是被**暴露**,还要 Prometheus + PodMonitor 才会被抓):
+集群 CR 默认**没开** metrics。指标只是被**暴露**,还要 Prometheus Operator + PodMonitor 才会被抓:
 
-| 加什么 | 暴露端口 | 抓什么 |
+| 在 Kafka CR 加 | 暴露端口 | 抓什么 |
 |---|---|---|
 | `spec.kafkaExporter: {}` | 9308 | **消费组 lag** / offset / topic(lag 告警必备) |
-| `spec.kafka.metricsConfig`(jmxPrometheusExporter + ConfigMap) | 9404 | broker/JVM/KRaft 内部指标 |
+| `spec.kafka.metricsConfig`(jmxPrometheusExporter + ConfigMap) | 9404 | broker / JVM / KRaft 内部指标 |
 
-完整链路:`metrics 配置(暴露)` → `PodMonitor(告诉 Prometheus 抓)` → `Prometheus` → `Grafana`。
-PodMonitor + Grafana 仪表盘见上游 `examples/metrics/`(strimzi-pod-monitor.yaml / grafana-dashboards/)。
+链路:`metrics 配置(暴露)` → `PodMonitor(告诉 Prometheus 抓)` → `Prometheus` → `Grafana`。
+PodMonitor + 仪表盘见上游 `examples/metrics/`(`prometheus-install/pod-monitors/` + `grafana-dashboards/`),namespace 记得改成 `kafka`。
 
-> 参考样本:[kafka-metrics.yaml](https://github.com/strimzi/strimzi-kafka-operator/blob/1.0.1/examples/metrics/kafka-metrics.yaml) / 标准最简集群:[kafka-ephemeral.yaml](https://github.com/strimzi/strimzi-kafka-operator/blob/1.0.1/examples/kafka/kafka-ephemeral.yaml)
+## 踩坑
+
+| 现象 | 原因 | 修法 |
+|---|---|---|
+| Pod 卡 `ImagePullBackOff`(quay.io/strimzi/operator) | 节点没配 quay mirror | `bash docker/containerd/mirrors.sh` + `systemctl restart containerd`,**别改 image** |
+| operator 起来了但 Kafka CR 不 reconcile | helm 没带 `--namespace kafka`,operator watch 错 ns | 重装带 `--namespace kafka`,或确认 `STRIMZI_NAMESPACE` |
+| broker pod Pending | 标签没打 / `longhorn` storageClass 不存在 / 节点 < 3 | `kubectl get sc`;`kubectl label node ... kafka=true`;3 节点用合并 pool |
+| nodeport 集群外连不上某 broker | `advertisedHost` 写的 IP 跟 broker 实际落点不符 | advertisedHost 改成 broker 实际所在节点 IP(详见上次排查) |
+| `auto.create.topics.enable=false` 下生产报 topic 不存在 | 集群 CR 关了自动建 topic | 用 `KafkaTopic` CR 显式建,或临时开自动建 |
+
+## 参考
+
+- 上游: https://github.com/strimzi/strimzi-kafka-operator
+- 兼容性 / 示例: `examples/kafka/`(kafka-persistent.yaml 等) / `examples/metrics/`
