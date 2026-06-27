@@ -141,6 +141,8 @@ PodMonitor + 仪表盘见上游 `examples/metrics/`(`prometheus-install/pod-moni
 | Pod 卡 `ImagePullBackOff`(quay.io/strimzi/operator) | 节点没配 quay mirror | `bash docker/containerd/mirrors.sh` + `systemctl restart containerd`,**别改 image** |
 | operator 起来了但 Kafka CR 不 reconcile | helm 没带 `--namespace kafka`,operator watch 错 ns | 重装带 `--namespace kafka`,或确认 `STRIMZI_NAMESPACE` |
 | broker pod Pending | 标签没打 / `longhorn` storageClass 不存在 / 节点 < 3 | `kubectl get sc`;`kubectl label node ... kafka=true`;3 节点用合并 pool |
+| broker 都起了,但 **entity-operator** Pending(`didn't satisfy existing pods anti-affinity`) | broker 反亲和选择器若用 `strimzi.io/cluster`(太宽),会把 entity-operator 也算进去 → 所有 broker 节点拒绝它 | 选择器收窄到只匹配 broker:`strimzi.io/name: kafka-cluster-kafka`(或 `strimzi.io/pool-name: kafka`),本仓库 yaml 已修 |
+| 节点不够(如 1 control-plane + 2 worker)第 3 broker Pending | 硬反亲和要 3 个可调度节点,CP 有 NoSchedule 污点 | 加节点(`kubeadm join`),或 nodepool `template.pod.tolerations` 容忍 control-plane 污点拉上 CP,或减副本 |
 | nodeport 集群外连不上某 broker | `advertisedHost` 写的 IP 跟 broker 实际落点不符 | advertisedHost 改成 broker 实际所在节点 IP(详见上次排查) |
 | `auto.create.topics.enable=false` 下生产报 topic 不存在 | 集群 CR 关了自动建 topic | 用 `KafkaTopic` CR 显式建,或临时开自动建 |
 

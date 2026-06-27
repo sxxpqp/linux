@@ -48,7 +48,9 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchLabels:
-                  strimzi.io/cluster: kafka-cluster
+                  # ⚠ 只匹配 broker pod。别用 strimzi.io/cluster(太宽:entity-operator 也带这标签,
+                  #    反亲和对称 → entity-operator 被所有 broker 节点拒绝,无处调度 Pending)
+                  strimzi.io/name: kafka-cluster-kafka
               topologyKey: kubernetes.io/hostname   # 每节点最多 1 个 broker
 ---
 apiVersion: kafka.strimzi.io/v1
