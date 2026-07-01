@@ -17,20 +17,20 @@ ARG REDIS_VERSION=1.1.0
 ARG NEXUS_BASE=https://nexus.ihome.sxxpqp.top:8443/repository/raw-hosted/kafka-connect
 
 # === 下载插件 ===
-RUN yum install -y unzip curl \
- && curl -fLo /tmp/debezium-plugin.tar.gz "${NEXUS_BASE}/debezium-connector-mysql-${DEBEZIUM_VERSION}-plugin.tar.gz" \
+# Strimzi 镜像没有包管理器,只能用已有工具:
+#   tar 解压 .tar.gz, jar(Java 内置) 解压 .zip
+RUN curl -fLo /tmp/debezium-plugin.tar.gz "${NEXUS_BASE}/debezium-connector-mysql-${DEBEZIUM_VERSION}-plugin.tar.gz" \
  && mkdir -p /opt/kafka/plugins/debezium-connector-mysql \
  && tar xzf /tmp/debezium-plugin.tar.gz -C /opt/kafka/plugins/debezium-connector-mysql --strip-components=1 \
  && rm -f /tmp/debezium-plugin.tar.gz \
  && curl -fLo /tmp/redis-plugin.zip "${NEXUS_BASE}/redis-redis-kafka-connect-${REDIS_VERSION}.zip" \
  && mkdir -p /opt/kafka/plugins/redis-kafka-connect \
- && unzip -q /tmp/redis-plugin.zip -d /opt/kafka/plugins/redis-kafka-connect \
+ && cd /opt/kafka/plugins/redis-kafka-connect \
+ && jar xf /tmp/redis-plugin.zip \
  && mv /opt/kafka/plugins/redis-kafka-connect/redis-redis-kafka-connect-${REDIS_VERSION}/lib/* \
     /opt/kafka/plugins/redis-kafka-connect/ 2>/dev/null || true \
  && rm -rf /opt/kafka/plugins/redis-kafka-connect/redis-redis-kafka-connect-${REDIS_VERSION} \
- && rm -f /tmp/redis-plugin.zip \
- && yum clean all \
- && rm -rf /var/cache/yum
+ && rm -f /tmp/redis-plugin.zip
 
 # Strimzi 镜像默认用非 root 用户,上面 curl 已用 root 跑完,切回原用户
 USER 1001
