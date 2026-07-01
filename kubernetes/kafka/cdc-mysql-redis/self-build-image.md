@@ -32,16 +32,16 @@ MySQL ──(Debezium 读 binlog)──> Kafka ──(Redis Sink)──> Redis
 
 ## 二、准备插件 + 写 Dockerfile
 
-新建目录,先把两个插件下下来并解压(走 Nexus,公网直连不稳;上游地址见 [README.md](README.md) 前置 2):
+新建目录,先把两个插件下下来并解压(构建机公网直连,或手动上传到 chfs):
 
 ```bash
 mkdir -p plugins && cd plugins
 # Debezium MySQL 3.5.2.Final
-curl -fLO https://nexus.ihome.sxxpqp.top:8443/repository/raw-hosted/kafka-connect/debezium-connector-mysql-3.5.2.Final-plugin.tar.gz
+curl -fLO https://repo1.maven.org/maven2/io/debezium/debezium-connector-mysql/3.5.2.Final/debezium-connector-mysql-3.5.2.Final-plugin.tar.gz
 mkdir -p debezium-connector-mysql && tar xzf debezium-connector-mysql-3.5.2.Final-plugin.tar.gz -C debezium-connector-mysql --strip-components=1
 # Redis Kafka Connect 1.1.0
-curl -fLO https://nexus.ihome.sxxpqp.top:8443/repository/raw-hosted/kafka-connect/redis-redis-kafka-connect-1.1.0.zip
-unzip -q redis-redis-kafka-connect-1.1.0.zip
+curl -fLO https://github.com/redis-field-engineering/redis-kafka-connect/releases/download/v1.1.0/redis-redis-kafka-connect-1.1.0.zip
+mkdir -p redis-kafka-connect && cd redis-kafka-connect && jar xf ../redis-redis-kafka-connect-1.1.0.zip && cd ..
 cd ..
 ```
 
