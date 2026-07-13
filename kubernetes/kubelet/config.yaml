@@ -1,0 +1,133 @@
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+
+# Base kubeadm config plus stability-oriented settings for kubelet
+# and core system pods such as kube-proxy, CoreDNS, and static pods.
+
+# Network and health endpoints
+address: 0.0.0.0
+port: 10250
+# readOnlyPort is intentionally disabled
+# readOnlyPort: 10255
+healthzBindAddress: 127.0.0.1
+healthzPort: 10248
+
+# Authentication and authorization
+# kubeadm clusters normally use /etc/kubernetes/pki/ca.crt here.
+authentication:
+  anonymous:
+    enabled: false
+  webhook:
+    cacheTTL: 2m0s
+    enabled: true
+  x509:
+    clientCAFile: /etc/kubernetes/pki/ca.crt
+authorization:
+  mode: Webhook
+  webhook:
+    cacheAuthorizedTTL: 5m0s
+    cacheUnauthorizedTTL: 30s
+
+# Runtime and cgroup
+cgroupDriver: systemd
+cgroupsPerQOS: true
+runtimeRequestTimeout: 5m0s
+failSwapOn: true
+
+# Cluster DNS
+clusterDNS:
+- 10.96.0.10
+clusterDomain: cluster.local
+
+# Reserve resources for the OS and Kubernetes node components.
+# These values are a safe starting point for 4C8G to 8C16G nodes.
+systemReserved:
+  cpu: "500m"
+  memory: "1Gi"
+  ephemeral-storage: "5Gi"
+kubeReserved:
+  cpu: "500m"
+  memory: "1Gi"
+  ephemeral-storage: "3Gi"
+enforceNodeAllocatable:
+- pods
+- system-reserved
+- kube-reserved
+
+# Eviction thresholds to protect kubelet and core components under pressure.
+evictionHard:
+  memory.available: "500Mi"
+  nodefs.available: "10%"
+  nodefs.inodesFree: "5%"
+  imagefs.available: "15%"
+  pid.available: "10%"
+evictionSoft:
+  memory.available: "800Mi"
+  nodefs.available: "15%"
+  nodefs.inodesFree: "10%"
+  imagefs.available: "20%"
+  imagefs.inodesFree: "15%"
+  pid.available: "15%"
+evictionSoftGracePeriod:
+  memory.available: 1m30s
+  nodefs.available: 2m
+  nodefs.inodesFree: 2m
+  imagefs.available: 2m
+  imagefs.inodesFree: 2m
+  pid.available: 2m
+evictionPressureTransitionPeriod: 5m0s
+
+# Pod density and PID protection
+maxPods: 110
+podPidsLimit: 4096
+
+# CPU policy for general-purpose worker nodes
+cpuManagerPolicy: none
+cpuManagerReconcilePeriod: 10s
+cpuCFSQuota: true
+
+# API and image pull throttling
+kubeAPIQPS: 50
+kubeAPIBurst: 100
+registryPullQPS: 5
+registryBurst: 10
+eventRecordQPS: 5
+eventBurst: 10
+
+# Image garbage collection
+imageGCHighThresholdPercent: 85
+imageGCLowThresholdPercent: 80
+imageMinimumGCAge: 2m0s
+
+# Container logs
+containerLogMaxFiles: 5
+containerLogMaxSize: 10Mi
+
+# Status reporting and reconciliation
+nodeStatusUpdateFrequency: 10s
+nodeStatusReportFrequency: 1m0s
+syncFrequency: 1m0s
+fileCheckFrequency: 20s
+httpCheckFrequency: 20s
+volumeStatsAggPeriod: 1m0s
+
+# Graceful shutdown to reduce kube-system pod disruption during reboot/shutdown
+shutdownGracePeriod: 30s
+shutdownGracePeriodCriticalPods: 10s
+
+# Other common stable settings
+hairpinMode: promiscuous-bridge
+iptablesDropBit: 15
+iptablesMasqueradeBit: 14
+makeIPTablesUtilChains: true
+maxOpenFiles: 1000000
+oomScoreAdj: -999
+resolvConf: /etc/resolv.conf
+# On Ubuntu nodes with systemd-resolved, use /run/systemd/resolve/resolv.conf instead.
+rotateCertificates: true
+serializeImagePulls: true
+staticPodPath: /etc/kubernetes/manifests
+streamingConnectionIdleTimeout: 4h0m0s
+contentType: application/vnd.kubernetes.protobuf
+enableControllerAttachDetach: true
+enableDebuggingHandlers: true
