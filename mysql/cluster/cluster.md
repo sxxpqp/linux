@@ -374,7 +374,8 @@ mysqlrouter \
 
 > ⚠️ 生成的 `mysqlrouter.conf` 默认缺少连接限制，建议手动在 `[DEFAULT]` 段加：
 > ```ini
-> max_total_connections=2000
+> max_total_connections=4000
+> max_connections=4000
 > read_timeout=30
 > ```
 > 加完后 `systemctl restart mysqlrouter` 生效。
