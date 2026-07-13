@@ -49,10 +49,10 @@ kubeReserved:
   cpu: "500m"
   memory: "1Gi"
   ephemeral-storage: "3Gi"
-enforceNodeAllocatable:
-- pods
-- system-reserved
-- kube-reserved
+# enforceNodeAllocatable:
+# - pods
+# - system-reserved
+# - kube-reserved
 
 # Eviction thresholds to protect kubelet and core components under pressure.
 evictionHard:
