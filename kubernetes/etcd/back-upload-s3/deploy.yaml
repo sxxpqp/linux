@@ -1,0 +1,102 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations: {}
+  labels:
+    app: etcd-backup
+    k8s.kuboard.cn/name: etcd-backup
+  name: etcd-backup
+  namespace: devops-tools
+  resourceVersion: '119874058'
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: etcd-backup
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/restartedAt: '2026-03-07T15:52:53+08:00'
+      creationTimestamp: null
+      labels:
+        app: etcd-backup
+    spec:
+      containers:
+        - envFrom:
+            - configMapRef:
+                name: etcd-backup-config
+            - secretRef:
+                name: etcd-backup-s3-creds
+          image: 'registry.cn-hangzhou.aliyuncs.com/sxxpqp/backup-etcd:latest'
+          imagePullPolicy: IfNotPresent
+          name: etcd-backup
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /etc/etcd-certs
+              name: etcd-certs
+              readOnly: true
+            - mountPath: /data
+              name: backup-tmp
+      dnsPolicy: ClusterFirst
+      nodeName: k8swork2
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: etcd-certs
+          secret:
+            defaultMode: 384
+            secretName: etcd-backup-certs
+        - emptyDir: {}
+          name: backup-tmp
+---
+---
+apiVersion: v1
+data:
+  CRON_SCHEDULE: 58 * * * *
+  ETCD_CA: /etc/etcd-certs/ca.crt
+  ETCD_CERT: /etc/etcd-certs/server.crt
+  ETCD_ENDPOINTS: 'https://192.168.150.240:2379'
+  ETCD_KEY: /etc/etcd-certs/server.key
+  S3_BACKUP_PATH: backup/etcd
+  S3_BUCKET: test-etcdbackup
+  S3_ENDPOINT: 'http://58.49.56.57:8060'
+  TZ: Asia/Shanghai
+kind: ConfigMap
+metadata:
+  annotations: {}
+  labels:
+    app: etcd-backup
+  name: etcd-backup-config
+  namespace: devops-tools
+  resourceVersion: '41145506'
+
+
+---
+apiVersion: v1
+data:
+  S3_ACCESS_KEY: 
+  S3_SECRET_KEY: 
+kind: Secret
+metadata:
+  labels:
+    app: etcd-backup
+  name: etcd-backup-s3-creds
+  namespace: devops-tools
+  resourceVersion: '41144996'
+type: Opaque
+
