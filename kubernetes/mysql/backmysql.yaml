@@ -81,7 +81,7 @@ metadata:
   namespace: devops-tools
 data:
   MYSQL_PASSWORD: U29odWdsb2JhbDEyMy4=
-  S3_ACCESS_KEY: b3hlem1zajZnenkzcDJteDdhbXA=
-  S3_SECRET_KEY: bWQ1YmEyMWZzeHd3Yjh3MjVkMHhtbTYzMndqaDlwanBxc3o0bXFuaQ==
+  S3_ACCESS_KEY: xxx
+  S3_SECRET_KEY: xxx
 type: Opaque
 
