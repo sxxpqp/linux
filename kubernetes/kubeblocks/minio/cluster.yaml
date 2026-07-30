@@ -1,0 +1,71 @@
+# KubeBlocks MinIO 分布式集群 (官方 addon)
+#
+# 拓扑: replicas 必须为偶数 (2/4/6/8/12...), 纠删码要求
+#   - 开发/测试: 2 副本 (无冗余, 仅功能验证)
+#   - 生产: ≥4 副本 (纠删码 EC:2 起步, 允许 1 节点故障)
+#
+# componentDef: minio (前缀匹配, 自动选最新)
+# serviceVersion: 2025.10.15 (addon 默认版本)
+#
+# 与 Bitnami Helm 版 (../minio-bitnami/) 的区别:
+#   - 统一用 KubeBlocks Cluster CR + OpsRequest 管理
+#   - 支持水平扩缩容 (OpsRequest HorizontalScaling)
+#   - 支持 BackupSchedule 自动备份
+#   - 自带 Grafana dashboard (addon 内置)
+#
+# 扩缩容: bash scale.sh 6   (必须偶数)
+# 已知问题: 扩容后新节点需 STOP→START 才能正常加入集群 (官方 README 说明)
+
+apiVersion: apps.kubeblocks.io/v1
+kind: Cluster
+metadata:
+  name: minio-cluster
+  namespace: test
+spec:
+  # 删除策略
+  # - DoNotTerminate: 拒绝删除 (生产推荐)
+  # - Delete:         删 K8s 资源 + PVC (数据丢失)
+  # - WipeOut:        Delete + 删远程备份
+  terminationPolicy: Delete
+
+  componentSpecs:
+    - name: minio
+      componentDef: minio
+      serviceVersion: "2025.10.15"
+
+      replicas: 4                    # 生产 ≥4 且偶数; 测试可改 2
+
+      env:
+        # 初始化时自动创建的 bucket (逗号分隔, 留空则不创建)
+        - name: MINIO_BUCKETS
+          value: "data,backup"
+
+      resources:
+        limits:
+          cpu: "2"
+          memory: 4Gi
+        requests:
+          cpu: 500m
+          memory: 1Gi
+
+      volumeClaimTemplates:
+        - name: data
+          spec:
+            # storageClassName: longhorn   # 生产建议显式指定
+            accessModes: [ ReadWriteOnce ]
+            resources:
+              requests:
+                storage: 50Gi
+
+  # 反亲和: 各副本尽量打散到不同节点
+  schedulingPolicy:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/instance: minio-cluster
+                  apps.kubeblocks.io/component-name: minio
