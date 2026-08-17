@@ -5,8 +5,8 @@ description: "Vue + Vite 前端项目 GitLab CI/CD + Dockerfile 生产模板。�
 
 # Vue + Vite 前端 CI/CD 生产模板
 
-> 提取自 `D:\code\admin`、`D:\code\sohu-admin`、`D:\code\dsp-web` 等 30+ 个真实项目。
-> CI 参数风格参考 `D:\code\ad-rtb\.gitlab-ci.yml`（分支感知环境映射）。
+> 提取自 `D:\code\admin`、`D:\code\sohu-admin`、`D:\code\dsp-web`、`D:\code\game-combine-h5\game-lottery-h5` 等 30+ 个真实项目。
+> CI 参数风格参考 `D:\code\ad-rtb\.gitlab-ci.yml`、`game-lottery-h5`（分支感知环境映射）。
 
 ## 核心思路
 
@@ -100,6 +100,8 @@ RUN pnpm run build:mp-weixin  # 或 build:h5
 
 ```dockerfile
 ARG BUILD_MODE=production
+ARG NODE_MAX_OLD_SPACE_SIZE=8192
+ENV NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}"
 RUN npm run build -- --mode ${BUILD_MODE}
 ```
 
@@ -112,8 +114,11 @@ RUN case "${BUILD_MODE}" in \
       production) VITE_MODE=production ;; \
       *) echo "Unsupported BUILD_MODE: ${BUILD_MODE}" && exit 1 ;; \
     esac \
- && npm run build -- --mode ${VITE_MODE}
+ && npm run build -- --mode ${VITE_MODE} \
+ && test -d dist  # 产物目录守卫：防 .env.<mode> 里的 VITE_APP_outputDir 覆盖掉 dist 导致 COPY 落空
 ```
+
+> 变体：项目自带命名脚本（`npm run stage` / `build:pre` / `build:prod`，本质仍是 `vite build --mode`），`case` 直接映射到脚本名即可，参考 `D:\code\game-combine-h5\game-lottery-h5\Dockerfile`。
 
 ### 变体 B2: 自定义 build.js（最后手段，多入口/多产物）
 
@@ -220,6 +225,9 @@ variables:
   DEPLOY_TO_K8S:
     value: "true"
     description: "构建完成后是否自动滚动更新 K8s（true/false）"
+  NODE_MAX_OLD_SPACE_SIZE:
+    value: "8192"
+    description: "Node 构建堆上限（MB）；大型前端项目建议至少 8192（需在 Dockerfile 配 ARG 并在 kaniko 透传 build-arg，见下方 B 情况）"
   K8S_DEPLOYMENT:
     value: "hmt-admin"                           # ← 改成 K8s Deployment 名
     description: "K8s 中的 Deployment 名称"
@@ -288,6 +296,8 @@ deploy-k8s:
 ```
 
 > **B 情况（环境变量注入）额外两步**：`before_script` 的 `case` 里加一行 `BUILD_MODE`（如 `test→staging / release*→pre / master→production`），并 `export BUILD_MODE`；`build-image` 的 `/kaniko/executor` 追加 `--build-arg "BUILD_MODE=${BUILD_MODE}"`。其余不变。
+>
+> 大项目 Node 堆上限同理：Dockerfile 加 `ARG NODE_MAX_OLD_SPACE_SIZE` + `ENV NODE_OPTIONS`，CI 变量定义 `NODE_MAX_OLD_SPACE_SIZE`，kaniko 追加 `--build-arg "NODE_MAX_OLD_SPACE_SIZE=${NODE_MAX_OLD_SPACE_SIZE}"`。完整落地见 `D:\code\game-combine-h5\game-lottery-h5`。
 
 ---
 
@@ -388,7 +398,7 @@ server {
 - [ ] master 分支 deploy 只允许 manual
 - [ ] 先判断构建模式：A 无环境变量 → 直接 `run build`；B 有环境变量 → 优先 `--mode`，最后才 `node build.js`
 - [ ] 变量 `HARBOR_PROJECT` / `IMAGE_NAME` / `K8S_DEPLOYMENT` / namespace 已替换为本项目值
-- [ ] （B 情况）CI `before_script` 已映射并 export `BUILD_MODE`，kaniko 已传 `--build-arg BUILD_MODE`
+- [ ] （B 情况）CI `before_script` 已映射并 export `BUILD_MODE`，kaniko 已传 `--build-arg BUILD_MODE`；大项目已配 `NODE_MAX_OLD_SPACE_SIZE` 并透传 build-arg
 - [ ] （B2 变体）私有源 `.npmrc` 已随依赖声明一起 COPY；产物目录（`dist/web` 等）与 `COPY --from=build` 一致
 
 ---
