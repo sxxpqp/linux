@@ -70,6 +70,17 @@ kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/downloa
 | **NGINX Gateway Fabric** | 要完整 Gateway API 能力 | `nginx` | 官方下一代控制器,纯 Gateway API 实现 |
 | Envoy Gateway / Cilium / Traefik / APISIX | 各有取舍 | 各异 | 按需评估 |
 
+**NGINX Gateway Fabric 安装**(内网 Nexus 改写,已验证文件路径):
+
+```bash
+# CRD(两个 tag 都是 deploy/crds.yaml)
+kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/nginx/nginx-gateway-fabric/v2.6.7/deploy/crds.yaml
+# 控制器(两个 tag 都是 deploy/default/deploy.yaml)
+kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/nginx/nginx-gateway-fabric/v2.6.7/deploy/default/deploy.yaml
+```
+
+> ⚠ 注意:这两个文件是**仓库 raw 文件**,不是 release 资产 —— 官方文档里给的 `releases/download/vX.Y.Z/nginx-gateway.yaml` 是**404 不存在的**,照抄会失败。要降级就用 `v1.5.1` 替换 URL 里的 `v2.6.7`,路径结构相同。
+
 ingress-nginx 开启方式(给 controller 容器加启动参数,具体以官方文档为准):
 
 ```bash
