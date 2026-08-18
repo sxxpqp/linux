@@ -15,6 +15,7 @@ K8s 生产配置归档 — 集群部署、网络(Calico BPF/BGP/BGP-LB)、存储
 | **Calico CNI — BGP + 内置 LB(生产)** | [calico/bgp-lb/](calico/bgp-lb/) |
 | 网络连通性验证 | [calico/test-connectivity.sh](calico/test-connectivity.sh) |
 | 入口 — ingress-nginx DS+hostNetwork | [ingress-nginx/](ingress-nginx/) |
+| 入口 — Gateway API(Gateway/HTTPRoute) | [gateway-api/](gateway-api/) |
 | 节点过载自动 cordon | [node-cordon-watcher/](node-cordon-watcher/) |
 | LB — 裸金属 (Calico BGP-LB 替代) | [metallb/](metallb/) |
 | 存储 — 动态 NFS | [csi-driver-nfs/](csi-driver-nfs/) |
@@ -56,6 +57,7 @@ K8s 生产配置归档 — 集群部署、网络(Calico BPF/BGP/BGP-LB)、存储
 | [kubelet/](kubelet/) | kubelet 配置 + systemd | 验证过 |
 | [traefik/](traefik/) | Traefik | 验证过 |
 | [apisix/](apisix/) | APISIX 网关 | 验证过 |
+| [gateway-api/](gateway-api/) | Gateway API(Gateway/HTTPRoute 等, Ingress 后继) | 学习笔记 |
 
 ### 存储
 

@@ -1,0 +1,58 @@
+# ============================================================
+# 08-route-grpc.yaml — GRPCRoute
+# GRPCRoute 在 v1.1 起进入 Standard(v1),用 standard-install.yaml 即可
+# listener 协议用 HTTPS(TLS terminate),route 类型限定 GRPCRoute
+# ============================================================
+
+# ---------- Gateway: grpc listener ----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: grpc-gateway
+  namespace: default
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - name: grpc
+    protocol: HTTPS
+    port: 443
+    hostname: "grpc.sxxpqp.top"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: grpc-tls
+    allowedRoutes:
+      namespaces:
+        from: Same
+        kinds:                 # 限定只允许 GRPCRoute 接入(可选)
+        - kind: GRPCRoute
+          group: gateway.networking.k8s.io
+---
+# ---------- GRPCRoute: 按 service.method 路由 ----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: grpc-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: grpc-gateway
+    sectionName: grpc
+  hostnames:
+  - "grpc.sxxpqp.top"
+  rules:
+  # 精确匹配某个 RPC:helloworld.Greeter/SayHello
+  - matches:
+    - method:
+        type: Exact
+        service: helloworld.Greeter
+        method: SayHello
+    backendRefs:
+    - name: grpc-svc
+      port: 50051
+  # 其余 RPC 全转发(空 matches = 匹配所有)
+  - matches:
+    - {}
+    backendRefs:
+    - name: grpc-svc
+      port: 50051

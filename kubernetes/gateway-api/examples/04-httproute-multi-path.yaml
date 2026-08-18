@@ -1,0 +1,55 @@
+# ============================================================
+# 04-httproute-multi-path.yaml — 多路径 rewrite
+# 等价于 ingress-nginx 生产示例(ingress-example.yaml):
+#   nginx.ingress.kubernetes.io/rewrite-target: /$2
+#   path: /api(/|$)(.*)      → backend: uc-api-svc:8103
+#   path: /monitor(/|$)(.*)  → backend: omvision-api-svc:8081
+# ============================================================
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: multi-path-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: shared-gateway     # 换成你实际的 Gateway 名字
+    sectionName: https
+  rules:
+  # /api/v1/users → 剥掉 /api 前缀 → /v1/users 转发给 uc-api-svc
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          type: ReplacePrefixMatch
+          replacePrefixMatch: /
+    backendRefs:
+    - name: uc-api-svc
+      port: 8103
+  # /monitor/health → 剥掉 /monitor 前缀 → /health 转发给 omvision-api-svc
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /monitor
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          type: ReplacePrefixMatch
+          replacePrefixMatch: /
+    backendRefs:
+    - name: omvision-api-svc
+      port: 8081
+---
+# ---------- URLRewrite 三种写法对照 ----------
+# 1) ReplacePrefixMatch: /  → 去掉匹配的前缀,保留剩余路径
+#      /api/v1/users ──▶ /v1/users   (等价 ingress 的 /api(/|$)(.*) → /$2)
+#
+# 2) ReplacePrefixMatch: /v2 → 前缀替换成指定值
+#      /api/v1/users ──▶ /v2/v1/users
+#
+# 3) ReplaceFullPath: / → 整段路径替换(注意:会丢掉剩余路径)
+#      /api/v1/users ──▶ /   (等价 ingress 的 rewrite-target: /)

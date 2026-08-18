@@ -1,0 +1,65 @@
+# ============================================================
+# 01-gateway.yaml — Gateway 两种常见形态
+# 形态 A: 单域名业务入口(一个团队 / 一个应用)
+# 形态 B: 通配符共享入口(多团队共用,平台团队创建)
+# ============================================================
+
+# ---------- 形态 A: 单域名 Gateway ----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: app-gateway
+  namespace: default
+spec:
+  gatewayClassName: nginx              # 换成实际的 GatewayClass:kubectl get gatewayclass
+  listeners:
+  - name: https
+    protocol: HTTPS
+    port: 443
+    hostname: "app.sxxpqp.top"         # 精确域名
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: app-tls                  # 同 namespace 的 Secret(cert-manager 签发)
+    allowedRoutes:
+      namespaces:
+        from: Same                     # 只允许本 namespace 的路由接入
+  - name: http
+    protocol: HTTP
+    port: 80
+    hostname: "app.sxxpqp.top"
+    allowedRoutes:
+      namespaces:
+        from: Same
+---
+# ---------- 形态 B: 通配符共享 Gateway(多团队)----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: shared-gateway
+  namespace: default
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - name: https
+    protocol: HTTPS
+    port: 443
+    hostname: "*.example.com"          # 通配符,允许所有一级子域名接入
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: wildcard-example-com-tls  # 通配符证书 Secret
+    allowedRoutes:
+      namespaces:
+        from: All                       # 多团队共用放开 All;要收紧用 Selector
+        # from: Selector               # 按 namespace 标签精确控制
+        # selector:
+        #   matchLabels:
+        #     gateway: enabled
+  - name: http
+    protocol: HTTP
+    port: 80
+    hostname: "*.example.com"
+    allowedRoutes:
+      namespaces:
+        from: All

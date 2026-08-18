@@ -1,0 +1,94 @@
+# ============================================================
+# 05-httproute-matches-canary.yaml — 请求匹配 + 金丝雀灰度
+# matches 支持:path / headers / queryParams / method 组合
+# 同一条 matches 内的条件 = AND,数组里多个 match = OR
+# 规则按顺序匹配,第一个命中的生效
+# ============================================================
+
+# ---------- 按 header 分流:x-env=gray → v2,其余 → v1 ----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: canary-header
+  namespace: default
+spec:
+  parentRefs:
+  - name: app-gateway
+  hostnames:
+  - "app.sxxpqp.top"
+  rules:
+  # 命中 header x-env=gray 的流量 → v2
+  - matches:
+    - headers:
+      - name: x-env
+        value: "gray"
+      path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: app-svc-v2
+      port: 8080
+  # 兜底:其余流量 → v1(无 header 条件,匹配所有)
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: app-svc-v1
+      port: 8080
+---
+# ---------- query + method 精确匹配:GET /healthz?debug=true ----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: match-query-method
+  namespace: default
+spec:
+  parentRefs:
+  - name: app-gateway
+  hostnames:
+  - "app.sxxpqp.top"
+  rules:
+  - matches:
+    - method: GET
+      queryParams:
+      - name: debug
+        value: "true"
+      path:
+        type: Exact
+        value: /healthz
+    backendRefs:
+    - name: debug-svc
+      port: 8080
+  # 兜底
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: app-svc-v1
+      port: 8080
+---
+# ---------- 金丝雀:权重灰度 90/10(最常用)----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: canary-weight
+  namespace: default
+spec:
+  parentRefs:
+  - name: app-gateway
+  hostnames:
+  - "app.sxxpqp.top"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: app-svc-v1
+      port: 8080
+      weight: 90              # 90% 流量
+    - name: app-svc-v2
+      port: 8080
+      weight: 10              # 10% 流量(新版本)

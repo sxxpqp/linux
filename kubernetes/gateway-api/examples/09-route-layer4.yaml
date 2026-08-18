@@ -1,0 +1,93 @@
+# ============================================================
+# 09-route-layer4.yaml — 四层路由 TCP / TLS / UDP
+# ⚠ 这些类型在 Experimental 通道:
+#   apiVersion 用 v1alpha2,CRD 需装 experimental-install.yaml
+#   (v1.5 起 TLSRoute 已转 Stable,新 CRD 可能提供 v1 版本)
+# listener 协议要跟 route 类型对应:TCP listener 收 TCPRoute,
+# TLS listener 收 TLSRoute,UDP listener 收 UDPRoute
+# ============================================================
+
+# ---------- Gateway: 开 TCP / TLS / UDP 三类 listener ----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: layer4-gateway
+  namespace: default
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - name: mysql
+    protocol: TCP
+    port: 3306
+    allowedRoutes:
+      namespaces:
+        from: Same
+  - name: pg-tls
+    protocol: TLS
+    port: 5432
+    tls:
+      mode: Passthrough            # 四层透传,不解密;SNI 由 TLSRoute 匹配
+    allowedRoutes:
+      namespaces:
+        from: Same
+  - name: dns
+    protocol: UDP
+    port: 53
+    allowedRoutes:
+      namespaces:
+        from: Same
+---
+# ---------- TCPRoute: 3306 → mysql-svc ----------
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: mysql-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: layer4-gateway
+    sectionName: mysql
+  rules:
+  - backendRefs:
+    - name: mysql-svc
+      port: 3306
+---
+# ---------- TLSRoute: 同一个端口按 SNI 分流(5432 多后端)----------
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TLSRoute
+metadata:
+  name: pg-tls-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: layer4-gateway
+    sectionName: pg-tls
+  hostnames:
+  - "pg-1.sxxpqp.top"
+  rules:
+  - matches:
+    - sni: "pg-1.sxxpqp.top"
+    backendRefs:
+    - name: pg-1-svc
+      port: 5432
+  # 加第二条规则即可再分一路:
+  # - matches:
+  #   - sni: "pg-2.sxxpqp.top"
+  #   backendRefs:
+  #   - name: pg-2-svc
+  #     port: 5432
+---
+# ---------- UDPRoute: 53 → coredns 转发 ----------
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: UDPRoute
+metadata:
+  name: dns-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: layer4-gateway
+    sectionName: dns
+  rules:
+  - backendRefs:
+    - name: coredns
+      port: 53

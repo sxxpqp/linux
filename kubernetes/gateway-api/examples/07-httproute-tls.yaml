@@ -1,0 +1,86 @@
+# ============================================================
+# 07-httproute-tls.yaml — TLS 终止 + cert-manager + HTTP→HTTPS 跳转
+# ============================================================
+
+# ---------- cert-manager 签发通配符证书(可选,也可直接用现成 Secret)----------
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-sxxpqp-top
+  namespace: default
+spec:
+  secretName: wildcard-sxxpqp-top-tls
+  issuerRef:
+    name: letsencrypt-prod          # 换成你实际的 Issuer/ClusterIssuer
+    kind: ClusterIssuer
+  dnsNames:
+  - "*.sxxpqp.top"
+  - "sxxpqp.top"
+---
+# ---------- Gateway: HTTPS 443 终止 TLS + HTTP 80 ----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: tls-gateway
+  namespace: default
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - name: https
+    protocol: HTTPS
+    port: 443
+    hostname: "*.sxxpqp.top"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: wildcard-sxxpqp-top-tls   # cert-manager 写入的 Secret
+    allowedRoutes:
+      namespaces:
+        from: Same
+  - name: http
+    protocol: HTTP
+    port: 80
+    hostname: "*.sxxpqp.top"
+    allowedRoutes:
+      namespaces:
+        from: Same
+---
+# ---------- HTTPRoute:80 流量 301 跳 https(只挂 http listener)----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: app-http-redirect
+  namespace: default
+spec:
+  parentRefs:
+  - name: tls-gateway
+    sectionName: http
+  hostnames:
+  - "app.sxxpqp.top"
+  rules:
+  - filters:
+    - type: RequestRedirect
+      requestRedirect:
+        scheme: https
+        statusCode: 301
+---
+# ---------- HTTPRoute:443 流量走真实后端(只挂 https listener)----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: app-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: tls-gateway
+    sectionName: https
+  hostnames:
+  - "app.sxxpqp.top"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: app-svc
+      port: 8080

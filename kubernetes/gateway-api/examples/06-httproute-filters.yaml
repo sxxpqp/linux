@@ -1,0 +1,51 @@
+# ============================================================
+# 06-httproute-filters.yaml — 请求过滤 + 超时/重试
+# filters 支持:URLRewrite / RequestHeaderModifier / RequestRedirect /
+#             RequestMirror / ResponseHeaderModifier
+# timeouts / retry 是 HTTPRoute 规则级内建字段(v1.1+)
+# ============================================================
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-filters
+  namespace: default
+spec:
+  parentRefs:
+  - name: app-gateway
+  hostnames:
+  - "app.sxxpqp.top"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /api
+    # ---- 超时(v1.1+)----
+    timeouts:
+      request: 30s              # 整个请求超时
+      backendRequest: 10s       # 单个 backend 请求超时(调上游超时用这个)
+    # ---- 重试(v1.1+)----
+    retry:
+      attempts: 3
+      codes: [502, 503, 504]
+      # backoff: 500ms         # v1.2+ 支持,重试退避间隔
+    filters:
+    # ---- 转发前改写请求头(等价 ingress 的 proxy_set_header)----
+    - type: RequestHeaderModifier
+      requestHeaderModifier:
+        set:                    # 覆盖
+        - name: X-Forwarded-Prefix
+          value: /api
+        add:                    # 追加(已有同名则忽略)
+        - name: X-Svc-Version
+          value: v1
+        remove:                 # 删除
+        - name: X-Debug-Token
+    # ---- 流量镜像(影子流量,不改真实响应;等价 ingress mirror-*)----
+    - type: RequestMirror
+      requestMirror:
+        backendRef:
+          name: app-svc-shadow
+          port: 8080
+    backendRefs:
+    - name: uc-api-svc
+      port: 8103

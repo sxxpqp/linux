@@ -1,0 +1,78 @@
+# ============================================================
+# 03-httproute-multi-team.yaml — 多团队共享通配符 Gateway
+# 平台团队建 shared-gateway(default,见 01 形态 B)
+# 业务团队各自在 namespace 里建 HTTPRoute,声明精确域名,
+# 域名落在通配符 *.example.com 范围内即可接入
+# ============================================================
+
+# ---------- team-a: app.example.com ----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: app-route
+  namespace: team-a
+spec:
+  parentRefs:
+  - name: shared-gateway
+    namespace: default       # Gateway 在 default,跨 namespace 挂载(无需 ReferenceGrant)
+    sectionName: https
+  hostnames:
+  - "app.example.com"        # 精确域名,在通配符范围内
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: app-service      # 与 HTTPRoute 同 ns(team-a)
+      port: 8080
+---
+# ---------- team-b: api.example.com ----------
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api-route
+  namespace: team-b
+spec:
+  parentRefs:
+  - name: shared-gateway
+    namespace: default
+    sectionName: https
+  hostnames:
+  - "api.example.com"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: api-service
+      port: 8080
+---
+# ---------- 跨 namespace 引用 backend 时才需要 ReferenceGrant ----------
+# 场景:HTTPRoute 在 team-b,但 Service 在 default(如平台公共 service)
+# ReferenceGrant 建在 Service 所在 namespace(default),显式授权 team-b 引用
+apiVersion: gateway.networking.k8s.io/v1
+kind: ReferenceGrant
+metadata:
+  name: allow-team-b-to-default-svc
+  namespace: default                  # = Service 所在 namespace
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: team-b                 # = HTTPRoute 所在 namespace
+  to:
+  - group: ""
+    kind: Service                     # 允许引用 default 下的 Service
+---
+# 授权后,team-b 的 HTTPRoute 才能这样写:
+#   rules:
+#   - matches:
+#     - path:
+#         type: PathPrefix
+#         value: /
+#     backendRefs:
+#     - name: shared-svc              # Service 在 default
+#       namespace: default
+#       port: 8080

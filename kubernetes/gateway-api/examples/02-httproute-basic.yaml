@@ -1,0 +1,24 @@
+# ============================================================
+# 02-httproute-basic.yaml — 最简 HTTPRoute(入门)
+# app.sxxpqp.top 的所有路径 → app-svc:8080
+# 配合 01-gateway.yaml 的形态 A 使用
+# ============================================================
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: app-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: app-gateway        # 挂到哪个 Gateway(名字)
+    sectionName: https       # 挂到 https listener(可选;不写则匹配所有协议/端口相符的 listener)
+  hostnames:
+  - "app.sxxpqp.top"         # 可选;不写则匹配该 Gateway 的所有请求
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /              # / 开头全部匹配(最常用的 pathType)
+    backendRefs:
+    - name: app-svc           # 与 HTTPRoute 同 namespace 的 Service
+      port: 8080
