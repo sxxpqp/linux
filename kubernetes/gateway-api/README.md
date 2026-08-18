@@ -81,6 +81,25 @@ kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubuserco
 
 > ⚠ 注意:这两个文件是**仓库 raw 文件**,不是 release 资产 —— 官方文档里给的 `releases/download/vX.Y.Z/nginx-gateway.yaml` 是**404 不存在的**,照抄会失败。要降级就用 `v1.5.1` 替换 URL 里的 `v2.6.7`,路径结构相同。
 
+**Helm 安装 + 数据面 DS 模式**(与 ingress-nginx DS+hostNetwork 对齐):
+
+```bash
+# ⚠ nginx.kind 大小写敏感:必须 daemonSet(大写 S),写 daemonset 会被 values schema 拒绝
+helm install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
+  --version 2.6.7 \
+  --create-namespace \
+  -n nginx-gateway \
+  --set nginx.kind=daemonSet \
+  --wait
+```
+
+- **控制面永远是 Deployment**(`nginxGateway.kind` 只支持 deployment);`nginx.kind=daemonSet` 让**数据面**每节点一个 NGINX pod(NGF 经 NginxProxy CR 动态创建,chart 里没有直接的 DaemonSet 资源)。
+- **kubectl 方式只有 Deployment** —— 要 DS 模式必须 Helm(或 kubectl apply 后手改 CR)。
+- 数据面 Service 默认 `LoadBalancer + externalTrafficPolicy: Local`(本集群 Calico BGP-LB 自动分 IP);要 NodePort 加 `--set nginx.service.type=NodePort`。
+- 镜像 `ghcr.io/nginx/nginx-gateway-fabric*` 走节点 containerd mirror(ghcr → ghcr.ihome.sxxpqp.top:8443),无需改 image。
+- 集群 K8s 需 **≥ 1.31**(chart `kubeVersion` 约束,装前 `kubectl get nodes` 确认)。
+- ⚠ 本机 helm 若报 `docker-credential-desktop not found`(Docker Desktop credsStore 干扰):`DOCKER_CONFIG=<空目录>` 再跑。
+
 ingress-nginx 开启方式(给 controller 容器加启动参数,具体以官方文档为准):
 
 ```bash
