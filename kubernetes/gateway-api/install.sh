@@ -7,7 +7,7 @@ set -euo pipefail
 
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 
-GATEWAY_API_VERSION="v1.4.0"
+GATEWAY_API_VERSION="v1.4.1"
 NGF_VERSION="v2.4.2"
 INSTALL_EXPERIMENTAL="false"
 SKIP_NGF="false"
@@ -24,7 +24,7 @@ usage() {
 
 选项:
   --gateway-api-version=VER   Gateway API CRD 版本,默认 v1.4.0
-  --ngf-version=VER           NGINX Gateway Fabric 版本,默认 v2.6.7
+  --ngf-version=VER           NGINX Gateway Fabric 版本,默认 v2.4.2
   --experimental              额外安装 Gateway API experimental CRD(TCP/UDP/TLS/GRPC 等)
   --skip-ngf                  只装 Gateway API CRD,不装控制器
   --dry-run                   只打印计划,不执行
@@ -35,7 +35,7 @@ usage() {
   bash install.sh
   bash install.sh --experimental
   bash install.sh --skip-ngf
-  bash install.sh --gateway-api-version=v1.4.0 --ngf-version=v2.6.7
+  bash install.sh --gateway-api-version=v1.4.0 --ngf-version=v2.4.2
 EOF
 }
 
