@@ -1,5 +1,9 @@
 # ============================================================
 # 01-gateway.yaml — Gateway 两种常见形态
+# 先安装:
+#   bash kubernetes/gateway-api/install.sh
+# 或只装 CRD:
+#   bash kubernetes/gateway-api/install.sh --skip-ngf
 # 形态 A: 单域名业务入口(一个团队 / 一个应用)
 # 形态 B: 通配符共享入口(多团队共用,平台团队创建)
 # ============================================================
@@ -36,30 +40,31 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: shared-gateway
-  namespace: default
+  name: test-gateway
+  namespace: nginx-gateway
 spec:
   gatewayClassName: nginx
   listeners:
-  - name: https
-    protocol: HTTPS
-    port: 443
-    hostname: "*.example.com"          # 通配符,允许所有一级子域名接入
-    tls:
-      mode: Terminate
-      certificateRefs:
-      - name: wildcard-example-com-tls  # 通配符证书 Secret
-    allowedRoutes:
-      namespaces:
-        from: All                       # 多团队共用放开 All;要收紧用 Selector
-        # from: Selector               # 按 namespace 标签精确控制
-        # selector:
-        #   matchLabels:
-        #     gateway: enabled
-  - name: http
-    protocol: HTTP
-    port: 80
-    hostname: "*.example.com"
-    allowedRoutes:
-      namespaces:
-        from: All
+    # HTTP 明文入口(可选:后面配合 HTTPRoute 做 301 跳转到 https)
+    - name: http
+      port: 80
+      protocol: HTTP
+      hostname: "*.wishfoxs.com"
+      allowedRoutes:
+        namespaces:
+          from: All          # 允许其他 namespace 的 HTTPRoute 挂进来,按需改成 Same
+
+    # HTTPS,通配符域名,TLS 终止
+    - name: https
+      port: 443
+      protocol: HTTPS
+      hostname: "*.wishfoxs.com"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: wishfox   # 你自己建的 Secret 名字
+            # namespace 不填默认取当前 Gateway 所在 ns(nginx-gateway)
+      allowedRoutes:
+        namespaces:
+          from: All

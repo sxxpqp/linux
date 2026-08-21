@@ -48,21 +48,46 @@ Kubernetes 新一代流量入口标准(`GatewayClass` / `Gateway` / `Route`),Ing
 | `backendRefs[].weight`     | 权重分流(灰度)                                                 | 90/10                                   |
 | `timeouts` / `retry`     | 超时 / 重试 —— 规则级内建字段(v1.1+),不是 annotation         | `request: 30s`                        |
 
-## 3. 安装
+## 3. 安装 / 卸载
 
-### 3.1 装 CRD(每集群一次)
+### 3.1 一键脚本(推荐)
 
 ```bash
-# 最新 stable: v1.5.x(2026-04)—— 走内网 Nexus(github release → raw-github 代理)
-kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/kubernetes-sigs/gateway-api/releases/download/v1.5.0/standard-install.yaml
+# 安装 standard CRD + NGINX Gateway Fabric
+bash kubernetes/gateway-api/install.sh
 
+# 需要实验通道(TCPRoute / UDPRoute / TLSRoute / GRPCRoute)
+bash kubernetes/gateway-api/install.sh --experimental
+
+# 只装 CRD,先不装控制器
+bash kubernetes/gateway-api/install.sh --skip-ngf
+```
+
+卸载:
+
+```bash
+# 默认 dry-run
+bash kubernetes/gateway-api/uninstall.sh
+
+# 真删 NGF + standard CRD
+bash kubernetes/gateway-api/uninstall.sh --apply
+
+# 只卸载 NGF,保留 Gateway API CRD
+bash kubernetes/gateway-api/uninstall.sh --apply --keep-crds
+```
+
+### 3.2 手工装 CRD(每集群一次)
+
+```bash
+# 示例版本 v1.4.0 —— 走内网 Nexus(github release → raw-github 代理)
+kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/kubernetes-sigs/gateway-api/releases/download/v1.4.0/standard-install.yaml
 # 需要 TCPRoute / UDPRoute / TLSRoute(实验通道)才装这个:
-kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/kubernetes-sigs/gateway-api/releases/download/v1.5.0/experimental-install.yaml
+kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/kubernetes-sigs/gateway-api/releases/download/v1.4.0/experimental-install.yaml
 ```
 
 > Nexus 仓库映射:`raw-github` = `github.com` 全站(release 下载走它);`raw-githubusercontent` = `raw.githubusercontent.com`(仓库 raw 文件)。这两个文件是 **release 资产**,仓库里没有合并的 install.yaml(`config/crd/standard|experimental/` 只有单个 CRD 文件),所以不走 raw-githubusercontent。
 
-### 3.2 装控制器(实现)
+### 3.3 手工装控制器(实现)
 
 | 实现                                      | 适合                        | GatewayClass | 说明                                                         |
 | ----------------------------------------- | --------------------------- | ------------ | ------------------------------------------------------------ |
@@ -81,15 +106,23 @@ kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubuserco
 
 > ⚠ 注意:这两个文件是**仓库 raw 文件**,不是 release 资产 —— 官方文档里给的 `releases/download/vX.Y.Z/nginx-gateway.yaml` 是**404 不存在的**,照抄会失败。要降级就用 `v1.5.1` 替换 URL 里的 `v2.6.7`,路径结构相同。
 
+**Helm 安装**(这条最小安装命令已验证):
+
+```bash
+helm upgrade --install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
+  --version 2.4.2 \
+  --create-namespace -n nginx-gateway \
+  --wait
+```
+
 **Helm 安装 + 数据面 DS 模式**(与 ingress-nginx DS+hostNetwork 对齐):
 
 ```bash
-# ⚠ nginx.kind 大小写敏感:必须 daemonSet(大写 S),写 daemonset 会被 values schema 拒绝
-helm install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
-  --version 2.6.7 \
-  --create-namespace \
-  -n nginx-gateway \
+helm upgrade --install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
+  --version 2.4.2 \
+  --create-namespace -n nginx-gateway \
   --set nginx.kind=daemonSet \
+  --set-string nginx.pod.nodeSelector."node-role\.kubernetes\.io/edge"=true \
   --wait
 ```
 
@@ -129,6 +162,7 @@ kubectl -n ingress-nginx set env deployment/ingress-nginx-controller \
 ```bash
 # CRD / 控制器就绪
 kubectl get gatewayclass
+kubectl -n nginx-gateway get pods -o wide
 
 # Gateway 状态(没 Accepted/Programmed 先查这里)
 kubectl get gateway -A
