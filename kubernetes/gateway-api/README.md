@@ -98,13 +98,13 @@ kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/kuber
 **NGINX Gateway Fabric 安装**(内网 Nexus 改写,已验证文件路径):
 
 ```bash
-# CRD(两个 tag 都是 deploy/crds.yaml)
-kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/nginx/nginx-gateway-fabric/v2.6.7/deploy/crds.yaml
+# CRD(这些 CRD 较大,用 server-side apply 避免 last-applied 注解超长)
+kubectl apply --server-side -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/nginx/nginx-gateway-fabric/v2.4.2/deploy/crds.yaml
 # 控制器(两个 tag 都是 deploy/default/deploy.yaml)
-kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/nginx/nginx-gateway-fabric/v2.6.7/deploy/default/deploy.yaml
+kubectl apply -f https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/nginx/nginx-gateway-fabric/v2.4.2/deploy/default/deploy.yaml
 ```
 
-> ⚠ 注意:这两个文件是**仓库 raw 文件**,不是 release 资产 —— 官方文档里给的 `releases/download/vX.Y.Z/nginx-gateway.yaml` 是**404 不存在的**,照抄会失败。要降级就用 `v1.5.1` 替换 URL 里的 `v2.6.7`,路径结构相同。
+> ⚠ 注意:这两个文件是**仓库 raw 文件**,不是 release 资产 —— 官方文档里给的 `releases/download/vX.Y.Z/nginx-gateway.yaml` 是**404 不存在的**,照抄会失败。要降级就用 `v1.5.1` 替换 URL 里的 `v2.4.2`,路径结构相同。
 
 **Helm 安装**(这条最小安装命令已验证):
 

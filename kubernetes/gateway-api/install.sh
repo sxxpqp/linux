@@ -2,7 +2,7 @@
 # 系统: Kubernetes (K8s) — 安装 Gateway API CRD + NGINX Gateway Fabric
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/gateway-api/install.sh
 # 用法: curl -sL <URL> -o install.sh && bash install.sh [选项]
-
+# 支持k8s >=1.28
 set -euo pipefail
 
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
@@ -103,9 +103,9 @@ log "[3/5] 安装 NGINX Gateway Fabric"
 if [ "$SKIP_NGF" = "true" ]; then
   warn "按参数跳过 NGF 控制器安装"
 else
-  run "kubectl apply -f $NGF_CRDS_URL"
+  run "kubectl apply --server-side -f $NGF_CRDS_URL"
   run "kubectl apply -f $NGF_DEPLOY_URL"
-  ok "NGF YAML 已 apply"
+  ok "NGF CRD 已用 server-side apply,控制器 YAML 已 apply"
 fi
 
 log "[4/5] 等待控制器 ready"
