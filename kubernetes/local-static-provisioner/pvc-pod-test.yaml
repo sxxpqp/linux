@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-ssd-test-pvc
+  namespace: local-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-ssd
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: local-ssd-test-pod
+  namespace: local-storage
+spec:
+  restartPolicy: Never
+  containers:
+    - name: test
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          echo hello-local-ssd > /data/test.txt
+          ls -l /data
+          sleep 36000
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: local-ssd-test-pvc
