@@ -6,6 +6,8 @@
 # 说明:
 #   - 本脚本只负责 K8s 侧部署,不负责节点磁盘 mkfs / mount / /etc/fstab
 #   - 节点需提前准备好本地目录,例如 /mnt/disks/ssd1/vol1
+#   - 盘规划建议:统一挂载到 /mnt/disks/<disk>,每块盘再划分 /mnt/disks/<disk>/<vol>
+#   - 后续新增磁盘时,继续新增 /mnt/disks/<disk>/<vol>,K8s 侧通常无需改脚本参数
 #   - StorageClass 默认: local-ssd
 #   - 节点标签默认: local-storage=ssd
 
