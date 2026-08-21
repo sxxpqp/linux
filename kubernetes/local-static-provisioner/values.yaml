@@ -1,5 +1,7 @@
 # local-static-provisioner Helm values
-# 场景: 3 节点本地 SSD,通过 local-static-provisioner 自动发现 /mnt/disks 下的本地卷目录
+# 场景: 3 节点本地 SSD,通过 local-static-provisioner 自动发现 /mnt/disks 下的本地挂载点
+# 生产建议:一块盘/分区一个挂载点,例如 /mnt/disks/ssd1、/mnt/disks/ssd2
+# 多块同类 SSD 共用同一个 local-ssd StorageClass,Pod 副本分散靠 workload 自己的 anti-affinity / topology spread
 
 nameOverride: ""
 fullnameOverride: ""

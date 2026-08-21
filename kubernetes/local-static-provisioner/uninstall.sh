@@ -6,6 +6,7 @@
 # 说明:
 #   - 默认 dry-run,加 --apply 才真删
 #   - 默认只卸载 Helm release / namespace 内组件,不删节点本地数据
+#   - 生产默认建议配合 reclaimPolicy=Retain 使用,删除 PVC/PV 后仍需人工检查并回收本地目录
 #   - 不自动删 PV/PVC/节点本地目录,危险动作需显式参数开启
 
 set -euo pipefail
@@ -40,6 +41,11 @@ usage() {
   --remove-node-labels       同时移除目标节点上的标签
   --wait-timeout=180s        删除等待超时,默认 180s
   -h, --help                 显示帮助
+
+生产说明:
+  - 本脚本只卸载 provisioner 组件,不会自动清空节点本地目录
+  - reclaimPolicy=Retain 时,删除 PVC/PV 后仍需人工检查并清理本地目录再复用
+  - 多块同类 SSD 共用一个 StorageClass 即可,不要把卸载当成数据回收动作
 
 示例:
   bash uninstall.sh
@@ -96,6 +102,7 @@ ok "kubectl / helm 可用"
 [ "$APPLY" != "true" ] && warn "DRY-RUN 模式,只打印不执行"
 warn "默认不会删除节点本地目录/数据,例如 /mnt/disks/*"
 warn "默认不会删除已有 PV/PVC,避免误删本地数据映射"
+warn "生产建议把卸载和数据回收分开做:先卸载组件,再人工检查本地目录是否可复用"
 
 log "[2/5] 删除测试资源(可选)"
 if [ "$DELETE_TEST_PVC" = "true" ]; then
@@ -173,3 +180,4 @@ echo "保留说明:"
 echo "  - 节点本地目录和数据不会自动删除"
 echo "  - 已发现的 PV 不会自动删除"
 echo "  - StorageClass / 测试 PVC / 节点标签只有显式参数才会删除"
+echo "  - 生产若采用 reclaimPolicy=Retain,删除 PVC/PV 后仍需人工检查并清理本地目录"

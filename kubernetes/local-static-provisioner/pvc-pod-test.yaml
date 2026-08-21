@@ -1,12 +1,14 @@
+# 默认示例模板: install.sh 会把 __NAMESPACE__ / __STORAGE_CLASS_NAME__ 渲染后再 apply
+# 如直接 kubectl apply -f 本文件,请先手工替换占位符
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: local-ssd-test-pvc
-  namespace: local-storage
+  namespace: __NAMESPACE__
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: local-ssd
+  storageClassName: __STORAGE_CLASS_NAME__
   resources:
     requests:
       storage: 1Gi
@@ -15,7 +17,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: local-ssd-test-pod
-  namespace: local-storage
+  namespace: __NAMESPACE__
 spec:
   restartPolicy: Never
   containers:
