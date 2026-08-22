@@ -1,13 +1,13 @@
 # manual local PV combined template
 # 场景: 以后自己新增 SSD/业务目录时,通过环境变量一次性生成 StorageClass + PV + PVC
 # 用法:
-#   export STORAGE_CLASS_NAME=local-mysql
-#   export PV_NAME=local-pv-mysql-node1
-#   export PVC_NAME=mysql-local-pvc-0
-#   export NAMESPACE=mysql
+#   export STORAGE_CLASS_NAME=local-ssd
+#   export PV_NAME=local-pv-ssd-node1
+#   export PVC_NAME=ssd-local-pvc-0
+#   export NAMESPACE=default
 #   export PV_SIZE=200Gi
-#   export LOCAL_PATH=/DATA/mysql/mysql-0
-#   export NODE_NAME=node1
+#   export LOCAL_PATH=/mnt/disks/ssd1/ssd
+#   export NODE_NAME=node4
 #   envsubst < sc-pv-pvc-local-ssd.tpl.yaml | kubectl apply -f -
 #
 # 注意:
