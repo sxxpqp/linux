@@ -1,0 +1,28 @@
+# manual local PV for MySQL on node1
+# 注意:
+#   - 这是 manual local PV,不要和 local-static-provisioner 共用同一个 StorageClass
+#   - 同一块大盘下多个目录只是逻辑隔离,不是物理隔离
+#   - capacity.storage 只是账面容量,不是硬 quota;不做 quota 时仍可能写满整块盘
+#   - 先在 node1 上准备目录并校验权限: /DATA/mysql/mysql-0
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-pv-mysql-node1
+spec:
+  capacity:
+    storage: 200Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-mysql
+  local:
+    path: /DATA/mysql/mysql-0
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - node1

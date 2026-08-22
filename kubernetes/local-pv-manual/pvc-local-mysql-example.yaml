@@ -1,0 +1,17 @@
+# PVC example for MySQL manual local PV
+# 用途: 演示业务如何申请 local-mysql;后续 StatefulSet/Helm chart 里按需复用
+# 注意:
+#   - 这是 manual local PV 示例,不绑定具体 chart
+#   - PVC 只会从 storageClassName=local-mysql 的 PV 中选择
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-local-pvc-example
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-mysql
+  resources:
+    requests:
+      storage: 200Gi

@@ -1,0 +1,13 @@
+# manual local PV for MySQL
+# 场景: 3 节点、每节点 1 块大盘,按业务目录手写 Local PV,后续给 MySQL 集群使用
+# 注意:
+#   - 这是 manual local PV,不要和 local-static-provisioner 共用同一个 StorageClass
+#   - 同一块大盘下多个目录只是逻辑隔离,不是物理隔离
+#   - capacity.storage 只是账面容量,不是硬 quota;不做 quota 时仍可能写满整块盘
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-mysql
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain

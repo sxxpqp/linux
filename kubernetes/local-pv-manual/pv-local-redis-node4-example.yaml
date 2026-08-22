@@ -1,0 +1,29 @@
+# manual local PV example for Redis on node4
+# 注意:
+#   - 这是 manual local PV,不要和 local-static-provisioner 共用同一个 StorageClass
+#   - 同一块大盘下多个目录只是逻辑隔离,不是物理隔离
+#   - capacity.storage 只是账面容量,不是硬 quota;不做 quota 时仍可能写满整块盘
+#   - 这是示例模板: 如需同节点第二个 Redis 实例,复制本文件并把名称/目录改成 -b
+#   - 主从/副本打散靠 StatefulSet/Helm 的反亲和或 topology spread,不是 PV 自动分布
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-pv-redis-node4-a
+spec:
+  capacity:
+    storage: 50Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-redis
+  local:
+    path: /DATA/redis/redis-2
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - node4
