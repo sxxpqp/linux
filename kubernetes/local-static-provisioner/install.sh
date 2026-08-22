@@ -183,8 +183,14 @@ log "[4/5] 等待 DaemonSet ready"
 if [ "$DRY_RUN" = "true" ]; then
   warn "[dry-run] 跳过等待"
 else
-  kubectl -n "$NAMESPACE" rollout status ds/${RELEASE_NAME}-local-volume-provisioner --timeout="$WAIT_TIMEOUT"
-  ok "DaemonSet ready"
+  if kubectl -n "$NAMESPACE" rollout status ds/${RELEASE_NAME}-local-static-provisioner --timeout="$WAIT_TIMEOUT"; then
+    ok "DaemonSet ready"
+  else
+    err "DaemonSet 未在 ${WAIT_TIMEOUT} 内 ready,输出现场信息"
+    kubectl -n "$NAMESPACE" get ds,pod -o wide 2>/dev/null || true
+    kubectl -n "$NAMESPACE" get events --sort-by=.lastTimestamp 2>/dev/null | tail -n 30 || true
+    exit 1
+  fi
 fi
 
 log "[5/5] 验证"
