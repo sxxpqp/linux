@@ -1,0 +1,41 @@
+# manual local PV test Pod template
+# 用途: 绑定已创建好的 PVC,验证 manual local PV 是否可读写
+# 用法:
+#   export TEST_POD_NAME=local-ssd-test-pod
+#   export PVC_NAME=ssd-local-pvc-0
+#   export NAMESPACE=default
+#   envsubst < pod-local-pvc-test.tpl.yaml | kubectl apply -f -
+#
+# 验证:
+#   kubectl get pod -n ${NAMESPACE} ${TEST_POD_NAME} -o wide
+#   kubectl exec -n ${NAMESPACE} ${TEST_POD_NAME} -- ls -lah /data
+#   kubectl exec -n ${NAMESPACE} ${TEST_POD_NAME} -- cat /data/test.txt
+#
+# 清理:
+#   envsubst < pod-local-pvc-test.tpl.yaml | kubectl delete -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${TEST_POD_NAME}
+  namespace: ${NAMESPACE}
+spec:
+  restartPolicy: Never
+  containers:
+    - name: test
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          date > /data/test.txt
+          echo hello-manual-local-pv >> /data/test.txt
+          ls -lah /data
+          sleep 36000
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: ${PVC_NAME}
