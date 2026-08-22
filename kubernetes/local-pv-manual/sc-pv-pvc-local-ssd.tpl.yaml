@@ -1,6 +1,20 @@
 # manual local PV combined template
 # 场景: 以后自己新增 SSD/业务目录时,通过环境变量一次性生成 StorageClass + PV + PVC
 # 用法:
+#   # 方式1: 直接用默认值
+#   bash apply-local-ssd-template.sh
+#
+#   # 方式2: 临时覆盖变量
+#   STORAGE_CLASS_NAME=local-ssd \
+#   PV_NAME=local-pv-ssd-node1 \
+#   PVC_NAME=ssd-local-pvc-0 \
+#   NAMESPACE=default \
+#   PV_SIZE=200Gi \
+#   LOCAL_PATH=/mnt/disks/ssd1/ssd \
+#   NODE_NAME=node4 \
+#   bash apply-local-ssd-template.sh
+#
+#   # 方式3: 手工 envsubst
 #   export STORAGE_CLASS_NAME=local-ssd
 #   export PV_NAME=local-pv-ssd-node1
 #   export PVC_NAME=ssd-local-pvc-0
