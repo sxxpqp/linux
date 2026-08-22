@@ -1,0 +1,61 @@
+# manual local PV combined template
+# 场景: 以后自己新增 SSD/业务目录时,通过环境变量一次性生成 StorageClass + PV + PVC
+# 用法:
+#   export STORAGE_CLASS_NAME=local-mysql
+#   export PV_NAME=local-pv-mysql-node1
+#   export PVC_NAME=mysql-local-pvc-0
+#   export NAMESPACE=mysql
+#   export PV_SIZE=200Gi
+#   export LOCAL_PATH=/DATA/mysql/mysql-0
+#   export NODE_NAME=node1
+#   envsubst < sc-pv-pvc-local-ssd.tpl.yaml | kubectl apply -f -
+#
+# 注意:
+#   - 这是 manual local PV,不要和 local-static-provisioner 共用同一个 StorageClass
+#   - 同一块大盘下多个目录只是逻辑隔离,不是物理隔离
+#   - capacity.storage 只是账面容量,不是硬 quota;不做 quota 时仍可能写满整块盘
+#   - 如果同名 StorageClass 已存在,apply 时只会更新同名对象,不要混用不同语义
+#   - WaitForFirstConsumer 场景下,若还没有 Pod 消费 PVC,PVC 先 Pending 是正常的
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ${STORAGE_CLASS_NAME}
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ${PV_NAME}
+spec:
+  capacity:
+    storage: ${PV_SIZE}
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ${STORAGE_CLASS_NAME}
+  local:
+    path: ${LOCAL_PATH}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - ${NODE_NAME}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${PVC_NAME}
+  namespace: ${NAMESPACE}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ${STORAGE_CLASS_NAME}
+  resources:
+    requests:
+      storage: ${PV_SIZE}
