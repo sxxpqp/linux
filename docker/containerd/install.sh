@@ -6,31 +6,34 @@ export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 
 echo "开始安装 containerd ..."
 
-CONTAINERD_PKG_BASE_URL="${CONTAINERD_PKG_BASE_URL:-https://chfs.sxxpqp.top:8443/chfs/shared/docker/containerd}"
-CONTAINERD_VERSION="${CONTAINERD_VERSION:-1.7.18}"
+CONTAINERD_VERSION="${CONTAINERD_VERSION:-2.1.3}"
 CNI_PLUGINS_VERSION="${CNI_PLUGINS_VERSION:-1.5.1}"
+RUNC_VERSION="${RUNC_VERSION:-1.1.10}"
 RUNC_BINARY="${RUNC_BINARY:-runc.amd64}"
 CONTAINERD_CONFIG="/etc/containerd/config.toml"
 CERTS_DIR="/etc/containerd/certs.d"
-CRI_CONTAINERD_CNI_PKG="cri-containerd-cni-${CONTAINERD_VERSION}-linux-amd64.tar.gz"
+CONTAINERD_PKG="containerd-${CONTAINERD_VERSION}-linux-amd64.tar.gz"
 CNI_PLUGINS_PKG="cni-plugins-linux-amd64-v${CNI_PLUGINS_VERSION}.tgz"
+CONTAINERD_DOWNLOAD_URL="${CONTAINERD_DOWNLOAD_URL:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/containerd/containerd/releases/download/v${CONTAINERD_VERSION}/${CONTAINERD_PKG}}"
+CNI_PLUGINS_DOWNLOAD_URL="${CNI_PLUGINS_DOWNLOAD_URL:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/containernetworking/plugins/releases/download/v${CNI_PLUGINS_VERSION}/${CNI_PLUGINS_PKG}}"
+RUNC_DOWNLOAD_URL="${RUNC_DOWNLOAD_URL:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/opencontainers/runc/releases/download/v${RUNC_VERSION}/${RUNC_BINARY}}"
 
 # 下载所需应用包
-wget -O "${CRI_CONTAINERD_CNI_PKG}" "${CONTAINERD_PKG_BASE_URL}/${CRI_CONTAINERD_CNI_PKG}"
-wget -O "${CNI_PLUGINS_PKG}" "${CONTAINERD_PKG_BASE_URL}/${CNI_PLUGINS_PKG}"
-wget -O "${RUNC_BINARY}" "${CONTAINERD_PKG_BASE_URL}/${RUNC_BINARY}"
+wget -O "${CONTAINERD_PKG}" "${CONTAINERD_DOWNLOAD_URL}"
+wget -O "${CNI_PLUGINS_PKG}" "${CNI_PLUGINS_DOWNLOAD_URL}"
+wget -O "${RUNC_BINARY}" "${RUNC_DOWNLOAD_URL}"
 
 # centos7 要升级libseccomp  runc二进制不需要这个包 静态编译了
 # yum -y install https://mirrors.tuna.tsinghua.edu.cn/centos/8-stream/BaseOS/x86_64/os/Packages/libseccomp-2.5.1-1.el8.x86_64.rpm
 
 
 # 创建 cni / containerd 所需目录
-mkdir -p /etc/cni/net.d /opt/cni/bin /etc/containerd "$CERTS_DIR/docker.io"
+mkdir -p /etc/cni/net.d /opt/cni/bin /etc/containerd /usr/local "$CERTS_DIR/docker.io"
 # 解压 cni 二进制包
 tar xf "${CNI_PLUGINS_PKG}" -C /opt/cni/bin/
 
 # 解压 containerd
-tar -xzf "${CRI_CONTAINERD_CNI_PKG}" -C /
+tar -xzf "${CONTAINERD_PKG}" -C /usr/local
 
 
 # 创建服务启动文件

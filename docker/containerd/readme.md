@@ -49,14 +49,14 @@ bash install.sh
 
 | 步骤 | 做了什么 |
 |---|---|
-| 1 | 下载 `cri-containerd-cni-1.7.18` + `cni-plugins-v1.5.1` |
-| 2 | 解压到 `/usr/local/bin` + `/opt/cni/bin` |
+| 1 | 下载 `containerd-2.1.3-linux-amd64.tar.gz` + `cni-plugins-v1.5.1` + `runc` |
+| 2 | 解压 `containerd` 到 `/usr/local`，解压 CNI 到 `/opt/cni/bin` |
 | 3 | 创建 `/etc/systemd/system/containerd.service` |
 | 4 | `containerd config default` 生成 `config.toml` |
-| 5 | sed: `SystemdCgroup=true` / `sandbox_image` 改代理 / `config_path` 开 certs.d |
-| 6 | 写 `/etc/modules-load.d/k8s.conf`(`br_netfilter`) |
+| 5 | sed: `SystemdCgroup=true` / `sandbox_image` 改阿里源 / `config_path` 开 certs.d |
+| 6 | 写 `/etc/modules-load.d/k8s.conf`(`overlay + br_netfilter`) |
 | 7 | 写 `/etc/sysctl.d/k8s.conf`(`ip_forward + bridge iptables`) |
-| 8 | `systemctl enable --now` + 拉 runc |
+| 8 | 安装 `runc` + `systemctl enable && restart` |
 
 ### config.toml 关键修改
 
@@ -64,8 +64,8 @@ bash install.sh
 # cgroup 对齐 kubelet
 sed -i 's|SystemdCgroup = false|SystemdCgroup = true|' /etc/containerd/config.toml
 
-# sandbox_image 走代理
-sed -i 's|registry.k8s.io/pause|k8s.ihome.sxxpqp.top:8443/pause|' /etc/containerd/config.toml
+# sandbox_image 走阿里 direct fallback
+sed -i 's|registry.k8s.io/pause|registry.aliyuncs.com/google_containers/pause|' /etc/containerd/config.toml
 
 # 开 certs.d
 sed -i 's|config_path = ""|config_path = "/etc/containerd/certs.d"|' /etc/containerd/config.toml
@@ -219,4 +219,4 @@ ctr -n k8s.io image pull quay.io/metallb/controller:v0.14.8
 | `ImagePullBackOff` | registry 不通或 hosts.toml 没配 | `ctr -n k8s.io image pull` 手动测 |
 | hosts.toml 不生效 | `config.toml` `config_path = ""` | 改成 `"/etc/containerd/certs.d"` + restart |
 | `SystemdCgroup` 没对齐 | kubelet 用 cgroupfs | `config.toml` 里 `SystemdCgroup = true` |
-| `sandbox_image` 拉不到 | `registry.k8s.io/pause` 国内不通 | 替换为 `k8s.ihome.sxxpqp.top:8443/pause:3.9` |
+| `sandbox_image` 拉不到 | `registry.k8s.io/pause` 国内不通 | 替换为 `registry.aliyuncs.com/google_containers/pause:3.9` |
