@@ -69,11 +69,11 @@ echo "已生成 $CONTAINERD_CONFIG"
 
 # 修改 Containerd 的配置文件
 sed -i "s#SystemdCgroup\ \=\ false#SystemdCgroup\ \=\ true#g" "$CONTAINERD_CONFIG"
-grep SystemdCgroup "$CONTAINERD_CONFIG"
+grep -nE 'SystemdCgroup|systemd_cgroup' "$CONTAINERD_CONFIG" || echo "WARN: 未找到 SystemdCgroup，需按当前 containerd 版本检查配置结构"
 sed -i "s#registry.k8s.io#registry.aliyuncs.com/google_containers#g" "$CONTAINERD_CONFIG"
-grep -E 'sandbox_image|sandbox =' "$CONTAINERD_CONFIG"
+grep -nE 'sandbox_image|sandbox =' "$CONTAINERD_CONFIG" || echo "WARN: 未找到 sandbox_image，需按当前 containerd 版本检查配置结构"
 sed -i "s#config_path\ \=\ \"\"#config_path\ \=\ \"$CERTS_DIR\"#g" "$CONTAINERD_CONFIG"
-grep certs.d "$CONTAINERD_CONFIG"
+grep -nE 'config_path|certs\.d' "$CONTAINERD_CONFIG" || echo "WARN: 未找到 config_path，需按当前 containerd 版本检查配置结构"
 
 
 # 配置加速器
