@@ -7,7 +7,7 @@ export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 echo "开始安装 containerd ..."
 
 CONTAINERD_PKG_BASE_URL="${CONTAINERD_PKG_BASE_URL:-https://chfs.sxxpqp.top:8443/chfs/shared/docker/containerd}"
-CONTAINERD_VERSION="${CONTAINERD_VERSION:-1.7.18}"
+CONTAINERD_VERSION="${CONTAINERD_VERSION:-2.1.3}"
 CNI_PLUGINS_VERSION="${CNI_PLUGINS_VERSION:-1.5.1}"
 RUNC_BINARY="${RUNC_BINARY:-runc.amd64}"
 CONTAINERD_CONFIG="/etc/containerd/config.toml"
