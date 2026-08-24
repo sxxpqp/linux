@@ -64,13 +64,14 @@ EOF
 
 # 创建 Containerd 的配置文件
 cp /usr/local/bin/containerd /usr/bin/containerd
-containerd config default | tee "$CONTAINERD_CONFIG"
+containerd config default > "$CONTAINERD_CONFIG"
+echo "已生成 $CONTAINERD_CONFIG"
 
 # 修改 Containerd 的配置文件
 sed -i "s#SystemdCgroup\ \=\ false#SystemdCgroup\ \=\ true#g" "$CONTAINERD_CONFIG"
 grep SystemdCgroup "$CONTAINERD_CONFIG"
 sed -i "s#registry.k8s.io#registry.aliyuncs.com/google_containers#g" "$CONTAINERD_CONFIG"
-grep sandbox_image "$CONTAINERD_CONFIG"
+grep -E 'sandbox_image|sandbox =' "$CONTAINERD_CONFIG"
 sed -i "s#config_path\ \=\ \"\"#config_path\ \=\ \"$CERTS_DIR\"#g" "$CONTAINERD_CONFIG"
 grep certs.d "$CONTAINERD_CONFIG"
 

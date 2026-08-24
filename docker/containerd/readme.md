@@ -61,8 +61,12 @@ bash install.sh
 ### config.toml 关键修改
 
 ```bash
-# cgroup 对齐 kubelet
-sed -i 's|SystemdCgroup = false|SystemdCgroup = true|' /etc/containerd/config.toml
+# 创建 Containerd 的配置文件
+cp /usr/local/bin/containerd /usr/bin/containerd
+containerd config default > /etc/containerd/config.toml
+
+# 确认已生成
+ls -l /etc/containerd/config.toml
 
 # sandbox_image 走阿里 direct fallback
 sed -i 's|registry.k8s.io/pause|registry.aliyuncs.com/google_containers/pause|' /etc/containerd/config.toml
