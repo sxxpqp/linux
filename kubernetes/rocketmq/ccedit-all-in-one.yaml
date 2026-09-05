@@ -176,7 +176,7 @@ spec:
         storageClassName: longhorn
         resources:
           requests:
-            storage: 10Gi
+            storage: 100Gi
 
 # -----------------------------------------------
 # Broker 配置
@@ -420,7 +420,7 @@ spec:
         storageClassName: longhorn
         resources:
           requests:
-            storage: 10Gi
+            storage: 100Gi
 
 ---
 apiVersion: v1
@@ -557,7 +557,7 @@ spec:
         storageClassName: longhorn
         resources:
           requests:
-            storage: 10Gi
+            storage: 100Gi
     - metadata:
         name: logs
       spec:
@@ -565,7 +565,7 @@ spec:
         storageClassName: longhorn
         resources:
           requests:
-            storage: 10Gi
+            storage: 100Gi
 
 ---
 apiVersion: v1
@@ -710,7 +710,7 @@ spec:
         storageClassName: longhorn
         resources:
           requests:
-            storage: 10Gi
+            storage: 100Gi
 
 # -----------------------------------------------
 # Proxy

@@ -210,7 +210,28 @@ kubectl -n ingress-nginx logs ds/ingress-nginx-controller --tail=100 \
 | 路由器只 1 个 nexthop(ECMP 没生效) | B | 路由器没开 ECMP / 只 1 个节点宣告 | FRR: `bgp bestpath as-path multipath-relax` + `maximum-paths`;`externalTrafficPolicy: Local` + 多节点跑 DS |
 | 流量全到一个节点 | B | 路由器哈希是 L3(默认 src_ip),压测单源时全到一个 nexthop | Linux: `sysctl -w net.ipv4.fib_multipath_hash_policy=1` 改 L3+L4 |
 | admission webhook 报 `no endpoints available` | A/B | 卸载残留 webhook 配置,backend 已死 | `k8s-cleanup-stuck` skill 详述,清残留 webhook |
+| 带 `configuration-snippet` / `server-snippet` 的 Ingress 被拒绝 | A/B | v1.12+ 默认按注解风险等级拦截高危 snippet,只开 `allow-snippet-annotations` 还不够 | 确认信任 Ingress 作者后,patch controller ConfigMap: `annotations-risk-level=Critical` |
 | ns 卡 Terminating | A/B | finalizer 卡住 | 见 `k8s-cleanup-stuck` skill 或 [uninstall.sh](uninstall.sh) 已自动剥 |
+
+### snippet 注解风险等级补丁
+
+如果 Ingress 里要用 `configuration-snippet` / `server-snippet` 等高风险注解,需要同时开启 snippet 并把 annotation 风险等级放到 `Critical`:
+
+```bash
+kubectl patch cm ingress-nginx-controller -n ingress-nginx \
+  --type merge \
+  -p '{"data":{"annotations-risk-level":"Critical"}}'
+
+kubectl -n ingress-nginx get cm ingress-nginx-controller -o yaml \
+  | grep -E 'allow-snippet-annotations|annotations-risk-level'
+```
+
+期望看到:
+
+```yaml
+allow-snippet-annotations: "true"
+annotations-risk-level: Critical
+```
 
 ---
 

@@ -361,8 +361,29 @@ curl -H "Host: demo.example.com" http://<打标签的节点 IP>/
 | `ImagePullBackOff: manifest digest doesn't match` | 镜像加速代理 rewrite 后 digest 跟上游不一致 | yaml 里去掉 `@sha256:...` 只用 tag,或者拉到本地后用真实 digest 替换 |
 | webhook 报 `connection refused` | controller Pod 没起来,admission Service 拨号失败 | 先确保 controller Pod Running,再 apply Ingress 资源 |
 | apply Ingress 报 `denied the request: ...` | webhook 拦截,nginx config 编译失败(典型是 `configuration-snippet` 注解写错) | 看错误信息修 yaml,这是 webhook 在帮你 |
+| 带 `configuration-snippet` / `server-snippet` 的 Ingress 被拒绝,提示 annotation group 风险等级不允许 | v1.12+ 默认按注解风险等级拦截高危 snippet,只开 `allow-snippet-annotations` 还不够 | 确认信任 Ingress 作者后,把 controller ConfigMap 的 `annotations-risk-level` patch 到 `Critical`,见下方命令 |
 | 装完 Pod Running 但外网超时 | 节点防火墙没开 80/443 | `firewall-cmd --add-port=80/tcp --permanent && firewall-cmd --reload` |
 | 创建 Ingress 后规则不生效 | yaml 里漏了 `ingressClassName: nginx` | 加上 |
+
+### snippet 注解风险等级补丁
+
+ingress-nginx v1.12+ 默认会按注解风险等级拦截高危 snippet。只配置 `allow-snippet-annotations: "true"` 时,`configuration-snippet` / `server-snippet` 这类注解仍可能被 webhook 拒绝。确认该集群的 Ingress 作者可信后,把 controller ConfigMap 的风险等级放到 `Critical`:
+
+```bash
+kubectl patch cm ingress-nginx-controller -n ingress-nginx \
+  --type merge \
+  -p '{"data":{"annotations-risk-level":"Critical"}}'
+
+kubectl -n ingress-nginx get cm ingress-nginx-controller -o yaml \
+  | grep -E 'allow-snippet-annotations|annotations-risk-level'
+```
+
+期望输出包含:
+
+```yaml
+allow-snippet-annotations: "true"
+annotations-risk-level: Critical
+```
 
 ---
 
