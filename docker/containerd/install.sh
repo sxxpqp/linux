@@ -83,14 +83,20 @@ insert_after_toml_section() {
   local tmp="${CONTAINERD_CONFIG}.tmp"
 
   awk -v section="$section" -v line="$line" '
-    $0 == section {
+    {
+      section_line = $0
+      sub(/^[[:space:]]*/, "", section_line)
+      sub(/[[:space:]]*$/, "", section_line)
+    }
+    section_line == section {
       print
       print line
+      found = 1
       next
     }
     { print }
-  ' "$CONTAINERD_CONFIG" > "$tmp"
-  mv "$tmp" "$CONTAINERD_CONFIG"
+    END { exit found ? 0 : 1 }
+  ' "$CONTAINERD_CONFIG" > "$tmp" && mv "$tmp" "$CONTAINERD_CONFIG"
 }
 
 ensure_systemd_cgroup() {
