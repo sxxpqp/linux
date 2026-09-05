@@ -4,8 +4,6 @@ set -euo pipefail
 
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 
-echo "开始安装 containerd ..."
-
 CONTAINERD_VERSION="${CONTAINERD_VERSION:-2.1.3}"
 CNI_PLUGINS_VERSION="${CNI_PLUGINS_VERSION:-1.5.1}"
 RUNC_VERSION="${RUNC_VERSION:-1.1.10}"
@@ -17,6 +15,17 @@ CNI_PLUGINS_PKG="cni-plugins-linux-amd64-v${CNI_PLUGINS_VERSION}.tgz"
 CONTAINERD_DOWNLOAD_URL="${CONTAINERD_DOWNLOAD_URL:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/containerd/containerd/releases/download/v${CONTAINERD_VERSION}/${CONTAINERD_PKG}}"
 CNI_PLUGINS_DOWNLOAD_URL="${CNI_PLUGINS_DOWNLOAD_URL:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/containernetworking/plugins/releases/download/v${CNI_PLUGINS_VERSION}/${CNI_PLUGINS_PKG}}"
 RUNC_DOWNLOAD_URL="${RUNC_DOWNLOAD_URL:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/opencontainers/runc/releases/download/v${RUNC_VERSION}/${RUNC_BINARY}}"
+
+case "$CONTAINERD_VERSION" in
+  1.*) CONTAINERD_CONFIG_MAJOR=1 ;;
+  2.*) CONTAINERD_CONFIG_MAJOR=2 ;;
+  *)
+    echo "ERROR: 当前脚本只显式支持 containerd 1.x 和 2.x，当前 CONTAINERD_VERSION=${CONTAINERD_VERSION}" >&2
+    exit 1
+    ;;
+esac
+
+echo "开始安装 containerd ${CONTAINERD_VERSION} ..."
 
 # 下载所需应用包
 wget -O "${CONTAINERD_PKG}" "${CONTAINERD_DOWNLOAD_URL}"
@@ -68,12 +77,143 @@ containerd config default > "$CONTAINERD_CONFIG"
 echo "已生成 $CONTAINERD_CONFIG"
 
 # 修改 Containerd 的配置文件
-sed -i "s#SystemdCgroup\ \=\ false#SystemdCgroup\ \=\ true#g" "$CONTAINERD_CONFIG"
-grep -nE 'SystemdCgroup|systemd_cgroup' "$CONTAINERD_CONFIG" || echo "WARN: 未找到 SystemdCgroup，需按当前 containerd 版本检查配置结构"
-sed -i "s#registry.k8s.io#registry.aliyuncs.com/google_containers#g" "$CONTAINERD_CONFIG"
-grep -nE 'sandbox_image|sandbox =' "$CONTAINERD_CONFIG" || echo "WARN: 未找到 sandbox_image，需按当前 containerd 版本检查配置结构"
-sed -i "s#config_path\ \=\ \"\"#config_path\ \=\ \"$CERTS_DIR\"#g" "$CONTAINERD_CONFIG"
-grep -nE 'config_path|certs\.d' "$CONTAINERD_CONFIG" || echo "WARN: 未找到 config_path，需按当前 containerd 版本检查配置结构"
+insert_after_toml_section() {
+  local section="$1"
+  local line="$2"
+  local tmp="${CONTAINERD_CONFIG}.tmp"
+
+  awk -v section="$section" -v line="$line" '
+    $0 == section {
+      print
+      print line
+      next
+    }
+    { print }
+  ' "$CONTAINERD_CONFIG" > "$tmp"
+  mv "$tmp" "$CONTAINERD_CONFIG"
+}
+
+ensure_systemd_cgroup() {
+  if grep -qE '^[[:space:]]*SystemdCgroup[[:space:]]*=' "$CONTAINERD_CONFIG"; then
+    sed -i -E 's#^([[:space:]]*)SystemdCgroup[[:space:]]*=.*#\1SystemdCgroup = true#' "$CONTAINERD_CONFIG"
+    return
+  fi
+
+  if grep -Fq '[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]' "$CONTAINERD_CONFIG"; then
+    insert_after_toml_section '[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]' '            SystemdCgroup = true'
+    return
+  fi
+
+  if grep -Fq '[plugins."io.containerd.cri.v1.runtime".containerd.runtimes.runc.options]' "$CONTAINERD_CONFIG"; then
+    insert_after_toml_section '[plugins."io.containerd.cri.v1.runtime".containerd.runtimes.runc.options]' '            SystemdCgroup = true'
+    return
+  fi
+
+  case "$CONTAINERD_CONFIG_MAJOR" in
+    1)
+      cat >> "$CONTAINERD_CONFIG" <<'EOF'
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+  SystemdCgroup = true
+EOF
+      ;;
+    *)
+      cat >> "$CONTAINERD_CONFIG" <<'EOF'
+
+[plugins."io.containerd.cri.v1.runtime".containerd.runtimes.runc.options]
+  SystemdCgroup = true
+EOF
+      ;;
+  esac
+}
+
+ensure_sandbox_image() {
+  local pause_image
+
+  case "$CONTAINERD_CONFIG_MAJOR" in
+    1) pause_image="${PAUSE_IMAGE:-registry.aliyuncs.com/google_containers/pause:3.8}" ;;
+    *) pause_image="${PAUSE_IMAGE:-registry.aliyuncs.com/google_containers/pause:3.10}" ;;
+  esac
+
+  if grep -qE '^[[:space:]]*sandbox_image[[:space:]]*=' "$CONTAINERD_CONFIG"; then
+    sed -i -E "s#^([[:space:]]*)sandbox_image[[:space:]]*=.*#\1sandbox_image = \"${pause_image}\"#" "$CONTAINERD_CONFIG"
+    return
+  fi
+
+  if grep -qE '^[[:space:]]*sandbox[[:space:]]*=' "$CONTAINERD_CONFIG"; then
+    sed -i -E "s#^([[:space:]]*)sandbox[[:space:]]*=.*#\1sandbox = \"${pause_image}\"#" "$CONTAINERD_CONFIG"
+    return
+  fi
+
+  if grep -Fq '[plugins."io.containerd.grpc.v1.cri"]' "$CONTAINERD_CONFIG"; then
+    insert_after_toml_section '[plugins."io.containerd.grpc.v1.cri"]' "  sandbox_image = \"${pause_image}\""
+    return
+  fi
+
+  if grep -Fq '[plugins."io.containerd.cri.v1.images".pinned_images]' "$CONTAINERD_CONFIG"; then
+    insert_after_toml_section '[plugins."io.containerd.cri.v1.images".pinned_images]' "  sandbox = \"${pause_image}\""
+    return
+  fi
+
+  case "$CONTAINERD_CONFIG_MAJOR" in
+    1)
+      cat >> "$CONTAINERD_CONFIG" <<EOF
+
+[plugins."io.containerd.grpc.v1.cri"]
+  sandbox_image = "${pause_image}"
+EOF
+      ;;
+    *)
+      cat >> "$CONTAINERD_CONFIG" <<EOF
+
+[plugins."io.containerd.cri.v1.images".pinned_images]
+  sandbox = "${pause_image}"
+EOF
+      ;;
+  esac
+}
+
+ensure_config_path() {
+  if grep -qE '^[[:space:]]*config_path[[:space:]]*=' "$CONTAINERD_CONFIG"; then
+    sed -i -E "s#^([[:space:]]*)config_path[[:space:]]*=.*#\1config_path = \"${CERTS_DIR}\"#" "$CONTAINERD_CONFIG"
+    return
+  fi
+
+  if grep -Fq '[plugins."io.containerd.grpc.v1.cri".registry]' "$CONTAINERD_CONFIG"; then
+    insert_after_toml_section '[plugins."io.containerd.grpc.v1.cri".registry]' "  config_path = \"${CERTS_DIR}\""
+    return
+  fi
+
+  if grep -Fq '[plugins."io.containerd.cri.v1.images".registry]' "$CONTAINERD_CONFIG"; then
+    insert_after_toml_section '[plugins."io.containerd.cri.v1.images".registry]' "  config_path = \"${CERTS_DIR}\""
+    return
+  fi
+
+  case "$CONTAINERD_CONFIG_MAJOR" in
+    1)
+      cat >> "$CONTAINERD_CONFIG" <<EOF
+
+[plugins."io.containerd.grpc.v1.cri".registry]
+  config_path = "${CERTS_DIR}"
+EOF
+      ;;
+    *)
+      cat >> "$CONTAINERD_CONFIG" <<EOF
+
+[plugins."io.containerd.cri.v1.images".registry]
+  config_path = "${CERTS_DIR}"
+EOF
+      ;;
+  esac
+}
+
+ensure_systemd_cgroup
+ensure_sandbox_image
+ensure_config_path
+
+grep -nE 'SystemdCgroup|systemd_cgroup' "$CONTAINERD_CONFIG" || { echo "ERROR: 未写入 SystemdCgroup" >&2; exit 1; }
+grep -nE 'sandbox_image|sandbox =' "$CONTAINERD_CONFIG" || { echo "ERROR: 未写入 sandbox_image" >&2; exit 1; }
+grep -nE 'config_path|certs\.d' "$CONTAINERD_CONFIG" || { echo "ERROR: 未写入 config_path" >&2; exit 1; }
 
 
 # 配置加速器

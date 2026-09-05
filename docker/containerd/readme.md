@@ -42,26 +42,43 @@ K8s Node
 ## 一、安装
 
 ```bash
+# 默认安装 containerd 2.1.3（2.x）
 bash install.sh
+
+# 如需安装 1.7 系列
+CONTAINERD_VERSION=1.7.18 bash install.sh
+
+# 如需指定其它 2.x 版本
+CONTAINERD_VERSION=2.1.3 bash install.sh
 ```
+
+> 当前脚本按主版本兼容 `1.x` 和 `2.x`（默认 `2.1.3`，1.x 示例 `1.7.18`）：`containerd config default` 生成的 `config.toml` 字段位置不同，脚本会按实际配置结构写入 `SystemdCgroup`、pause sandbox 镜像和 `certs.d`。
 
 脚本做 8 件事:
 
 | 步骤 | 做了什么 |
 |---|---|
-| 1 | 下载 `containerd-2.1.3-linux-amd64.tar.gz` + `cni-plugins-v1.5.1` + `runc` |
+| 1 | 默认下载 `containerd-2.1.3-linux-amd64.tar.gz`，也支持 `CONTAINERD_VERSION=1.7.18` 或其它 2.x 版本 |
 | 2 | 解压 `containerd` 到 `/usr/local`，解压 CNI 到 `/opt/cni/bin` |
 | 3 | 创建 `/etc/systemd/system/containerd.service` |
 | 4 | `containerd config default` 生成 `config.toml` |
-| 5 | sed: `SystemdCgroup=true` / `sandbox_image` 改阿里源 / `config_path` 开 certs.d |
+| 5 | 兼容写入 `SystemdCgroup=true` / pause sandbox 镜像改阿里源 / `config_path` 开 certs.d |
 | 6 | 写 `/etc/modules-load.d/k8s.conf`(`overlay + br_netfilter`) |
 | 7 | 写 `/etc/sysctl.d/k8s.conf`(`ip_forward + bridge iptables`) |
 | 8 | 安装 `runc` + `systemctl enable && restart` |
 
 ### config.toml 关键修改
 
+脚本不要只做 `sed 's/SystemdCgroup = false/SystemdCgroup = true/'`：`containerd 2.x` 的默认配置可能已经不再生成 `SystemdCgroup` 这一行，必须按版本和实际 section 兜底插入。
+
+| 版本 | CRI section | pause 字段 | cgroup 字段 |
+|---|---|---|---|
+| `1.7.18` | `[plugins."io.containerd.grpc.v1.cri"]` | `sandbox_image` | `[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]` 下 `SystemdCgroup = true` |
+| `2.x` | `[plugins."io.containerd.cri.v1.*]` | `pinned_images.sandbox` 或已有 sandbox 字段 | `[plugins."io.containerd.cri.v1.runtime".containerd.runtimes.runc.options]` 下 `SystemdCgroup = true` |
+
+手动检查：
+
 ```bash
-# 创建 Containerd 的配置文件
 cp /usr/local/bin/containerd /usr/bin/containerd
 containerd config default > /etc/containerd/config.toml
 
