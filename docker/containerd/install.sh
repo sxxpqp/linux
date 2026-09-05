@@ -104,8 +104,18 @@ ensure_systemd_cgroup() {
     return
   fi
 
+  if grep -Fq "[plugins.'io.containerd.grpc.v1.cri'.containerd.runtimes.runc.options]" "$CONTAINERD_CONFIG"; then
+    insert_after_toml_section "[plugins.'io.containerd.grpc.v1.cri'.containerd.runtimes.runc.options]" '            SystemdCgroup = true'
+    return
+  fi
+
   if grep -Fq '[plugins."io.containerd.cri.v1.runtime".containerd.runtimes.runc.options]' "$CONTAINERD_CONFIG"; then
     insert_after_toml_section '[plugins."io.containerd.cri.v1.runtime".containerd.runtimes.runc.options]' '            SystemdCgroup = true'
+    return
+  fi
+
+  if grep -Fq "[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc.options]" "$CONTAINERD_CONFIG"; then
+    insert_after_toml_section "[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc.options]" '            SystemdCgroup = true'
     return
   fi
 
@@ -150,8 +160,18 @@ ensure_sandbox_image() {
     return
   fi
 
+  if grep -Fq "[plugins.'io.containerd.grpc.v1.cri']" "$CONTAINERD_CONFIG"; then
+    insert_after_toml_section "[plugins.'io.containerd.grpc.v1.cri']" "  sandbox_image = \"${pause_image}\""
+    return
+  fi
+
   if grep -Fq '[plugins."io.containerd.cri.v1.images".pinned_images]' "$CONTAINERD_CONFIG"; then
     insert_after_toml_section '[plugins."io.containerd.cri.v1.images".pinned_images]' "  sandbox = \"${pause_image}\""
+    return
+  fi
+
+  if grep -Fq "[plugins.'io.containerd.cri.v1.images'.pinned_images]" "$CONTAINERD_CONFIG"; then
+    insert_after_toml_section "[plugins.'io.containerd.cri.v1.images'.pinned_images]" "  sandbox = \"${pause_image}\""
     return
   fi
 
@@ -184,8 +204,18 @@ ensure_config_path() {
     return
   fi
 
+  if grep -Fq "[plugins.'io.containerd.grpc.v1.cri'.registry]" "$CONTAINERD_CONFIG"; then
+    insert_after_toml_section "[plugins.'io.containerd.grpc.v1.cri'.registry]" "  config_path = \"${CERTS_DIR}\""
+    return
+  fi
+
   if grep -Fq '[plugins."io.containerd.cri.v1.images".registry]' "$CONTAINERD_CONFIG"; then
     insert_after_toml_section '[plugins."io.containerd.cri.v1.images".registry]' "  config_path = \"${CERTS_DIR}\""
+    return
+  fi
+
+  if grep -Fq "[plugins.'io.containerd.cri.v1.images'.registry]" "$CONTAINERD_CONFIG"; then
+    insert_after_toml_section "[plugins.'io.containerd.cri.v1.images'.registry]" "  config_path = \"${CERTS_DIR}\""
     return
   fi
 
