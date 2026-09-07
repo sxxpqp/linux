@@ -11,7 +11,6 @@
 #  registry.k8s.io      → k8s.ihome.sxxpqp.top:8443
 #  quay.io              → quay.ihome.sxxpqp.top:8443
 #  ghcr.io              → ghcr.ihome.sxxpqp.top:8443
-#  registry-1.docker.io → dockerhub.ihome.sxxpqp.top:8443
 #
 #  自建服务:
 #  registry.cn-hangzhou.aliyuncs.com/sxxpqp/  → 阿里云 ACR(直连,推送目标)
@@ -106,7 +105,6 @@ echo "  docker.io            → dockerhub.ihome.sxxpqp.top:8443"
 echo "  registry.k8s.io      → k8s.ihome.sxxpqp.top:8443"
 echo "  quay.io              → quay.ihome.sxxpqp.top:8443"
 echo "  ghcr.io              → ghcr.ihome.sxxpqp.top:8443"
-echo "  registry-1.docker.io → dockerhub.ihome.sxxpqp.top:8443"
 echo
 echo "自建服务:"
 echo "  registry.cn-hangzhou.aliyuncs.com/sxxpqp/  (阿里云 ACR 推送)"

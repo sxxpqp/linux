@@ -1,24 +1,45 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/opentelemetry/replace-docker-image.sh
-# 替换无法拉取镜像 
-# $1为需修改的文件 
-#ghcr.io/修改ghcr.dockerproxy.com
-sed -i 's#ghcr.io/#ghcr.dockerproxy.com/#g' $1
-#gcr.io/修改gcr.dockerproxy.com
-sed -i 's#gcr.io/#gcr.dockerproxy.com/#g' $1
+# 检查 YAML 中的镜像 registry；不修改 YAML image 字段。
+# 用法: bash replace-docker-image.sh <manifest.yaml>
 
-# k8s.gcr.io/ registry.k8s.io/修改 k8s.dockerproxy.com/
+set -euo pipefail
 
-sed -i 's#k8s.gcr.io/#k8s.dockerproxy.com/#g' $1
-sed -i 's#registry.k8s.io/#k8s.dockerproxy.com/#g' $1
+export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 
-# quay.io/修改 quay.dockerproxy.com/
+MANIFEST="${1:-}"
 
-sed -i 's#quay.io/#quay.dockerproxy.com/#g' $1
+if [[ -z "$MANIFEST" || ! -f "$MANIFEST" ]]; then
+  echo "用法: bash $0 <manifest.yaml>" >&2
+  exit 1
+fi
 
-# mcr.microsoft.com/ 修改mcr.dockerproxy.com/
+if ! grep -qE '^[[:space:]]*image:' "$MANIFEST"; then
+  echo "未在 ${MANIFEST} 中发现 image 字段"
+  exit 0
+fi
 
-sed -i 's#mcr.microsoft.com/#mcr.dockerproxy.com/#g' $1
+echo "发现的镜像："
+grep -E '^[[:space:]]*image:' "$MANIFEST"
+echo
 
-# 查看文件拉取镜像
-# cat opentelemetry-demo.yaml |grep image:|awk -F" " '{print $2}'|xargs -I {} docker pull {}
+MIRROR_REGISTRIES=(docker.io ghcr.io quay.io registry.k8s.io)
+MIRROR_REQUIRED=false
+for registry in "${MIRROR_REGISTRIES[@]}"; do
+  if grep -qE "^[[:space:]]*image:[[:space:]]*['\"]?${registry}/" "$MANIFEST"; then
+    echo "${registry}: 由 containerd hosts.toml 透明加速，不修改 YAML"
+    MIRROR_REQUIRED=true
+  fi
+done
+
+for registry in gcr.io mcr.microsoft.com; do
+  if grep -qE "^[[:space:]]*image:[[:space:]]*['\"]?${registry}/" "$MANIFEST"; then
+    echo "${registry}: 当前不在 containerd mirror 表中，不自动改写 YAML"
+  fi
+done
+
+if [[ "$MIRROR_REQUIRED" == true ]]; then
+  echo
+  echo "请在每个节点执行:"
+  echo "  bash docker/containerd/mirrors.sh && systemctl restart containerd"
+fi

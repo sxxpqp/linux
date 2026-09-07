@@ -7,7 +7,7 @@ OpenTelemetry **Demo 应用**（用于演示/测试），不含 Operator/Jaeger�
 | 文件 | 说明 |
 |---|---|
 | [opentelemetry-demo.yaml](opentelemetry-demo.yaml) | OpenTelemetry Demo 应用部署 |
-| [replace-docker-image.sh](replace-docker-image.sh) | 替换 Docker 镜像脚本（离线环境/镜像仓库迁移） |
+| [replace-docker-image.sh](replace-docker-image.sh) | 检查镜像 registry 并提示 containerd mirror 配置，不修改 YAML image 字段 |
 
 ## 生产环境的真实可观测性栈
 

@@ -17,7 +17,7 @@ Linux 运维知识库，涵盖容器编排、云原生、CI/CD、监控、网络
 | 目录 | 内容 | 状态 |
 |---|---|---|
 | [docker/](docker/README.md) | Docker 生态（安装、镜像构建、docker-compose 服务编排、Kind 测试集群、nvidia-container-toolkit GPU 节点） | ✅ 生产验证 |
-| [docker/containerd/](docker/containerd/README.md) | Containerd 运行时安装与配置（离线部署、K8s 集成） | 验证过 |
+| [docker/containerd/](docker/containerd/readme.md) | Containerd 运行时安装与配置（离线部署、K8s 集成） | 验证过 |
 
 ### 容器编排平台
 
@@ -83,7 +83,6 @@ Linux 运维知识库，涵盖容器编排、云原生、CI/CD、监控、网络
 | [ai/nvidia/](ai/nvidia/) | NVIDIA GPU 驱动 + Container Toolkit 安装（走 Nexus 代理） | ✅ 生产验证 |
 | [ai/nvidia-container-toolkit/](ai/nvidia-container-toolkit/) | GPU 节点 nvidia-container-toolkit 配置 | ✅ 生产验证 |
 | [ai/ollama/](ai/ollama/) | Ollama 本地 LLM 部署 | 验证过 |
-| [ai/go/](ai/go/README.md) | Go 语言笔记（Channel 模式） | 学习笔记 |
 
 > ✅ **生产验证** = 该模块的配置已在生产环境运行使用  
 > **验证过** = 在测试/预发环境验证过  
@@ -96,7 +95,7 @@ Linux 运维知识库，涵盖容器编排、云原生、CI/CD、监控、网络
 |---|---|
 | MySQL InnoDB 集群（生产推荐） | [mysql/mysql-config.md](mysql/mysql-config.md) |
 | K8s 集群部署 | [kubernetes/README.md](kubernetes/README.md) |
-| Prometheus 监控（VictoriaMetrics 生产推荐） | [prometheus/README.md](prometheus/README.md) |
+| Prometheus 监控（VictoriaMetrics 生产推荐） | [kubernetes/prometheus/README.md](kubernetes/prometheus/README.md) |
 | Jenkins CI/CD 流水线 | [devops/README.md](devops/README.md) |
 | Docker 服务编排 | [docker/docker-compose/](docker/docker-compose/) |
 | Nginx 反向代理 | [nginx/nginx.cnf](nginx/nginx.cnf) |
