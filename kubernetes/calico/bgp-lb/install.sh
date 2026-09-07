@@ -22,6 +22,7 @@ LB_CIDR=""
 PEER_ASN=""
 PEER_ADDRESS=""
 DRY_RUN="false"
+KUBECTL_IMAGE="${KUBECTL_IMAGE:-bitnami/kubectl:1.30.14}"
 
 usage() {
   cat <<'EOF'
@@ -38,6 +39,7 @@ usage() {
   --apiserver-port=PORT     API server 端口,默认 6443
   --pod-cidr=CIDR           Pod CIDR,默认自动探测
   --calico-version=VER      版本,默认 v3.28.2
+  --kubectl-image=IMAGE     LB assigner 使用的 kubectl 镜像,默认 bitnami/kubectl:1.30.14
   --dry-run                 只打印不执行
   -h, --help                显示帮助
 
@@ -64,6 +66,7 @@ while [ $# -gt 0 ]; do
     --apiserver-port=*)  APISERVER_PORT="${1#*=}" ;;
     --pod-cidr=*)        POD_CIDR="${1#*=}" ;;
     --calico-version=*)  CALICO_VERSION="${1#*=}" ;;
+    --kubectl-image=*)   KUBECTL_IMAGE="${1#*=}" ;;
     --my-asn=*)          MY_ASN="${1#*=}" ;;
     --lb-cidr=*)         LB_CIDR="${1#*=}" ;;
     --peer-asn=*)        PEER_ASN="${1#*=}" ;;
@@ -91,6 +94,22 @@ ok()   { echo -e "  ${GREEN}✓${NC} $*"; }
 warn() { echo -e "  ${YELLOW}⚠${NC} $*"; }
 err()  { echo -e "  ${RED}✗${NC} $*" >&2; }
 
+wait_for_calico_node_pod() {
+  local pod=""
+  local i
+
+  for i in $(seq 1 30); do
+    pod=$(kubectl -n calico-system get pod -l k8s-app=calico-node -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+    if [ -n "$pod" ]; then
+      echo "pod/$pod"
+      return 0
+    fi
+    sleep 2
+  done
+
+  return 1
+}
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ============================================================
@@ -104,7 +123,12 @@ ok "kubectl 可用"
 if [ -z "$POD_CIDR" ]; then
   POD_CIDR=$(kubectl -n kube-system get cm kubeadm-config -o yaml 2>/dev/null \
     | grep -oE 'podSubnet: [0-9./,]+' | awk '{print $2}' | head -1 || true)
-  [ -n "$POD_CIDR" ] && ok "Pod CIDR: $POD_CIDR (自动)" || { POD_CIDR="192.168.0.0/16"; warn "回退 $POD_CIDR"; }
+  if [ -n "$POD_CIDR" ]; then
+    ok "Pod CIDR: $POD_CIDR (自动)"
+  else
+    POD_CIDR="192.168.0.0/16"
+    warn "回退 $POD_CIDR"
+  fi
 else
   ok "Pod CIDR: $POD_CIDR"
 fi
@@ -156,7 +180,12 @@ ok "ConfigMap 已 apply"
 NEXUS_RAW="${NEXUS_RAW:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent}"
 TIGERA_OP_URL="${NEXUS_RAW}/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml"
 TMP_OP=$(mktemp /tmp/tigera-operator.XXXXXX.yaml)
-trap "rm -f $TMP_OP" EXIT
+TMP_ASSIGNER=""
+cleanup() {
+  rm -f "$TMP_OP"
+  [ -n "$TMP_ASSIGNER" ] && rm -f "$TMP_ASSIGNER"
+}
+trap cleanup EXIT
 
 curl -fsSLk "$TIGERA_OP_URL" -o "$TMP_OP" || { err "下载失败"; exit 1; }
 kubectl apply --server-side -f "$TMP_OP"
@@ -247,7 +276,8 @@ fi
 ASSIGNER="${SCRIPT_DIR}/lb-assigner.sh"
 if [ -f "$ASSIGNER" ]; then
   log "  部署 LB IP 自动分配器..."
-  cat > /tmp/lb-assigner-deploy.yaml <<EOF
+  TMP_ASSIGNER=$(mktemp /tmp/lb-assigner-deploy.XXXXXX.yaml)
+  cat > "$TMP_ASSIGNER" <<EOF
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -292,22 +322,40 @@ spec:
         app: lb-assigner
     spec:
       serviceAccountName: lb-assigner
+      terminationGracePeriodSeconds: 30
       containers:
       - name: assigner
-        image: bitnami/kubectl:latest
+        image: ${KUBECTL_IMAGE}
+        imagePullPolicy: IfNotPresent
         command: ["/bin/bash", "/scripts/lb-assigner.sh"]
         env:
         - name: LB_CIDR
           value: "${LB_CIDR}"
         - name: INTERVAL
           value: "5"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
         volumeMounts:
         - name: script
           mountPath: /scripts
+          readOnly: true
       volumes:
       - name: script
         configMap:
           name: lb-assigner-script
+          defaultMode: 0755
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -318,8 +366,7 @@ data:
   lb-assigner.sh: |
 $(sed 's/^/    /' "$ASSIGNER")
 EOF
-  kubectl apply -f /tmp/lb-assigner-deploy.yaml 2>/dev/null || warn "LB Assigner 部署失败(手动指定 externalIPs 或 loadBalancerIP 即可)"
-  rm -f /tmp/lb-assigner-deploy.yaml
+  kubectl apply -f "$TMP_ASSIGNER" 2>/dev/null || warn "LB Assigner 部署失败(手动指定 externalIPs 或 loadBalancerIP 即可)"
   ok "LB IP 自动分配器已部署(创建 type=LoadBalancer Service 自动获得 IP)"
 else
   warn "lb-assigner.sh 不在, 创建 LB Service 时需手动指定 externalIPs:"
@@ -332,12 +379,13 @@ fi
 # ============================================================
 log "[6/6] 验证 BGP"
 
-sleep 15
-NODE_POD=$(kubectl -n calico-system get pod -l k8s-app=calico-node -o name | head -1)
-if kubectl -n calico-system exec "$NODE_POD" -- birdcl show protocols 2>/dev/null | grep -q "Established\|Start\|Active"; then
+NODE_POD=$(wait_for_calico_node_pod || true)
+if [ -n "$NODE_POD" ] && kubectl -n calico-system exec "$NODE_POD" -- birdcl show protocols 2>/dev/null | grep -q "Established\|Start\|Active"; then
   ok "BIRD BGP 运行中"
-else
+elif [ -n "$NODE_POD" ]; then
   warn "BIRD 状态待确认: kubectl -n calico-system exec $NODE_POD -- birdcl show protocols"
+else
+  warn "未找到 calico-node Pod,稍后手动确认: kubectl -n calico-system get pod -l k8s-app=calico-node"
 fi
 
 echo

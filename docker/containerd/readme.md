@@ -32,7 +32,7 @@ K8s Node
 |---|---|
 | [install.sh](install.sh) | 安装(二进制 + systemd + 内核参数 + config.toml) |
 | [mirrors.sh](mirrors.sh) | 5 个上游加速源一键配置 |
-| [readme.md](readme.md) | 本文档 |
+| [README.md](README.md) | 本文档 |
 | [containerd-install.sh](containerd-install.sh) | 旧版(保留) |
 | [containerd-offline-install.md](containerd-offline-install.md) | 离线步骤(含 crictl) |
 | [add-nofile-limit.sh](add-nofile-limit.sh) | 句柄限制 |
@@ -111,76 +111,27 @@ sysctl --system
 
 ---
 
-## 二、镜像加速 — copy 即用
+## 二、镜像加速 — mirrors.sh 唯一入口
 
-### docker.io
-
-```bash
-mkdir -p /etc/containerd/certs.d/docker.io
-cat > /etc/containerd/certs.d/docker.io/hosts.toml <<'EOF'
-server = "https://registry-1.docker.io"
-[host."https://dockerhub.ihome.sxxpqp.top:8443"]
-  capabilities = ["pull", "resolve"]
-  skip_verify = true
-EOF
-```
-
-### registry.k8s.io
+`install.sh` 只负责安装 containerd 并打开 `config_path = "/etc/containerd/certs.d"`；所有 `/etc/containerd/certs.d/<host>/hosts.toml` 统一由 `mirrors.sh` 写入。
 
 ```bash
-mkdir -p /etc/containerd/certs.d/registry.k8s.io
-cat > /etc/containerd/certs.d/registry.k8s.io/hosts.toml <<'EOF'
-server = "https://registry.k8s.io"
-[host."https://k8s.ihome.sxxpqp.top:8443"]
-  capabilities = ["pull", "resolve"]
-  skip_verify = true
-EOF
+bash install.sh
+bash mirrors.sh
+systemctl restart containerd
 ```
 
-### quay.io
+`mirrors.sh` 固定写 5 份 hosts.toml：
 
-```bash
-mkdir -p /etc/containerd/certs.d/quay.io
-cat > /etc/containerd/certs.d/quay.io/hosts.toml <<'EOF'
-server = "https://quay.io"
-[host."https://quay.ihome.sxxpqp.top:8443"]
-  capabilities = ["pull", "resolve"]
-  skip_verify = true
-EOF
-```
+| `/etc/containerd/certs.d/<上游>/hosts.toml` | 指向 | 模式 |
+|---|---|---|
+| `docker.io` | `dockerhub.ihome.sxxpqp.top:8443` | Harbor pull-through |
+| `registry.k8s.io` | `k8s.ihome.sxxpqp.top:8443` | Harbor pull-through |
+| `quay.io` | `quay.ihome.sxxpqp.top:8443` | Harbor pull-through |
+| `ghcr.io` | `ghcr.ihome.sxxpqp.top:8443` | Harbor pull-through |
+| `registry.cn-hangzhou.aliyuncs.com` | `registry.cn-hangzhou.aliyuncs.com` | 阿里 ACR 直连 |
 
-### ghcr.io
-
-```bash
-mkdir -p /etc/containerd/certs.d/ghcr.io
-cat > /etc/containerd/certs.d/ghcr.io/hosts.toml <<'EOF'
-server = "https://ghcr.io"
-[host."https://ghcr.ihome.sxxpqp.top:8443"]
-  capabilities = ["pull", "resolve"]
-  skip_verify = true
-EOF
-```
-
-### registry-1.docker.io(docker.io 别名)
-
-```bash
-mkdir -p /etc/containerd/certs.d/registry-1.docker.io
-cat > /etc/containerd/certs.d/registry-1.docker.io/hosts.toml <<'EOF'
-server = "https://registry-1.docker.io"
-[host."https://dockerhub.ihome.sxxpqp.top:8443"]
-  capabilities = ["pull", "resolve"]
-  skip_verify = true
-EOF
-```
-
-### 阿里云 ACR(推送目标, 直连)
-
-```bash
-mkdir -p /etc/containerd/certs.d/registry.cn-hangzhou.aliyuncs.com
-cat > /etc/containerd/certs.d/registry.cn-hangzhou.aliyuncs.com/hosts.toml <<'EOF'
-server = "https://registry.cn-hangzhou.aliyuncs.com"
-EOF
-```
+> 不要在业务 YAML / Dockerfile / 安装脚本里 sed 改 `image:` / `FROM`。保持 `docker.io` / `registry.k8s.io` / `quay.io` / `ghcr.io` 上游地址，由 containerd 根据 hosts.toml 自动走 mirror。
 
 ---
 
@@ -189,7 +140,6 @@ EOF
 | 上游 | 代理地址 |
 |---|---|
 | `docker.io` | `dockerhub.ihome.sxxpqp.top:8443` |
-| `registry-1.docker.io` | `dockerhub.ihome.sxxpqp.top:8443` |
 | `registry.k8s.io` | `k8s.ihome.sxxpqp.top:8443` |
 | `quay.io` | `quay.ihome.sxxpqp.top:8443` |
 | `ghcr.io` | `ghcr.ihome.sxxpqp.top:8443` |
@@ -219,7 +169,7 @@ EOF
 ## 五、验证
 
 ```bash
-systemctl status containerd
+systemctl --no-pager status containerd
 crictl info | head -10
 lsmod | grep -E 'overlay|br_netfilter'
 sysctl net.bridge.bridge-nf-call-iptables net.ipv4.ip_forward
@@ -236,7 +186,7 @@ ctr -n k8s.io image pull quay.io/metallb/controller:v0.14.8
 
 | 现象 | 原因 | 修法 |
 |---|---|---|
-| `crictl` `connection refused` | containerd 没跑 / sock 路径错 | `systemctl status containerd` |
+| `crictl` `connection refused` | containerd 没跑 / sock 路径错 | `systemctl --no-pager status containerd` |
 | `ImagePullBackOff` | registry 不通或 hosts.toml 没配 | `ctr -n k8s.io image pull` 手动测 |
 | hosts.toml 不生效 | `config.toml` `config_path = ""` | 改成 `"/etc/containerd/certs.d"` + restart |
 | `SystemdCgroup` 没对齐 | kubelet 用 cgroupfs | `config.toml` 里 `SystemdCgroup = true` |

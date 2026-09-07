@@ -1,5 +1,5 @@
-# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/install.sh
 #!/usr/bin/env bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/install.sh
 set -euo pipefail
 
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
@@ -37,7 +37,7 @@ wget -O "${RUNC_BINARY}" "${RUNC_DOWNLOAD_URL}"
 
 
 # 创建 cni / containerd 所需目录
-mkdir -p /etc/cni/net.d /opt/cni/bin /etc/containerd /usr/local "$CERTS_DIR/docker.io"
+mkdir -p /etc/cni/net.d /opt/cni/bin /etc/containerd /usr/local "$CERTS_DIR"
 # 解压 cni 二进制包
 tar xf "${CNI_PLUGINS_PKG}" -C /opt/cni/bin/
 
@@ -250,17 +250,8 @@ ensure_config_path
 grep -nE 'SystemdCgroup|systemd_cgroup' "$CONTAINERD_CONFIG" || { echo "ERROR: 未写入 SystemdCgroup" >&2; exit 1; }
 grep -nE 'sandbox_image|sandbox =' "$CONTAINERD_CONFIG" || { echo "ERROR: 未写入 sandbox_image" >&2; exit 1; }
 grep -nE 'config_path|certs\.d' "$CONTAINERD_CONFIG" || { echo "ERROR: 未写入 config_path" >&2; exit 1; }
-
-
-# 配置加速器
-cat > "$CERTS_DIR/docker.io/hosts.toml" << EOF
-server = "https://registry-1.docker.io"
-[host."https://dockerhub.ihome.sxxpqp.top:8443"]
-  capabilities = ["pull", "resolve"]
-  skip_verify = true
-EOF
-
-
+echo "已开启 containerd certs.d mirror 配置目录: $CERTS_DIR"
+echo "下一步: bash docker/containerd/mirrors.sh && systemctl restart containerd"
 cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
 overlay
 br_netfilter

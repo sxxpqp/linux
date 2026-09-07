@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/helm/install-helm.sh
 
 
@@ -19,13 +19,18 @@
 # The install script is based off of the MIT-licensed script from glide,
 # the package manager for Go: https://github.com/Masterminds/glide.sh/blob/master/get
 
-: ${BINARY_NAME:="helm"}
-: ${USE_SUDO:="true"}
-: ${DEBUG:="false"}
-: ${VERIFY_CHECKSUM:="true"}
-: ${VERIFY_SIGNATURES:="false"}
-: ${HELM_INSTALL_DIR:="/usr/local/bin"}
-: ${GPG_PUBRING:="pubring.kbx"}
+: "${BINARY_NAME:=helm}"
+: "${USE_SUDO:=true}"
+: "${DEBUG:=false}"
+: "${VERIFY_CHECKSUM:=true}"
+: "${VERIFY_SIGNATURES:=false}"
+: "${HELM_INSTALL_DIR:=/usr/local/bin}"
+: "${GPG_PUBRING:=pubring.kbx}"
+: "${HELM_DIST_BASE_URL:=https://chfs.sxxpqp.top:8443/chfs/shared}"
+: "${HELM_LATEST_VERSION_URL:=https://chfs.sxxpqp.top:8443/chfs/shared/helm4-latest-version}"
+: "${NEXUS_RAW:=https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent}"
+: "${HELM_KEYS_URL:=${NEXUS_RAW}/helm/helm/main/KEYS}"
+: "${HELM_RELEASE_BASE_URL:=https://chfs.sxxpqp.top:8443/chfs/shared}"
 
 HAS_CURL="$(type "curl" &> /dev/null && echo true || echo false)"
 HAS_WGET="$(type "wget" &> /dev/null && echo true || echo false)"
@@ -51,7 +56,7 @@ initArch() {
 
 # initOS discovers the operating system for this system.
 initOS() {
-  OS=$(echo `uname`|tr '[:upper:]' '[:lower:]')
+  OS=$(uname | tr '[:upper:]' '[:lower:]')
 
   case "$OS" in
     # Minimalist GNU for Windows
@@ -61,7 +66,7 @@ initOS() {
 
 # runs the given command as root (detects if we are root already)
 runAsRoot() {
-  if [ $EUID -ne 0 -a "$USE_SUDO" = "true" ]; then
+  if [ "$EUID" -ne 0 ] && [ "$USE_SUDO" = "true" ]; then
     sudo "${@}"
   else
     "${@}"
@@ -114,9 +119,9 @@ verifySupported() {
 
 # checkDesiredVersion checks if the desired version is available.
 checkDesiredVersion() {
-  if [ "x$DESIRED_VERSION" == "x" ]; then
+  if [ -z "${DESIRED_VERSION:-}" ]; then
     # Get tag from release URL
-    local latest_release_url="https://get.helm.sh/helm4-latest-version"
+    local latest_release_url="$HELM_LATEST_VERSION_URL"
     local latest_release_response=""
     if [ "${HAS_CURL}" == "true" ]; then
       latest_release_response=$( curl -L --silent --show-error --fail "$latest_release_url" 2>&1 || true )
@@ -124,7 +129,7 @@ checkDesiredVersion() {
       latest_release_response=$( wget "$latest_release_url" -q -O - 2>&1 || true )
     fi
     TAG=$( echo "$latest_release_response" | grep '^v[0-9]' )
-    if [ "x$TAG" == "x" ]; then
+    if [ -z "$TAG" ]; then
       printf "Could not retrieve the latest release tag information from %s: %s\n" "${latest_release_url}" "${latest_release_response}"
       exit 1
     fi
@@ -137,7 +142,8 @@ checkDesiredVersion() {
 # if it needs to be changed.
 checkHelmInstalledVersion() {
   if [[ -f "${HELM_INSTALL_DIR}/${BINARY_NAME}" ]]; then
-    local version=$("${HELM_INSTALL_DIR}/${BINARY_NAME}" version --template="{{ .Version }}")
+    local version
+    version=$("${HELM_INSTALL_DIR}/${BINARY_NAME}" version --template="{{ .Version }}")
     if [[ "$version" == "$TAG" ]]; then
       echo "Helm ${version} is already ${DESIRED_VERSION:-latest}"
       return 0
@@ -154,7 +160,7 @@ checkHelmInstalledVersion() {
 # for that binary.
 downloadFile() {
   HELM_DIST="helm-$TAG-$OS-$ARCH.tar.gz"
-  DOWNLOAD_URL="https://get.helm.sh/$HELM_DIST"
+  DOWNLOAD_URL="${HELM_DIST_BASE_URL%/}/$HELM_DIST"
   CHECKSUM_URL="$DOWNLOAD_URL.sha256"
   HELM_TMP_ROOT="$(mktemp -dt helm-installer-XXXXXX)"
   HELM_TMP_FILE="$HELM_TMP_ROOT/$HELM_DIST"
@@ -195,8 +201,10 @@ installFile() {
 # verifyChecksum verifies the SHA256 checksum of the binary package.
 verifyChecksum() {
   printf "Verifying checksum... "
-  local sum=$(openssl sha1 -sha256 ${HELM_TMP_FILE} | awk '{print $2}')
-  local expected_sum=$(cat ${HELM_SUM_FILE})
+  local sum
+  local expected_sum
+  sum=$(openssl sha1 -sha256 "${HELM_TMP_FILE}" | awk '{print $2}')
+  expected_sum=$(cat "${HELM_SUM_FILE}")
   if [ "$sum" != "$expected_sum" ]; then
     echo "SHA sum of ${HELM_TMP_FILE} does not match. Aborting."
     exit 1
@@ -210,7 +218,7 @@ verifyChecksum() {
 verifySignatures() {
   printf "Verifying signatures... "
   local keys_filename="KEYS"
-  local github_keys_url="https://raw.githubusercontent.com/helm/helm/main/${keys_filename}"
+  local github_keys_url="$HELM_KEYS_URL"
   if [ "${HAS_CURL}" == "true" ]; then
     curl -SsL "${github_keys_url}" -o "${HELM_TMP_ROOT}/${keys_filename}"
   elif [ "${HAS_WGET}" == "true" ]; then
@@ -218,14 +226,15 @@ verifySignatures() {
   fi
   local gpg_keyring="${HELM_TMP_ROOT}/keyring.gpg"
   local gpg_homedir="${HELM_TMP_ROOT}/gnupg"
-  mkdir -p -m 0700 "${gpg_homedir}"
+  mkdir -p "${gpg_homedir}"
+  chmod 0700 "${gpg_homedir}"
   local gpg_stderr_device="/dev/null"
   if [ "${DEBUG}" == "true" ]; then
     gpg_stderr_device="/dev/stderr"
   fi
   gpg --batch --quiet --homedir="${gpg_homedir}" --import "${HELM_TMP_ROOT}/${keys_filename}" 2> "${gpg_stderr_device}"
   gpg --batch --no-default-keyring --keyring "${gpg_homedir}/${GPG_PUBRING}" --export > "${gpg_keyring}"
-  local github_release_url="https://github.com/helm/helm/releases/download/${TAG}"
+  local github_release_url="${HELM_RELEASE_BASE_URL%/}"
   if [ "${HAS_CURL}" == "true" ]; then
     curl -SsL "${github_release_url}/helm-${TAG}-${OS}-${ARCH}.tar.gz.sha256.asc" -o "${HELM_TMP_ROOT}/helm-${TAG}-${OS}-${ARCH}.tar.gz.sha256.asc"
     curl -SsL "${github_release_url}/helm-${TAG}-${OS}-${ARCH}.tar.gz.asc" -o "${HELM_TMP_ROOT}/helm-${TAG}-${OS}-${ARCH}.tar.gz.asc"
@@ -235,13 +244,15 @@ verifySignatures() {
   fi
   local error_text="If you think this might be a potential security issue,"
   error_text="${error_text}\nplease see here: https://github.com/helm/community/blob/master/SECURITY.md"
-  local num_goodlines_sha=$(gpg --verify --keyring="${gpg_keyring}" --status-fd=1 "${HELM_TMP_ROOT}/helm-${TAG}-${OS}-${ARCH}.tar.gz.sha256.asc" 2> "${gpg_stderr_device}" | grep -c -E '^\[GNUPG:\] (GOODSIG|VALIDSIG)')
+  local num_goodlines_sha
+  num_goodlines_sha=$(gpg --verify --keyring="${gpg_keyring}" --status-fd=1 "${HELM_TMP_ROOT}/helm-${TAG}-${OS}-${ARCH}.tar.gz.sha256.asc" 2> "${gpg_stderr_device}" | grep -c -E '^\[GNUPG:\] (GOODSIG|VALIDSIG)')
   if [[ ${num_goodlines_sha} -lt 2 ]]; then
     echo "Unable to verify the signature of helm-${TAG}-${OS}-${ARCH}.tar.gz.sha256!"
     echo -e "${error_text}"
     exit 1
   fi
-  local num_goodlines_tar=$(gpg --verify --keyring="${gpg_keyring}" --status-fd=1 "${HELM_TMP_ROOT}/helm-${TAG}-${OS}-${ARCH}.tar.gz.asc" 2> "${gpg_stderr_device}" | grep -c -E '^\[GNUPG:\] (GOODSIG|VALIDSIG)')
+  local num_goodlines_tar
+  num_goodlines_tar=$(gpg --verify --keyring="${gpg_keyring}" --status-fd=1 "${HELM_TMP_ROOT}/helm-${TAG}-${OS}-${ARCH}.tar.gz.asc" 2> "${gpg_stderr_device}" | grep -c -E '^\[GNUPG:\] (GOODSIG|VALIDSIG)')
   if [[ ${num_goodlines_tar} -lt 2 ]]; then
     echo "Unable to verify the signature of helm-${TAG}-${OS}-${ARCH}.tar.gz!"
     echo -e "${error_text}"
@@ -269,9 +280,8 @@ fail_trap() {
 # testVersion tests the installed client to make sure it is working.
 testVersion() {
   set +e
-  HELM="$(command -v $BINARY_NAME)"
-  if [ "$?" = "1" ]; then
-    echo "$BINARY_NAME not found. Is $HELM_INSTALL_DIR on your "'$PATH?'
+  if ! command -v "$BINARY_NAME" >/dev/null 2>&1; then
+    echo "$BINARY_NAME not found. Is $HELM_INSTALL_DIR on your PATH?"
     exit 1
   fi
   set -e
@@ -305,7 +315,7 @@ if [ "${DEBUG}" == "true" ]; then
 fi
 
 # Parsing input arguments (if any)
-export INPUT_ARGUMENTS="${@}"
+export INPUT_ARGUMENTS="${*}"
 set -u
 while [[ $# -gt 0 ]]; do
   case $1 in

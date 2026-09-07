@@ -14,6 +14,7 @@ YAML=""
 SERVICE_TYPE=""    # 空 = 用 yaml 默认(ClusterIP)
 DRY_RUN="false"
 NO_WAIT="false"
+PRINT_PASSWORD="false"
 
 usage() {
   cat <<'EOF'
@@ -28,6 +29,7 @@ usage() {
                          NodePort(内网快速暴露)
                          LoadBalancer(配合 Calico BGP-LB / MetalLB)
   --no-wait              跳过 rollout 等待(yaml 装完立刻返回)
+  --print-password       显式打印初始 admin 密码(默认只给查询命令,避免日志泄漏)
   --dry-run              只检查不 apply
   -h, --help             显示帮助
 
@@ -53,6 +55,7 @@ while [ $# -gt 0 ]; do
     --service-type=*) SERVICE_TYPE="${1#*=}" ;;
     --dry-run) DRY_RUN="true" ;;
     --no-wait) NO_WAIT="true" ;;
+    --print-password) PRINT_PASSWORD="true" ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: 未知参数: $1" >&2; usage >&2; exit 1 ;;
   esac
@@ -127,15 +130,11 @@ fi
 # ============================================================
 log "[2/5] namespace"
 
-if kubectl get ns "$NAMESPACE" >/dev/null 2>&1; then
-  ok "namespace 已存在: $NAMESPACE"
+if [ "$DRY_RUN" = "true" ]; then
+  warn "[dry-run] kubectl create ns $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -"
 else
-  if [ "$DRY_RUN" = "true" ]; then
-    warn "[dry-run] kubectl create namespace $NAMESPACE"
-  else
-    kubectl create namespace "$NAMESPACE"
-    ok "namespace 已建: $NAMESPACE"
-  fi
+  kubectl create ns "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+  ok "namespace 已确保存在: $NAMESPACE"
 fi
 
 # ============================================================
@@ -188,8 +187,12 @@ fi
 
 kubectl -n "$NAMESPACE" get pod
 
-PASSWORD=$(kubectl -n "$NAMESPACE" get secret argocd-initial-admin-secret \
-  -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || true)
+if [ "$PRINT_PASSWORD" = "true" ]; then
+  PASSWORD=$(kubectl -n "$NAMESPACE" get secret argocd-initial-admin-secret \
+    -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || true)
+else
+  PASSWORD=""
+fi
 
 SVC_TYPE=$(kubectl -n "$NAMESPACE" get svc argocd-server \
   -o jsonpath='{.spec.type}' 2>/dev/null || echo "ClusterIP")
@@ -199,12 +202,19 @@ log "==== 安装完成 ===="
 echo
 echo "登录:"
 echo "  用户: admin"
-if [ -n "$PASSWORD" ]; then
-  echo "  密码: $PASSWORD"
-  echo "  ⚠ 初始密码,登入后立即改 + 删 secret:"
-  echo "    kubectl -n $NAMESPACE delete secret argocd-initial-admin-secret"
+if [ "$PRINT_PASSWORD" = "true" ]; then
+  if [ -n "$PASSWORD" ]; then
+    echo "  密码: $PASSWORD"
+    echo "  ⚠ 初始密码,登入后立即改 + 删 secret:"
+    echo "    kubectl -n $NAMESPACE delete secret argocd-initial-admin-secret"
+  else
+    warn "  argocd-initial-admin-secret 未取到(可能 server 还没初始化完,稍后再查)"
+  fi
 else
-  warn "  argocd-initial-admin-secret 未取到(可能 server 还没初始化完,稍后再查)"
+  echo "  密码: 默认不打印,需要时手动执行:"
+  echo "    kubectl -n $NAMESPACE get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo"
+  echo "  登入后立即改密码并删除初始 secret:"
+  echo "    kubectl -n $NAMESPACE delete secret argocd-initial-admin-secret"
 fi
 echo
 echo "访问 UI:"

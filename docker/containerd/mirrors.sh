@@ -4,7 +4,7 @@
 # 用法: bash mirrors.sh
 #
 # ============================================================
-#  加速源完整映射(全部 Harbor pull-through proxy)
+#  加速源完整映射(4 个 Harbor pull-through + 1 个 ACR direct)
 # ============================================================
 #
 #  docker.io            → dockerhub.ihome.sxxpqp.top:8443
