@@ -15,6 +15,9 @@ CNI_PLUGINS_PKG="cni-plugins-linux-amd64-v${CNI_PLUGINS_VERSION}.tgz"
 CONTAINERD_DOWNLOAD_URL="${CONTAINERD_DOWNLOAD_URL:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/containerd/containerd/releases/download/v${CONTAINERD_VERSION}/${CONTAINERD_PKG}}"
 CNI_PLUGINS_DOWNLOAD_URL="${CNI_PLUGINS_DOWNLOAD_URL:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/containernetworking/plugins/releases/download/v${CNI_PLUGINS_VERSION}/${CNI_PLUGINS_PKG}}"
 RUNC_DOWNLOAD_URL="${RUNC_DOWNLOAD_URL:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/opencontainers/runc/releases/download/v${RUNC_VERSION}/${RUNC_BINARY}}"
+CONTAINERD_SHA256="${CONTAINERD_SHA256:-}"
+CNI_PLUGINS_SHA256="${CNI_PLUGINS_SHA256:-}"
+RUNC_SHA256="${RUNC_SHA256:-}"
 
 case "$CONTAINERD_VERSION" in
   1.*) CONTAINERD_CONFIG_MAJOR=1 ;;
@@ -27,10 +30,25 @@ esac
 
 echo "开始安装 containerd ${CONTAINERD_VERSION} ..."
 
+download_and_verify() {
+  local output="$1"
+  local url="$2"
+  local expected_sha256="$3"
+
+  wget -O "$output" "$url"
+
+  if [[ -z "$expected_sha256" ]]; then
+    echo "WARN: 未配置 ${output} SHA256，跳过完整性校验" >&2
+    return
+  fi
+
+  printf '%s  %s\n' "$expected_sha256" "$output" | sha256sum -c -
+}
+
 # 下载所需应用包
-wget -O "${CONTAINERD_PKG}" "${CONTAINERD_DOWNLOAD_URL}"
-wget -O "${CNI_PLUGINS_PKG}" "${CNI_PLUGINS_DOWNLOAD_URL}"
-wget -O "${RUNC_BINARY}" "${RUNC_DOWNLOAD_URL}"
+download_and_verify "$CONTAINERD_PKG" "$CONTAINERD_DOWNLOAD_URL" "$CONTAINERD_SHA256"
+download_and_verify "$CNI_PLUGINS_PKG" "$CNI_PLUGINS_DOWNLOAD_URL" "$CNI_PLUGINS_SHA256"
+download_and_verify "$RUNC_BINARY" "$RUNC_DOWNLOAD_URL" "$RUNC_SHA256"
 
 # centos7 要升级libseccomp  runc二进制不需要这个包 静态编译了
 # yum -y install https://mirrors.tuna.tsinghua.edu.cn/centos/8-stream/BaseOS/x86_64/os/Packages/libseccomp-2.5.1-1.el8.x86_64.rpm

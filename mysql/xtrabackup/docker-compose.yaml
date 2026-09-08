@@ -1,0 +1,15 @@
+services:
+  xtrabackup:
+    image: percona/percona-xtrabackup:8.0
+    container_name: xtrabackup
+    entrypoint: ["tail", "-f", "/dev/null"]
+    user: "999:999"
+    volumes:
+      - /opt/1panel/apps/mysql/mysql/data:/var/lib/mysql:ro
+      - ./backup:/backup
+    networks:
+      - 1panel-network
+
+networks:
+  1panel-network:
+    external: true    # 关键：告诉 compose 这是已存在的外部网络，不要新建

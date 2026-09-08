@@ -50,9 +50,15 @@ CONTAINERD_VERSION=1.7.18 bash install.sh
 
 # 如需指定其它 2.x 版本
 CONTAINERD_VERSION=2.1.3 bash install.sh
+
+# 生产推荐：下载后校验 SHA256（3 个值按实际版本填写）
+CONTAINERD_SHA256=<containerd-sha256> \
+CNI_PLUGINS_SHA256=<cni-plugins-sha256> \
+RUNC_SHA256=<runc-sha256> \
+bash install.sh
 ```
 
-> 当前脚本按主版本兼容 `1.x` 和 `2.x`（默认 `2.1.3`，1.x 示例 `1.7.18`）：`containerd config default` 生成的 `config.toml` 字段位置不同，脚本会按实际配置结构写入 `SystemdCgroup`、pause sandbox 镜像和 `certs.d`。
+> 当前脚本按主版本兼容 `1.x` 和 `2.x`（默认 `2.1.3`，1.x 示例 `1.7.18`）：`containerd config default` 生成的 `config.toml` 字段位置不同，脚本会按实际配置结构写入 `SystemdCgroup`、pause sandbox 镜像和 `certs.d`。默认只下载；生产安装建议传入 3 个 SHA256 环境变量，脚本会在解压前校验，任一校验失败立即退出。
 
 脚本做 8 件事:
 
