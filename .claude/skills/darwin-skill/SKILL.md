@@ -1,6 +1,6 @@
 ---
 name: darwin-skill
-description: "Darwin Skill 2.0 (达尔文.skill 2.0): autonomous skill optimizer, v2.0 integrates Microsoft Research SkillLens (arXiv 2605.23899) 9-dim rubric + SkillOpt (arXiv 2605.23904) validation-gated design + human-in-the-loop checkpoints. Evaluates SKILL.md files using a 9-dimension rubric (structure + effectiveness + meta-skill blacklists), runs hill-climbing with git version control, spawns independent judge agents for blind evaluation, validates improvements through test prompts with auto-break on diminishing returns, and generates visual result cards. Use when user mentions \"优化skill\", \"skill评分\", \"自动优化\", \"auto optimize\", \"skill质量检查\", \"达尔文\", \"darwin\", \"帮我改改skill\", \"skill怎么样\", \"提升skill质量\", \"skill review\", \"skill打分\"."
+description: Use when the user asks to evaluate or improve one or more Agent Skills, compare skill quality, run skill scoring, or design validation prompts. Do not claim independent testing, history, or generated artifacts that are not present.
 ---
 
 # Darwin Skill 2.0
@@ -69,7 +69,7 @@ rubric 设计依据来自 **SkillLens 论文（arXiv 2605.23899）** + **本机 
 
 **结论**：rubric 能识别 gross degradation，但 fine-grained quality difference 仍不可信，**重要决策必须人审**。
 
-→ 详细论文证据 + 5 judges 完整数据 + HL 实战案例数字见 [references/skilllens-evidence.md](references/skilllens-evidence.md)
+→ 论文证据、运行时中立性规则等 supporting files 如果要使用，必须先确认对应文件已经存在；当前技能目录默认只保证本 `SKILL.md`。
 
 ### 关于「实测表现」维度
 
@@ -102,7 +102,7 @@ grep -nE "(在 Claude Code|Claude Code skill|Claude Code 用户|Cursor only|Code
 
 frontmatter 触发词、花叔生态内部 skill 名引用、明确标注 runtime-specific 章节、commit message——这些正当出现，不算红灯。
 
-→ 红灯/绿灯完整对照表 + 例外清单详细规则 + Phase 1/2/3 各阶段审查时机见 [references/runtime-neutrality.md](references/runtime-neutrality.md)
+→ 运行时中立性规则如果需要展开，先确认 supporting file 已存在；不要把不存在的路径当作必需依赖。
 
 ---
 
@@ -284,13 +284,13 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 ```
 
 新增 `eval_mode` 列：`full_test`（跑了子agent测试）或 `dry_run`（模拟推演）。
-文件位置：`.claude/skills/darwin-skill/results.tsv`
+如果要记录历史，先创建 `.claude/skills/darwin-skill/results.tsv`；不存在时不要声称已有历史数据。
 
 ---
 
 ## 实战 high-leverage 操作（精髓速查）
 
-4 条经实战验证（huashu-gpt-image +10.85 / huashu-weread-advisor +14.9 / claude-design +16.5）。详细案例数据见 [references/skilllens-evidence.md](references/skilllens-evidence.md) 的「HL 实战案例」节。
+4 条经实战验证（huashu-gpt-image +10.85 / huashu-weread-advisor +14.9 / claude-design +16.5）。详细案例数据仅在相应 supporting file 已存在且路径验证通过时引用。
 
 - **HL-1（dim4）显性视觉标记是杠杆**：加 🔴 CHECKPOINT / 🛑 STOP，靠「必须」措辞不行——LLM 解析时扫描视觉标记。4 行改动撬动 dim4 +3 分
 - **HL-2（dim3）if-then 三段式 fallback 表**：把「症状/解法」两列升级为「触发条件 / 一线修复 / 仍失败兜底」三段式。SkillLens failure-mechanism encoding 维度的落地
@@ -434,9 +434,9 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 
 每个skill优化完成后（或全量汇总后），自动生成视觉成果卡片，截图保存为PNG。
 
-### 卡片模板
+### 成果卡片（可选）
 
-模板位置：`templates/result-card.html`
+仅在用户明确要求生成视觉成果卡片，且模板、截图工具和输出目录均已创建并通过路径检查后执行。
 
 3种风格，每次随机选择一种：
 
@@ -449,7 +449,7 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 ### 生成流程
 
 ```
-1. 复制 templates/result-card.html 到临时工作文件
+1. 读取并验证已存在的成果卡片模板，复制到临时工作文件
 2. 用 sed/编辑工具 替换占位数据：
    - data-field="skill-name" → 实际skill名
    - data-field="score-before/after/delta" → 实际分数
@@ -457,23 +457,13 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
    - data-field="improvement-1/2/3" → 实际改进摘要
    - data-field="date" → 当前日期
 3. 随机选择风格：hash 设为 swiss/terminal/newspaper 之一
-4. 用 scripts/screenshot.mjs 截图（2x 高清，只截 .card 元素，自动 open 图片）：
-   node .claude/skills/darwin-skill/scripts/screenshot.mjs \
-     /abs/path/to/card.html /abs/path/to/output.png
-   # 回退方案（脚本失败时）：
-   npx playwright screenshot "file:///path/to/card.html#[theme]" \
-     output.png --viewport-size=960,1280 --wait-for-timeout=2000
+4. 使用已验证存在的截图工具生成 PNG；若工具不可用则停止卡片流程并返回文本评分报告
+   按已验证工具的使用说明执行截图
 5. 提示用户查看成果卡片 PNG
 
-### 资源文件速查
+### 可选成果卡片资源
 
-| 路径 | 用途 |
-|---|---|
-| `templates/result-card.html` | 3风格主模板（swiss/terminal/newspaper，hash切换） |
-| `templates/result-card-dark.html` / `-white.html` | 单一风格替代模板（需要锁定风格时用） |
-| `scripts/screenshot.mjs` | 2x 高清截图，只截 .card，自动 open |
-| `results.tsv` | 历次优化日志（9列含 eval_mode） |
-| `{skill目录}/test-prompts.json` | 每个 skill 的测试 prompt 集（用于维度8实测） |
+成果卡片模板、截图脚本、历史 TSV 和测试 prompt 都不是当前技能自带文件。只有在用户明确要求启用这些功能、且相应文件已经创建并验证路径后，才能执行对应步骤；否则使用文本评分报告，不宣称生成卡片或完成 full_test。
 
 ### 何时生成
 

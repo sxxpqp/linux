@@ -12,46 +12,67 @@ description: Diagnose and safely clean up stuck Kubernetes resources — Termina
 
 K8s 资源卡 Terminating / 删不掉 / 删完又回来,本质就 4 类原因。**按顺序排查**,排错一类就解一类:
 
-| 优先级 | 症状 | 根因类 | 解套动作 |
+| 优先级 | 症状 | 根因类 | 确认后动作 |
 |---|---|---|---|
-| 1 | `kubectl delete` 阻塞 60s+ 才超时 | finalizer 卡(controller 已死或卡住) | **先 `kubectl patch xxx -p '{"metadata":{"finalizers":null}}'` 再 delete** |
-| 2 | 删完 `kubectl get` 还在,timestamp 不变 | 控制器(operator/webhook)在边删边建 / 静默拦 | 先关控制器(scale 0 或 delete deploy)、删 webhook |
-| 3 | `kubectl delete` 显示 "deleted",资源真没了,但相关 Pod RBAC forbidden | operator 动态创建的 ClusterRole 删了没人重建 | 显式 `kubectl delete clusterrole,clusterrolebinding xxx yyy` |
-| 4 | 装 / 改任何东西都失败,错误信息奇怪 | 残留 admission webhook 后端死了,在静默拦 | `kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations \| grep <component>` 全清 |
+| 1 | `kubectl delete` 阻塞 60s+ 才超时 | finalizer 卡(controller 已死或卡住) | **确认后先 patch finalizers，再 delete** |
+| 2 | 删完 `kubectl get` 还在,timestamp 不变 | 控制器(operator/webhook)在边删边建 / 静默拦 | 确认后先关控制器、删 webhook |
+| 3 | `kubectl delete` 显示 "deleted",资源真没了,但相关 Pod RBAC forbidden | operator 动态创建的 ClusterRole 删了没人重建 | 确认后清理对应 ClusterRole 和 Binding |
+| 4 | 装 / 改任何东西都失败,错误信息奇怪 | 残留 admission webhook 后端死了,在静默拦 | 确认后删除匹配 webhook |
 
 ## 快速诊断决策树
 
-```
+下面只执行 `get`/`jsonpath` 等只读检查。需要执行 patch、delete、scale 或 replace 时，先回到上面的 CHECKPOINT。
+
+```text
 kubectl delete X 卡住 / 不生效
   │
   ├─ X 是 CR(Installation/IPPool 等)?
-  │   └─ kubectl get X -o yaml | grep -A3 finalizers
-  │      → 有 finalizer:patch 剥掉再 delete
+  │   └─ 只读检查: kubectl get X -o yaml | grep -A3 finalizers
+  │      → 记录 finalizer 名称，确认后再 patch 和 delete
   │
   ├─ X 是 namespace?
-  │   └─ kubectl get ns X -o jsonpath='{.status.phase}'
-  │      → Terminating:
-  │         kubectl get ns X -o json | python3 -c "import sys,json; \
-  │           d=json.load(sys.stdin); d['spec']['finalizers']=[]; print(json.dumps(d))" | \
-  │           kubectl replace --raw "/api/v1/namespaces/X/finalize" -f -
+  │   └─ 只读检查: kubectl get ns X -o jsonpath='{.status.phase}'
+  │      → Terminating: 记录 namespace，确认后再处理 finalize endpoint
   │
   ├─ 删完又回来,timestamp 没变?
-  │   └─ → "deleted" 是假象,API 实际拒绝
-  │      ① 找控制器:kubectl get deploy -A | grep <component>-operator,scale 0 或删
-  │      ② 找 webhook:kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations | grep <component>,全删
-  │      ③ 再 delete
+  │   └─ → "deleted" 可能是假象，先只读检查控制器和 webhook
+  │      ① kubectl get deploy -A | grep <component>-operator
+  │      ② kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations | grep <component>
+  │      → 记录匹配对象，确认后再 scale、删除 webhook 和重试 delete
   │
   └─ 相关 Pod 起来 RBAC forbidden,但 RBAC 文件里看着对?
-      └─ → operator 动态创建的 ClusterRole 没被覆盖
+      └─ → 只读检查 operator 动态创建的 ClusterRole
          kubectl get clusterrole <pod-sa-name> -o yaml | grep <missing-rule>
-         没的话:kubectl delete clusterrole,clusterrolebinding <name> → 让 operator 重建
+         → 记录需要重建的 RBAC，确认后再删除对应 role/binding
 ```
+
+## 清理前：只读诊断
+
+先只读取并列出将受影响的对象，不执行删除、剥 finalizer、scale 或 replace：
+
+```bash
+kubectl get installation,apiserver -o name 2>/dev/null || true
+kubectl get ns calico-system tigera-operator -o custom-columns=NAME:.metadata.name,PHASE:.status.phase,DELETING:.metadata.deletionTimestamp 2>/dev/null || true
+kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations -o name 2>/dev/null | grep -iE 'calico|tigera|cilium|cert-manager|operator' || true
+kubectl get clusterrole,clusterrolebinding -o name 2>/dev/null | grep -iE 'calico|tigera|cilium|cert-manager|operator' || true
+```
+
+根据诊断结果，明确列出需要处理的 CR、namespace、webhook 和 RBAC 名称。`get`、`describe`、`jsonpath` 是只读操作，可以在确认前执行。
+
+🔴 **CHECKPOINT · STOP：以下动作必须得到用户明确确认后才能执行**
+
+- patch/replace 清除资源 finalizer
+- `kubectl delete` CR、namespace、webhook、ClusterRole 或 ClusterRoleBinding
+- scale 或删除 operator/controller
+- 对 namespace finalize endpoint 执行 `kubectl replace --raw`
+
+确认时应说明目标集群、资源清单和可能后果；未确认时只返回诊断结果，不执行下面的清理命令。
 
 ## 正确的卸载顺序(operator 类)
 
 **不要**:删 CR → 删 namespace → 删 operator deployment。这条路线会留下 RBAC + webhook 孤儿,下次装会翻车。
 
-**应该**(每一步删除之前都先剥 finalizer):
+**确认后应该**(每一步删除之前都先剥 finalizer):
 
 ```bash
 COMPONENT=tigera-operator   # 换成你的:cilium / cert-manager-operator 等
@@ -90,6 +111,16 @@ kubectl get ns $NS -o json 2>/dev/null | \
   kubectl replace --raw "/api/v1/namespaces/$NS/finalize" -f - 2>/dev/null || true
 kubectl delete ns $NS --ignore-not-found --timeout=30s
 ```
+
+## 清理后验证
+
+```bash
+kubectl get installation,apiserver,ns -o wide 2>/dev/null | grep -E 'Terminating|calico|tigera|cilium|cert-manager' || true
+kubectl get validatingwebhookconfigurations,mutatingwebhookconfigurations -o name 2>/dev/null | grep -iE 'calico|tigera|cilium|cert-manager|operator' || true
+kubectl get clusterrole,clusterrolebinding -o name 2>/dev/null | grep -iE 'calico|tigera|cilium|cert-manager|operator' || true
+```
+
+若仍有 Terminating、webhook 或 RBAC 残留，停止重装并重新执行只读诊断，不要盲目重复删除。
 
 ## 重装前的 preflight 检查
 

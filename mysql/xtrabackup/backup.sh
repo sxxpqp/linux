@@ -4,7 +4,7 @@ cd "$(dirname "$0")"
 DATE=$(date "+%Y%m%d_%H%M%S")
 LAST_BACKUP_FILE="backup/.last_backup_dir"
 DB_USER="root"
-DB_PASS="xxx"
+DB_PASS="Xl123456.."
 
 if [ ! -s "$LAST_BACKUP_FILE" ]; then
     # 文件不存在 或者 文件为空(-s 判断非空)，都走全量分支
