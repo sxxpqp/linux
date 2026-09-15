@@ -26,8 +26,8 @@
 : "${VERIFY_SIGNATURES:=false}"
 : "${HELM_INSTALL_DIR:=/usr/local/bin}"
 : "${GPG_PUBRING:=pubring.kbx}"
-: "${HELM_DIST_BASE_URL:=https://get.helm.sh}"
-: "${HELM_LATEST_VERSION_URL:=https://get.helm.sh/helm4-latest-version}"
+: "${HELM_VERSION:=v4.3.0}"
+: "${HELM_DIST_BASE_URL:=https://mirrors.huaweicloud.com/helm}"
 : "${NEXUS_RAW:=https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent}"
 : "${HELM_KEYS_URL:=${NEXUS_RAW}/helm/helm/main/KEYS}"
 : "${HELM_RELEASE_BASE_URL:=https://github.com/helm/helm/releases/download}"
@@ -120,19 +120,7 @@ verifySupported() {
 # checkDesiredVersion checks if the desired version is available.
 checkDesiredVersion() {
   if [ -z "${DESIRED_VERSION:-}" ]; then
-    # Get tag from release URL
-    local latest_release_url="$HELM_LATEST_VERSION_URL"
-    local latest_release_response=""
-    if [ "${HAS_CURL}" == "true" ]; then
-      latest_release_response=$( curl -L --silent --show-error --fail "$latest_release_url" 2>&1 || true )
-    elif [ "${HAS_WGET}" == "true" ]; then
-      latest_release_response=$( wget "$latest_release_url" -q -O - 2>&1 || true )
-    fi
-    TAG=$( echo "$latest_release_response" | grep '^v[0-9]' )
-    if [ -z "$TAG" ]; then
-      printf "Could not retrieve the latest release tag information from %s: %s\n" "${latest_release_url}" "${latest_release_response}"
-      exit 1
-    fi
+    TAG="$HELM_VERSION"
   else
     TAG=$DESIRED_VERSION
   fi
