@@ -92,7 +92,13 @@ need_helm() {
 # ================================================================
 do_kernel() { run_url "① 内核参数优化" "$URL_KERNEL"; }
 do_k8s()    { run_url "② 安装 Kubernetes (kubeadm)" "$URL_K8S"; }
-do_helm()   { run_url "③ 安装 Helm" "$URL_HELM"; }
+do_helm()  {
+    # Nexus raw 代理可能暂时缓存旧版安装脚本，显式覆盖其下载源，避免回退到失效的 chfs。
+    export HELM_VERSION="${HELM_VERSION:-v4.3.0}"
+    export HELM_LATEST_VERSION_URL="${HELM_LATEST_VERSION_URL:-https://get.helm.sh/helm4-latest-version}"
+    export HELM_DIST_BASE_URL="${HELM_DIST_BASE_URL:-https://mirrors.huaweicloud.com/helm}"
+    run_url "③ 安装 Helm" "$URL_HELM"
+}
 
 # ----------------------------------------------------------------
 do_mirror() {
