@@ -14,7 +14,7 @@ TTY_INPUT=/dev/tty
 BASE="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes"
 URL_KERNEL="${BASE}/kubeadm/k8skerneloptimize.sh"
 URL_K8S="${BASE}/kubeadm/installk8s.sh"
-URL_HELM="${BASE}/helm/install-helm.sh"
+URL_HELM="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/fa96ca0/kubernetes/helm/install-helm.sh"
 
 # ================================================================
 #  全局配置变量（按需修改）
