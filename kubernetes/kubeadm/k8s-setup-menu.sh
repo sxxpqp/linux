@@ -61,9 +61,19 @@ run_url() {
 
     # 先下载到临时文件再执行，避免 curl|bash 吞掉 stdin 导致 read 失效
     tmpfile=$(mktemp /tmp/k8s-run-XXXXXX.sh)
-    curl -fsSLk "$url" -o "$tmpfile"
+    if ! curl -fsSLk "$url" -o "$tmpfile"; then
+        err "$desc 下载失败"
+        rm -f "$tmpfile"
+        pause
+        return 1
+    fi
     chmod +x "$tmpfile"
-    bash "$tmpfile"
+    if ! bash "$tmpfile"; then
+        err "$desc 执行失败"
+        rm -f "$tmpfile"
+        pause
+        return 1
+    fi
     rm -f "$tmpfile"
 
     info "$desc 完成 ✓"

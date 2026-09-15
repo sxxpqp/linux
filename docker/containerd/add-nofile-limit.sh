@@ -1,4 +1,10 @@
+#!/usr/bin/env bash
+# 系统: Linux (systemd)
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/add-nofile-limit.sh
+# 用法: curl -sL https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/add-nofile-limit.sh | bash
+
+set -euo pipefail
+
 # 备份原文件
 cp /etc/security/limits.conf /etc/security/limits.conf.bak
 

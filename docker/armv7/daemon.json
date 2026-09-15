@@ -1,7 +1,16 @@
 {
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "registry-mirrors": ["https://dockerhub.ihome.sxxpqp.top:8443"],
+  "insecure-registries": [
+    "dockerhub.ihome.sxxpqp.top:8443",
+    "ghcr.ihome.sxxpqp.top:8443",
+    "quay.ihome.sxxpqp.top:8443",
+    "k8s.ihome.sxxpqp.top:8443"
+  ],
+  "max-concurrent-downloads": 10,
+  "log-driver": "json-file",
   "log-opts": {
-    "max-size": "5m",
-    "max-file":"3"
-  },
-  "registry-mirrors": ["https://dockerproxy.1panel.live","https://dockerhubk.sxxpqp.top"]
+    "max-size": "100m",
+    "max-file": "5"
+  }
 }

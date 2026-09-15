@@ -1,5 +1,5 @@
-# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/containerd-install.sh
 #!/usr/bin/env bash
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/containerd-install.sh
 set -euo pipefail
 
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''

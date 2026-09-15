@@ -26,11 +26,11 @@
 : "${VERIFY_SIGNATURES:=false}"
 : "${HELM_INSTALL_DIR:=/usr/local/bin}"
 : "${GPG_PUBRING:=pubring.kbx}"
-: "${HELM_DIST_BASE_URL:=https://chfs.sxxpqp.top:8443/chfs/shared}"
-: "${HELM_LATEST_VERSION_URL:=https://chfs.sxxpqp.top:8443/chfs/shared/helm4-latest-version}"
+: "${HELM_DIST_BASE_URL:=https://get.helm.sh}"
+: "${HELM_LATEST_VERSION_URL:=https://get.helm.sh/helm4-latest-version}"
 : "${NEXUS_RAW:=https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent}"
 : "${HELM_KEYS_URL:=${NEXUS_RAW}/helm/helm/main/KEYS}"
-: "${HELM_RELEASE_BASE_URL:=https://chfs.sxxpqp.top:8443/chfs/shared}"
+: "${HELM_RELEASE_BASE_URL:=https://github.com/helm/helm/releases/download}"
 
 HAS_CURL="$(type "curl" &> /dev/null && echo true || echo false)"
 HAS_WGET="$(type "wget" &> /dev/null && echo true || echo false)"
@@ -203,7 +203,7 @@ verifyChecksum() {
   printf "Verifying checksum... "
   local sum
   local expected_sum
-  sum=$(openssl sha1 -sha256 "${HELM_TMP_FILE}" | awk '{print $2}')
+  sum=$(openssl dgst -sha256 "${HELM_TMP_FILE}" | awk '{print $NF}')
   expected_sum=$(cat "${HELM_SUM_FILE}")
   if [ "$sum" != "$expected_sum" ]; then
     echo "SHA sum of ${HELM_TMP_FILE} does not match. Aborting."
