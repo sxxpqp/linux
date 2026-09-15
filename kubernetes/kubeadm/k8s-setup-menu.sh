@@ -97,6 +97,7 @@ do_helm()  {
     export HELM_VERSION="${HELM_VERSION:-v4.3.0}"
     export HELM_LATEST_VERSION_URL="${HELM_LATEST_VERSION_URL:-https://get.helm.sh/helm4-latest-version}"
     export HELM_DIST_BASE_URL="${HELM_DIST_BASE_URL:-https://mirrors.huaweicloud.com/helm}"
+    export VERIFY_CHECKSUM="false"
     run_url "③ 安装 Helm" "$URL_HELM"
 }
 
