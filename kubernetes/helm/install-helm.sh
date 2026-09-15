@@ -148,15 +148,15 @@ checkHelmInstalledVersion() {
 # for that binary.
 downloadFile() {
   HELM_DIST="helm-$TAG-$OS-$ARCH.tar.gz"
-  DOWNLOAD_URL="${HELM_DIST_BASE_URL%/}/$HELM_DIST"
+  DOWNLOAD_URL="${HELM_DIST_BASE_URL%/}/${TAG}/$HELM_DIST"
   CHECKSUM_URL="$DOWNLOAD_URL.sha256"
   HELM_TMP_ROOT="$(mktemp -dt helm-installer-XXXXXX)"
   HELM_TMP_FILE="$HELM_TMP_ROOT/$HELM_DIST"
   HELM_SUM_FILE="$HELM_TMP_ROOT/$HELM_DIST.sha256"
   echo "Downloading $DOWNLOAD_URL"
   if [ "${HAS_CURL}" == "true" ]; then
-    curl -SsL "$CHECKSUM_URL" -o "$HELM_SUM_FILE"
-    curl -SsL "$DOWNLOAD_URL" -o "$HELM_TMP_FILE"
+    curl -fSsL "$CHECKSUM_URL" -o "$HELM_SUM_FILE"
+    curl -fSsL "$DOWNLOAD_URL" -o "$HELM_TMP_FILE"
   elif [ "${HAS_WGET}" == "true" ]; then
     wget -q -O "$HELM_SUM_FILE" "$CHECKSUM_URL"
     wget -q -O "$HELM_TMP_FILE" "$DOWNLOAD_URL"
