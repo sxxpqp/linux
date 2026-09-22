@@ -235,6 +235,74 @@ annotations-risk-level: Critical
 
 ---
 
+## CORS 跨域标准写法
+
+按浏览器请求是否携带凭证选择配置；不要把两种场景混用。
+
+| 场景 | `cors-allow-origin` | `cors-allow-credentials` | 适用条件 |
+|---|---|---|---|
+| **A. 携带凭证** | 明确可信来源，如 `https://*.wishfoxs.com` | `"true"` | 前端使用 Cookie / Session，或 `fetch(..., { credentials: "include" })` |
+| **B. 公开无凭证 API** | `"*"` | `"false"` 或不设置 | 不依赖 Cookie / Session，所有来源均可调用 |
+
+> `cors-allow-credentials: "true"` 时，浏览器会拒绝 `cors-allow-origin: "*"`。`*https://*.wishfoxs.com` 也是无效 Origin，`*` 只能作为域名通配的一部分。
+
+### A. 前端携带 Cookie / Session / credentials
+
+`https://*.wishfoxs.com` 匹配单级子域名，例如 `https://admin.wishfoxs.com`。根域也需要访问时，显式加入根域：`https://wishfoxs.com, https://*.wishfoxs.com`。
+
+```yaml
+metadata:
+  name: sohu-default
+  annotations:
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://*.wishfoxs.com"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: >-
+      Origin, Content-Type, Accept, Authorization, X-Requested-With,
+      Content-Language, Platform, Platform-Type, Shop-Id, Syssource,
+      X-Encrypt-Key, Device, Version, User-Type, Devicemodel, Basehost,
+      Tenantid, Pushid, Lang
+    nginx.ingress.kubernetes.io/cors-max-age: "86400"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+```
+
+### B. 公开 API，不携带凭证
+
+只有不需要 Cookie / Session、也不使用 `credentials: "include"` 时才可以放开为 `*`：
+
+```yaml
+metadata:
+  name: public-api
+  annotations:
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "false"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Origin, Content-Type, Accept, Authorization, X-Requested-With"
+    nginx.ingress.kubernetes.io/cors-max-age: "86400"
+```
+
+### 预检验证
+
+```bash
+curl -i -X OPTIONS 'https://<api-domain>/<path>' \
+  -H 'Origin: https://admin.wishfoxs.com' \
+  -H 'Access-Control-Request-Method: POST' \
+  -H 'Access-Control-Request-Headers: authorization,content-type,x-encrypt-key'
+```
+
+场景 A 期望看到：
+
+```text
+Access-Control-Allow-Origin: https://admin.wishfoxs.com
+Access-Control-Allow-Credentials: true
+```
+
+场景 B 的 `Access-Control-Allow-Origin` 应为 `*`；不要为了排障把场景 A 临时改成 `*`，应补充实际前端 Origin 到白名单。
+
+---
+
 ## 何时用哪种模式
 
 | 场景 | 选哪个 |
