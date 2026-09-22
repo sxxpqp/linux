@@ -1,0 +1,73 @@
+# cluster: <cluster-name>
+# env: <environment>
+# namespace: default
+# type: ingress-nginx CORS examples
+# last-updated: 2026-09-22
+#
+# 使用前替换：namespace、host、service.name、service.port。
+# 两个示例只能按业务场景二选一，不要把 cors-allow-origin: "*" 与凭证模式混用。
+
+# ============================================================
+# 示例 A：携带 Cookie / Session / credentials: "include"
+# 仅允许 wishfoxs.com 的单级子域访问。
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cors-credentialed-api
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://*.wishfoxs.com"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: >-
+      Origin, Content-Type, Accept, Authorization, X-Requested-With,
+      Content-Language, Platform, Platform-Type, Shop-Id, Syssource,
+      X-Encrypt-Key, Device, Version, User-Type, Devicemodel, Basehost,
+      Tenantid, Pushid, Lang
+    nginx.ingress.kubernetes.io/cors-max-age: "86400"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.wishfoxs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-service
+                port:
+                  number: 80
+---
+# ============================================================
+# 示例 B：公开 API，不携带 Cookie / Session / credentials。
+# 允许任意 Origin；不要用于需要浏览器凭证的接口。
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cors-public-api
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "false"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Origin, Content-Type, Accept, Authorization, X-Requested-With"
+    nginx.ingress.kubernetes.io/cors-max-age: "86400"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: public-api.wishfoxs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: public-api-service
+                port:
+                  number: 80

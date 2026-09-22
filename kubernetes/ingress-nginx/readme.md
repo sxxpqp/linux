@@ -106,6 +106,7 @@ bash uninstall.sh --apply
 | [test.sh](test.sh) | ✅ | **验证脚本**:部署测试应用 → Pod→ClusterIP → 集群内 Ingress → 外部 Ingress |
 | [ingress-demo.yaml](ingress-demo.yaml) | 参考 | 最简 Ingress 示例 |
 | [ingress-example.yaml](ingress-example.yaml) | 参考 | TLS + 多路径 rewrite 示例 |
+| [cors-example.yaml](cors-example.yaml) | 参考 | CORS 模板：受限凭证跨域 / 公开无凭证跨域 |
 | [test.yaml](test.yaml) | 参考 | 测试 Deployment + Service + Ingress |
 | [values.yaml](values.yaml) | 参考 | Helm values(跟 deploy.yaml 互补) |
 
