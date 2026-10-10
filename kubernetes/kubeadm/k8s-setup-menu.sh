@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeadm/k8s-setup-menu.sh
 # ================================================================
 #  K8s 集群一键安装菜单
 #  作者: sxxpqp 运智运维
@@ -8,7 +7,6 @@
 set -uo pipefail
 
 # ---- curl|bash 执行时 stdin 被管道占用，用 /dev/tty 作为交互终端 ----
-# 所有 read 命令通过 TTY 变量显式指定输入源
 TTY_INPUT=/dev/tty
 
 BASE="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes"
@@ -20,20 +18,40 @@ URL_HELM="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/s
 #  全局配置变量（按需修改）
 # ================================================================
 
-# ---- 私有镜像仓库 ----
-REGISTRY="dockerhub.ihome.sxxpqp.top:8443"
+# ---- Harbor 代理缓存 ----
+# Harbor 项目(均需设为 Public, 类型 Proxy Cache):
+#   dockerhub        -> docker.io
+#   google_containers-> registry.k8s.io
+#   ghcr             -> ghcr.io
+#   quay             -> quay.io
+HARBOR_HOST="hub.ihome.sxxpqp.top:8443"
+# 脚本内部用到的 docker.io 镜像前缀 (直接走 Harbor 的 dockerhub 项目)
+IMG_PREFIX="${HARBOR_HOST}/dockerhub"
+
+# ---- Helm 仓库 (Nexus) ----
 NEXUS_HELM="https://nexus.ihome.sxxpqp.top:8443/repository"
 NEXUS_LONGHORN="https://nexus.ihome.sxxpqp.top:8443/repository/hwlm-longhorn"
 NEXUS_INGRESS_NGINX="https://nexus.ihome.sxxpqp.top:8443/repository/helmingress-nginx"
 
+# ---- containerd 镜像代理配置 ----
+# 格式: "域名|上游|代理端点|override_path(0/1)|测试镜像(可选)"
+MIRROR_REGISTRIES=(
+    "docker.io|https://registry-1.docker.io|https://${HARBOR_HOST}/v2/dockerhub|1|docker.io/library/busybox:1.36"
+    "registry.k8s.io|https://registry.k8s.io|https://${HARBOR_HOST}/v2/google_containers|1|registry.k8s.io/pause:3.9"
+    "k8s.gcr.io|https://k8s.gcr.io|https://${HARBOR_HOST}/v2/google_containers|1|"
+    "ghcr.io|https://ghcr.io|https://${HARBOR_HOST}/v2/ghcr|1|"
+    "quay.io|https://quay.io|https://${HARBOR_HOST}/v2/quay|1|quay.io/prometheus/busybox:latest"
+)
+CERTS_DIR="/etc/containerd/certs.d"
+
 # ---- K8s 网络配置 ----
-POD_CIDR="10.244.0.0/16"          # Pod 网段
-K8S_API_PORT="6443"                # API Server 端口
+POD_CIDR="10.244.0.0/16"
+K8S_API_PORT="6443"
 
 # ---- Cilium BGP 配置 ----
-BGP_ASN="65000"                    # 本地 ASN
-LB_IP_START="172.16.0.200"        # LoadBalancer IP 池起始
-LB_IP_END="172.16.0.210"          # LoadBalancer IP 池结束
+BGP_ASN="65000"
+LB_IP_START="172.16.0.200"
+LB_IP_END="172.16.0.210"
 
 # ---- Cilium BGP CRD 名称 ----
 BGP_CLUSTER_NAME="cilium-bgp"
@@ -51,7 +69,22 @@ info()  { echo -e "${G}[INFO]${N}  $*"; }
 warn()  { echo -e "${Y}[WARN]${N}  $*"; }
 err()   { echo -e "${R}[ERR ]${N}  $*"; }
 title() { echo -e "\n${C}${B}━━━  $*  ━━━${N}"; }
-pause() { read -rp "$(echo -e "${Y}按回车继续...${N}")" < ${TTY_INPUT} < ${TTY_INPUT}; }
+pause() { read -rp "$(echo -e "${Y}按回车继续...${N}")" < "${TTY_INPUT}"; }
+
+# ask VAR "提示" [默认值]
+ask() {
+    local __v="$1" __p="$2" __d="${3:-}" __a
+    read -rp "$(echo -e "${Y}${__p}${N}")" __a < "${TTY_INPUT}"
+    printf -v "$__v" '%s' "${__a:-$__d}"
+}
+
+# confirm "提示" [默认 y|n]，返回 0 表示确认
+confirm() {
+    local a
+    read -rp "$(echo -e "${Y}$1${N}")" a < "${TTY_INPUT}"
+    a="${a:-${2:-n}}"
+    [[ "${a,,}" == "y" ]]
+}
 
 run_url() {
     local desc="$1" url="$2"
@@ -59,7 +92,6 @@ run_url() {
     title "$desc"
     info "执行: $url"
 
-    # 先下载到临时文件再执行，避免 curl|bash 吞掉 stdin 导致 read 失效
     tmpfile=$(mktemp /tmp/k8s-run-XXXXXX.sh)
     if ! curl -fsSLk "$url" -o "$tmpfile"; then
         err "$desc 下载失败"
@@ -93,7 +125,6 @@ need_helm() {
 do_kernel() { run_url "① 内核参数优化" "$URL_KERNEL"; }
 do_k8s()    { run_url "② 安装 Kubernetes (kubeadm)" "$URL_K8S"; }
 do_helm()  {
-    # Nexus raw 代理可能暂时缓存旧版安装脚本，显式覆盖其下载源，避免回退到失效的 chfs。
     export HELM_VERSION="${HELM_VERSION:-v4.3.0}"
     export HELM_LATEST_VERSION_URL="${HELM_LATEST_VERSION_URL:-https://get.helm.sh/helm4-latest-version}"
     export HELM_DIST_BASE_URL="${HELM_DIST_BASE_URL:-https://mirrors.huaweicloud.com/helm}"
@@ -103,64 +134,120 @@ do_helm()  {
 
 # ----------------------------------------------------------------
 do_mirror() {
-    title "④ 配置容器镜像加速源"
+    title "④ 配置容器镜像加速源 (Harbor Proxy Cache)"
 
-    # 统一私有代理地址
-    PROXY="https://${REGISTRY}"
+    local entry registry upstream endpoint override dir
 
-    info "开始配置 containerd 镜像加速，代理: ${PROXY}"
-
-    # 仓库列表: "registry|upstream_server"
-    REGISTRIES=(
-        "docker.io|https://registry-1.docker.io"
-        "registry.k8s.io|https://registry.k8s.io"
-        "k8s.gcr.io|https://k8s.gcr.io"
-        "gcr.io|https://gcr.io"
-        "ghcr.io|https://ghcr.io"
-        "quay.io|https://quay.io"
-        "registry.cn-hangzhou.aliyuncs.com|https://registry.cn-hangzhou.aliyuncs.com"
-    )
-
-    for entry in "${REGISTRIES[@]}"; do
-        registry="${entry%%|*}"
-        upstream="${entry##*|}"
-        dir="/etc/containerd/certs.d/${registry}"
+    # ---- 1. 生成各上游的 hosts.toml ----
+    for entry in "${MIRROR_REGISTRIES[@]}"; do
+        IFS='|' read -r registry upstream endpoint override _ <<< "$entry"
+        dir="${CERTS_DIR}/${registry}"
         mkdir -p "$dir"
-        cat > "${dir}/hosts.toml" <<EOF
-server = "${upstream}"
-
-[host."${PROXY}"]
-  capabilities = ["pull", "resolve"]
-  skip_verify = true
-EOF
-        info "${registry} → ${PROXY} ✓"
+        {
+            echo "server = \"${upstream}\""
+            echo ""
+            echo "[host.\"${endpoint}\"]"
+            echo "  capabilities = [\"pull\", \"resolve\"]"
+            echo "  skip_verify = true"
+            [[ "$override" == "1" ]] && echo "  override_path = true"
+        } > "${dir}/hosts.toml"
+        info "${registry} → ${endpoint} ✓"
     done
 
-    # 确保 containerd config.toml 启用 config_path
-    CONTAINERD_CFG="/etc/containerd/config.toml"
-    if [[ -f "$CONTAINERD_CFG" ]]; then
-        if grep -q 'config_path' "$CONTAINERD_CFG"; then
-            info "containerd config_path 已配置 ✓"
-        else
-            warn "未检测到 config_path，自动注入..."
-            sed -i '/\[plugins\."io\.containerd\.grpc\.v1\.cri"\.registry\]/a\        config_path = "/etc/containerd/certs.d"' "$CONTAINERD_CFG" \
-                && info "config_path 注入成功 ✓" \
-                || warn "注入失败，请手动在 [plugins.\"io.containerd.grpc.v1.cri\".registry] 下添加:\n  config_path = \"/etc/containerd/certs.d\""
-        fi
-    else
-        warn "未找到 ${CONTAINERD_CFG}，请确认 containerd 已安装"
+    # ---- 2. 确保 containerd 启用 config_path ----
+    local CONTAINERD_CFG="/etc/containerd/config.toml"
+    if [[ ! -f "$CONTAINERD_CFG" ]]; then
+        warn "未找到 ${CONTAINERD_CFG}，生成默认配置..."
+        mkdir -p /etc/containerd
+        containerd config default > "$CONTAINERD_CFG" \
+            || { err "生成默认配置失败，请确认 containerd 已安装"; pause; return 1; }
     fi
 
+    if grep -Eq "config_path *= *[\"'][^\"']+[\"']" "$CONTAINERD_CFG"; then
+        info "containerd config_path 已配置 ✓"
+    else
+        cp -a "$CONTAINERD_CFG" "${CONTAINERD_CFG}.bak.$(date +%s)"
+        if grep -Eq "config_path *= *[\"'][\"']" "$CONTAINERD_CFG"; then
+            sed -i -E "s|config_path *= *[\"'][\"']|config_path = \"${CERTS_DIR}\"|" "$CONTAINERD_CFG"
+        else
+            sed -i -E "/^\[plugins\.\"io\.containerd\.(grpc\.v1\.cri|cri\.v1\.images)\"\.registry\]/a\\        config_path = \"${CERTS_DIR}\"" "$CONTAINERD_CFG"
+        fi
+        grep -q "${CERTS_DIR}" "$CONTAINERD_CFG" \
+            && info "config_path 注入成功 ✓（原文件已备份）" \
+            || warn "注入失败，请在 registry section 下手动添加: config_path = \"${CERTS_DIR}\""
+    fi
+
+    # ---- 3. 重启 containerd ----
     info "重启 containerd..."
-    systemctl restart containerd \
-        && info "containerd 重启完成 ✓" \
-        || warn "重启失败，请手动执行: systemctl restart containerd"
+    if systemctl restart containerd; then
+        info "containerd 重启完成 ✓"
+        sleep 2
+    else
+        err "重启失败，请检查: journalctl -u containerd -n 50"
+        pause; return 1
+    fi
+
+    # ---- 4. 验证 ----
+    do_mirror_verify
+}
+
+do_mirror_verify() {
+    title "④ 镜像加速验证"
+    local ok=0 fail=0 skip=0
+    local entry registry endpoint img base code start out
+
+    echo -e "${B}── 检查1: containerd config_path ──${N}"
+    if containerd config dump 2>/dev/null | grep -q "config_path.*${CERTS_DIR}"; then
+        info "containerd 已加载 config_path=${CERTS_DIR} ✓"
+    else
+        err "containerd 未加载 config_path，hosts.toml 不会生效 ✗"
+        warn "排查: containerd config dump | grep config_path"
+    fi
 
     echo ""
-    echo -e "${B}已配置仓库 (均代理至 ${PROXY}):${N}"
-    for entry in "${REGISTRIES[@]}"; do echo "  ${entry%%|*}"; done
+    echo -e "${B}── 检查2: 代理端点连通性 (/v2/ 返回 200/401 均正常) ──${N}"
+    for entry in "${MIRROR_REGISTRIES[@]}"; do
+        IFS='|' read -r registry _ endpoint _ _ <<< "$entry"
+        base="${endpoint%%/v2*}"
+        code=$(curl -sk -o /dev/null -m 8 -w '%{http_code}' "${base}/v2/" || echo "000")
+        if [[ "$code" == "200" || "$code" == "401" ]]; then
+            info "${registry}: ${base} → HTTP ${code} ✓"
+        else
+            err  "${registry}: ${base} → HTTP ${code} ✗（检查域名解析/端口/反向代理）"
+        fi
+    done
+
     echo ""
-    echo -e "${Y}验证: crictl pull docker.io/library/nginx:alpine${N}"
+    echo -e "${B}── 检查3: crictl 拉取测试 ──${N}"
+    if ! command -v crictl &>/dev/null; then
+        warn "未找到 crictl，跳过拉取测试"
+    else
+        for entry in "${MIRROR_REGISTRIES[@]}"; do
+            IFS='|' read -r registry _ _ _ img <<< "$entry"
+            if [[ -z "$img" ]]; then
+                warn "${registry}: 未配置测试镜像，跳过"
+                skip=$((skip+1)); continue
+            fi
+            crictl rmi "$img" &>/dev/null || true
+            start=$(date +%s)
+            if out=$(crictl pull "$img" 2>&1); then
+                info "${img} ✓ ($(( $(date +%s) - start ))s)"
+                ok=$((ok+1))
+            else
+                err "${img} ✗"
+                echo "      ${out##*$'\n'}"
+                fail=$((fail+1))
+            fi
+        done
+        echo ""
+        echo -e "${B}结果: 成功 ${ok} / 失败 ${fail} / 跳过 ${skip}${N}"
+    fi
+
+    echo ""
+    echo -e "${Y}提示:${N}"
+    echo "  - 拉取成功不代表走了代理（失败会回退上游），请到 Harbor 对应项目里确认缓存已出现该镜像"
+    echo "  - 精确确认: journalctl -u containerd | grep -i 'trying next host'"
+    echo "    出现该日志说明代理失败后回退了上游"
     pause
 }
 
@@ -170,32 +257,32 @@ do_cilium() {
     need_kubectl || return
     need_helm    || return
 
+    local MASTER_IP m IFACE PORT WORKER_IP
     MASTER_IP=$(kubectl get nodes \
         --selector='node-role.kubernetes.io/control-plane' \
         -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)
-    [[ -z "$MASTER_IP" ]] && read -rp "Master 节点 IP: " MASTER_IP < ${TTY_INPUT}
+    [[ -z "$MASTER_IP" ]] && ask MASTER_IP "Master 节点 IP: "
 
     echo -e "\n${B}选择 Cilium 模式:${N}"
     echo "  1) 完整模式  — 替换 kube-proxy + eBPF + Hubble UI  [推荐]"
     echo "  2) 标准模式  — 保留 kube-proxy + Hubble UI"
-    read -rp "$(echo -e "${Y}请选 [1/2，默认1]: ${N}")" m; m="${m:-1}" < ${TTY_INPUT}
+    ask m "请选 [1/2，默认1]: " 1
 
     helm repo add cilium ${NEXUS_HELM}/helm.cilium/ 2>/dev/null || true
     helm repo update cilium
 
-    # 自动检测主网卡名称
     IFACE=$(ip route | awk '/default/{print $5; exit}')
     info "检测到出口网卡: ${IFACE}"
 
-    COMMON=(
+    local COMMON=(
         cilium cilium/cilium
         --namespace kube-system
         --set hubble.relay.enabled=true
         --set hubble.ui.enabled=true
         --set hubble.ui.service.type=NodePort
         --set ipam.mode=cluster-pool
-        --set "ipam.operator.clusterPoolIPv4PodCIDRList={${POD_CIDR}}"             --set "securityContext.capabilities.ciliumAgent=${CILIUM_CAP}"
-        # 隧道模式 NAT 相关
+        --set "ipam.operator.clusterPoolIPv4PodCIDRList={${POD_CIDR}}"
+        --set "securityContext.capabilities.ciliumAgent=${CILIUM_CAP}"
         --set routingMode=tunnel
         --set tunnelProtocol=vxlan
         --set bpf.masquerade=true
@@ -212,7 +299,6 @@ do_cilium() {
             --set k8sServiceHost="${MASTER_IP}" \
             --set k8sServicePort=${K8S_API_PORT}
 
-        # 删除 kube-proxy（Cilium 完全接管）
         info "删除 kube-proxy DaemonSet..."
         kubectl delete daemonset kube-proxy -n kube-system --ignore-not-found
         kubectl delete configmap kube-proxy -n kube-system --ignore-not-found
@@ -225,14 +311,12 @@ do_cilium() {
     kubectl rollout status daemonset/cilium -n kube-system --timeout=120s || true
     kubectl get pods -n kube-system -l k8s-app=cilium
 
-    # ---- 重启相关组件，确保被 Cilium CNI 正确接管 ----
     info "重启 hubble-relay / hubble-ui / coredns，确保 Pod IP 由 Cilium 分配..."
     kubectl rollout restart deployment/hubble-relay -n kube-system 2>/dev/null || true
     kubectl rollout restart deployment/hubble-ui -n kube-system 2>/dev/null || true
     kubectl rollout restart deployment/coredns -n kube-system 2>/dev/null || true
     kubectl rollout status deployment/coredns -n kube-system --timeout=60s || true
 
-    # 等待 hubble 就绪
     sleep 10
     kubectl rollout status deployment/hubble-relay -n kube-system --timeout=60s || true
     kubectl rollout status deployment/hubble-ui -n kube-system --timeout=60s || true
@@ -241,13 +325,14 @@ do_cilium() {
         -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || echo "未就绪")
     info "Cilium 完成 ✓  Hubble UI NodePort: ${PORT}"
 
-    # 获取任意 worker 节点 IP 做访问提示
-    WORKER_IP=$(kubectl get nodes         --selector='!node-role.kubernetes.io/control-plane'         -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)
+    WORKER_IP=$(kubectl get nodes \
+        --selector='!node-role.kubernetes.io/control-plane' \
+        -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)
     echo ""
     echo -e "${B}Hubble UI 访问方式:${N}"
-    echo "  浏览器:      http://${WORKER_IP:-<WorkerIP>}:${PORT}"
+    echo "  浏览器:       http://${WORKER_IP:-<WorkerIP>}:${PORT}"
     echo "  port-forward: kubectl port-forward -n kube-system svc/hubble-ui 8080:80 --address=0.0.0.0"
-    echo "  然后访问:    http://${MASTER_IP}:8080"
+    echo "  然后访问:     http://${MASTER_IP}:8080"
     pause
 }
 
@@ -257,13 +342,12 @@ do_rancher() {
     need_kubectl || return
     need_helm    || return
 
+    local RHOST RPASS
     warn "Rancher 较重，单集群场景 Kuboard 已够用，多集群管理才建议安装"
-    read -rp "$(echo -e "${Y}确认安装? [y/N]: ${N}")" yn < ${TTY_INPUT}
-    [[ "${yn,,}" != "y" ]] && { warn "已跳过"; pause; return; }
+    confirm "确认安装? [y/N]: " n || { warn "已跳过"; pause; return; }
 
-    read -rp "Rancher 域名 (如 rancher.wishfoxs.com): " RHOST < ${TTY_INPUT}
-    read -rp "Bootstrap 密码 [默认 Admin@123456]: " RPASS < ${TTY_INPUT}
-    RPASS="${RPASS:-Admin@123456}"
+    ask RHOST "Rancher 域名 (如 rancher.wishfoxs.com): "
+    ask RPASS "Bootstrap 密码 [默认 Admin@123456]: " "Admin@123456"
 
     info "安装 cert-manager..."
     helm repo add jetstack https://charts.jetstack.io 2>/dev/null || true
@@ -287,20 +371,20 @@ do_rancher() {
     pause
 }
 
-
 # ----------------------------------------------------------------
 do_test() {
     title "⑦ Cilium 网络连通性验证"
     need_kubectl || return
 
-    NS="cilium-test"
-    IMAGE_BUSYBOX="${REGISTRY}/library/busybox:1.36"
-    IMAGE_NGINX="${REGISTRY}/library/nginx:alpine"
+    local NS="cilium-test" m clean
+    local IMAGE_BUSYBOX="${IMG_PREFIX}/library/busybox:1.36"
+    local IMAGE_NGINX="${IMG_PREFIX}/library/nginx:alpine"
+    local CLIENT_NODE SERVER_NODE SERVER_IP SVC_IP
 
     echo -e "${B}选择验证方式:${N}"
     echo "  1) 快速验证  — 部署两个 Pod 互通（反亲和强制跨节点）[推荐]"
     echo "  2) 完整验证  — cilium connectivity test（需安装 cilium CLI，较慢）"
-    read -rp "$(echo -e "${Y}请选 [1/2，默认1]: ${N}")" m; m="${m:-1}" < ${TTY_INPUT}
+    ask m "请选 [1/2，默认1]: " 1
 
     if [[ "$m" == "2" ]]; then
         if ! command -v cilium &>/dev/null; then
@@ -312,7 +396,6 @@ do_test() {
         pause; return
     fi
 
-    # ---- 快速验证（反亲和性强制跨节点）----
     info "创建测试命名空间 ${NS}..."
     kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
 
@@ -376,10 +459,8 @@ EOF
         --port=80 --name=cilium-test-svc 2>/dev/null || true
 
     info "等待 Pod 就绪（最多90秒）..."
-    kubectl wait pod cilium-test-server \
-        --namespace="$NS" --for=condition=Ready --timeout=90s
-    kubectl wait pod cilium-test-client \
-        --namespace="$NS" --for=condition=Ready --timeout=90s
+    kubectl wait pod cilium-test-server --namespace="$NS" --for=condition=Ready --timeout=90s
+    kubectl wait pod cilium-test-client --namespace="$NS" --for=condition=Ready --timeout=90s
 
     CLIENT_NODE=$(kubectl get pod cilium-test-client -n "$NS" -o jsonpath='{.spec.nodeName}')
     SERVER_NODE=$(kubectl get pod cilium-test-server -n "$NS" -o jsonpath='{.spec.nodeName}')
@@ -396,29 +477,24 @@ EOF
 
     echo ""
     echo -e "${B}── 测试1: 跨节点 Pod IP 直连 ──${N}"
-    kubectl exec -n "$NS" cilium-test-client -- \
-        wget -qO- --timeout=5 "http://${SERVER_IP}" \
+    kubectl exec -n "$NS" cilium-test-client -- wget -qO- --timeout=5 "http://${SERVER_IP}" \
         && info "Pod IP 直连 ✓" \
         || err "Pod IP 直连失败 ✗"
 
     echo ""
     echo -e "${B}── 测试2: ClusterIP Service 访问 ──${N}"
-    kubectl exec -n "$NS" cilium-test-client -- \
-        wget -qO- --timeout=5 "http://${SVC_IP}" \
+    kubectl exec -n "$NS" cilium-test-client -- wget -qO- --timeout=5 "http://${SVC_IP}" \
         && info "ClusterIP Service 访问 ✓" \
         || err "ClusterIP Service 访问失败 ✗"
 
     echo ""
     echo -e "${B}── 测试3: DNS 解析 ──${N}"
-    kubectl exec -n "$NS" cilium-test-client -- \
-        nslookup cilium-test-svc."$NS".svc.cluster.local \
+    kubectl exec -n "$NS" cilium-test-client -- nslookup cilium-test-svc."$NS".svc.cluster.local \
         && info "DNS 解析 ✓" \
         || err "DNS 解析失败 ✗"
 
     echo ""
-    read -rp "$(echo -e "${Y}验证完成，是否清理测试资源? [Y/n]: ${N}")" clean < ${TTY_INPUT}
-    clean="${clean:-y}"
-    if [[ "${clean,,}" == "y" ]]; then
+    if confirm "验证完成，是否清理测试资源? [Y/n]: " y; then
         kubectl delete namespace "$NS" --ignore-not-found
         info "测试资源已清理 ✓"
     else
@@ -428,19 +504,18 @@ EOF
 }
 
 # ----------------------------------------------------------------
-
-# ----------------------------------------------------------------
 do_bgp() {
     title "⑧ 配置 Cilium BGP + L2 Announcement"
     need_kubectl || return
+    need_helm    || return
 
     echo -e "${Y}说明:${N}"
     echo "  BGP  — 节点间互相通告 Pod CIDR 路由，后期可接交换机"
     echo "  L2   — 同二层网络 ARP 响应 LoadBalancer IP，使其立即可访问"
     echo ""
 
-    # ---- 检测 Cilium 安装方式 ----
-    CILIUM_VALUES="/etc/cilium-values.yaml"
+    local CILIUM_VALUES="/tmp/cilium-values.yaml"
+    local CILIUM_RELEASE CILIUM_NS INSTALL_MODE
     CILIUM_RELEASE=$(helm list -A --filter 'cilium' -q 2>/dev/null | head -1)
     CILIUM_NS=$(helm list -A --filter 'cilium' 2>/dev/null | awk 'NR>1{print $2}' | head -1)
     CILIUM_NS="${CILIUM_NS:-kube-system}"
@@ -458,27 +533,21 @@ do_bgp() {
     fi
     info "模式: ${INSTALL_MODE}"
 
-    # ---- 收集节点信息 ----
     echo ""
     echo -e "${B}当前集群节点:${N}"
     kubectl get nodes -o wide
     echo ""
 
-    read -rp "$(echo -e "${Y}本地 ASN [默认 65000]: ${N}")" LOCAL_ASN < ${TTY_INPUT}
-    LOCAL_ASN="${LOCAL_ASN:-${BGP_ASN}}"
+    local LOCAL_ASN IP_START IP_END
+    ask LOCAL_ASN "本地 ASN [默认 ${BGP_ASN}]: " "${BGP_ASN}"
+    ask IP_START  "LoadBalancer IP 池起始 IP [默认 ${LB_IP_START}]: " "${LB_IP_START}"
+    ask IP_END    "LoadBalancer IP 池结束 IP [默认 ${LB_IP_END}]: " "${LB_IP_END}"
 
-    read -rp "$(echo -e "${Y}LoadBalancer IP 池起始 IP [默认 ${LB_IP_START}]: ${N}")" IP_START < ${TTY_INPUT}
-    IP_START="${IP_START:-${LB_IP_START}}"
-
-    read -rp "$(echo -e "${Y}LoadBalancer IP 池结束 IP [默认 ${LB_IP_END}]: ${N}")" IP_END < ${TTY_INPUT}
-    IP_END="${IP_END:-${LB_IP_END}}"
-
-    # 自动获取所有节点 IP 和名称
+    local NODE_IPS NODE_NAMES IFACE i
     NODE_IPS=($(kubectl get nodes \
         -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}'))
     NODE_NAMES=($(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'))
 
-    # 自动检测主网卡
     IFACE=$(ip route | awk '/default/{print $5; exit}')
     info "检测到出口网卡: ${IFACE}"
 
@@ -488,26 +557,20 @@ do_bgp() {
         echo "  ${NODE_NAMES[$i]} → ${NODE_IPS[$i]}"
     done
     echo ""
-    read -rp "$(echo -e "${Y}确认执行? [y/N]: ${N}")" yn < ${TTY_INPUT}
-    [[ "${yn,,}" != "y" ]] && { warn "已取消"; pause; return; }
+    confirm "确认执行? [y/N]: " n || { warn "已取消"; pause; return; }
 
-    # ================================================================
-    # Step1: 更新 Cilium 配置（开启 BGP + L2 + NET_BIND_SERVICE）
-    # ================================================================
+    # ---- Step1: 更新 Cilium 配置 ----
     info "Step1: 更新 Cilium 配置..."
 
     helm repo add cilium ${NEXUS_HELM}/helm.cilium/ 2>/dev/null || true
     helm repo update cilium
 
-    # 统一的 capability 配置
-    CAP="${CILIUM_CAP}"
+    local CAP="${CILIUM_CAP}"
 
     if [[ "$INSTALL_MODE" == "helm" ]]; then
-        # 导出当前 values，去掉冲突的旧 key
         helm get values "${CILIUM_RELEASE}" -n "${CILIUM_NS}" | \
-            grep -v '^\s*tunnelProtocol:\|^\s*routingMode:' > "${CILIUM_VALUES}" || true
+            grep -v '^\s*tunnelProtocol:\|^\s*routingMode:\|^USER-SUPPLIED' > "${CILIUM_VALUES}" || true
 
-        # 追加 BGP + L2 配置
         cat >> "${CILIUM_VALUES}" << VALEOF
 bgpControlPlane:
   enabled: true
@@ -537,10 +600,11 @@ VALEOF
             --set "securityContext.capabilities.ciliumAgent=${CAP}"
 
     elif [[ "$INSTALL_MODE" == "new" ]]; then
+        local MASTER_IP
         MASTER_IP=$(kubectl get nodes \
             --selector='node-role.kubernetes.io/control-plane' \
             -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)
-        [[ -z "$MASTER_IP" ]] && read -rp "Master 节点 IP: " MASTER_IP < ${TTY_INPUT}
+        [[ -z "$MASTER_IP" ]] && ask MASTER_IP "Master 节点 IP: "
 
         helm install cilium cilium/cilium \
             --namespace kube-system \
@@ -565,16 +629,9 @@ VALEOF
             --set "securityContext.capabilities.ciliumAgent=${CAP}"
 
     else
-        # kubectl 安装方式，patch configmap
-        kubectl patch configmap cilium-config -n kube-system --type merge -p '{
-          "data": {
-            "enable-bgp-control-plane": "true",
-            "enable-l2-announcements": "true",
-            "routing-mode": "native",
-            "ipv4-native-routing-cidr": "${POD_CIDR}",
-            "auto-direct-node-routes": "true"
-          }
-        }'
+        # 非 helm 安装：patch configmap（双引号包 JSON，保证变量展开）
+        kubectl patch configmap cilium-config -n kube-system --type merge -p \
+            "{\"data\":{\"enable-bgp-control-plane\":\"true\",\"enable-l2-announcements\":\"true\",\"routing-mode\":\"native\",\"ipv4-native-routing-cidr\":\"${POD_CIDR}\",\"auto-direct-node-routes\":\"true\"}}"
     fi
 
     # ---- Step2: 重启 operator 和 cilium ----
@@ -599,16 +656,16 @@ spec:
     stop: "${IP_END}"
 YAML
 
-    # ---- Step4: BGP peer 配置（所有节点互为 peer，包含 localPort）----
+    # ---- Step4: BGP peer 配置 ----
     info "Step4: 生成 BGP peer 配置..."
 
-    PEERS_YAML=""
+    local PEERS_YAML=""
     for i in "${!NODE_NAMES[@]}"; do
         PEERS_YAML+="    - name: \"peer-${NODE_NAMES[$i]}\"\n"
         PEERS_YAML+="      peerASN: ${LOCAL_ASN}\n"
         PEERS_YAML+="      peerAddress: ${NODE_IPS[$i]}\n"
         PEERS_YAML+="      peerConfigRef:\n"
-        PEERS_YAML+="        name: cilium-peer\n"
+        PEERS_YAML+="        name: ${BGP_PEER_NAME}\n"
     done
 
     kubectl apply -f - <<YAML
@@ -659,7 +716,7 @@ spec:
   - advertisementType: PodCIDR
 YAML
 
-    # ---- Step5: L2 通告策略（匹配所有常见网卡名，兼容不同节点）----
+    # ---- Step5: L2 通告策略 ----
     info "Step5: 创建 L2 通告策略..."
     kubectl apply -f - <<YAML
 apiVersion: cilium.io/v2alpha1
@@ -699,6 +756,7 @@ YAML
     echo -e "${B}── LoadBalancer 服务 ──${N}"
     kubectl get svc -A --field-selector spec.type=LoadBalancer 2>/dev/null || true
 
+    local LB_IP
     LB_IP=$(kubectl get svc -n kube-system hubble-ui \
         -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
     echo ""
@@ -706,7 +764,7 @@ YAML
     [[ -n "$LB_IP" ]] && echo -e "${B}Hubble UI: http://${LB_IP}:80${N}"
     echo ""
     echo -e "${Y}后期添加交换机 peer:${N}"
-    echo "  kubectl edit ciliumbgpclusterconfig cilium-bgp"
+    echo "  kubectl edit ciliumbgpclusterconfig ${BGP_CLUSTER_NAME}"
     pause
 }
 
@@ -721,10 +779,8 @@ do_longhorn_prereq() {
     echo "  - device-mapper                        (设备映射)"
     echo "  - 内核模块: iscsi_tcp / dm_crypt"
     echo ""
-    read -rp "$(echo -e "${Y}确认执行? [y/N]: ${N}")" yn < ${TTY_INPUT}
-    [[ "${yn,,}" != "y" ]] && { warn "已取消"; pause; return; }
+    confirm "确认执行? [y/N]: " n || { warn "已取消"; pause; return; }
 
-    # ---- 自动检测包管理器 ----
     detect_pkgmgr() {
         if command -v apt-get &>/dev/null; then echo "apt"
         elif command -v dnf &>/dev/null;     then echo "dnf"
@@ -733,11 +789,11 @@ do_longhorn_prereq() {
         fi
     }
 
+    local PKG REMOTE NODE_IPS
     PKG=$(detect_pkgmgr)
     info "本机包管理器: ${PKG}"
     [[ "$PKG" == "unknown" ]] && { err "不支持的包管理器，请手动安装"; pause; return; }
 
-    # ---- 获取所有节点 IP ----
     if command -v kubectl &>/dev/null && kubectl get nodes &>/dev/null; then
         NODE_IPS=($(kubectl get nodes \
             -o jsonpath='{.items[*].status.addresses[?(@.type=="InternalIP")].address}'))
@@ -748,7 +804,6 @@ do_longhorn_prereq() {
         REMOTE=false
     fi
 
-    # ---- 本机安装 ----
     install_local() {
         local pkg=$1
         info "安装系统包 [${pkg}]..."
@@ -757,14 +812,8 @@ do_longhorn_prereq() {
                 apt-get update -qq
                 apt-get install -y open-iscsi nfs-common cryptsetup dmsetup
                 ;;
-            dnf)
-                dnf install -y iscsi-initiator-utils nfs-utils cryptsetup device-mapper
-                [[ ! -s /etc/iscsi/initiatorname.iscsi ]] && \
-                    echo "InitiatorName=$(/sbin/iscsi-iname 2>/dev/null || echo iqn.$(date +%Y-%m).local:$(hostname))" \
-                    > /etc/iscsi/initiatorname.iscsi
-                ;;
-            yum)
-                yum install -y iscsi-initiator-utils nfs-utils cryptsetup device-mapper
+            dnf|yum)
+                "$pkg" install -y iscsi-initiator-utils nfs-utils cryptsetup device-mapper
                 [[ ! -s /etc/iscsi/initiatorname.iscsi ]] && \
                     echo "InitiatorName=$(/sbin/iscsi-iname 2>/dev/null || echo iqn.$(date +%Y-%m).local:$(hostname))" \
                     > /etc/iscsi/initiatorname.iscsi
@@ -787,14 +836,12 @@ do_longhorn_prereq() {
 
     install_local "$PKG"
 
-    # ---- 远程节点：DaemonSet（nsenter 进宿主机，脚本内自动识别发行版）----
     if [[ "$REMOTE" == "true" ]]; then
         info "通过 DaemonSet 在所有节点安装（自动识别发行版）..."
 
-        # 生成 YAML 到临时文件，只展开 REGISTRY，其余 shell 变量转义
+        local LONGHORN_DS_YAML INSTALL_SCRIPT
         LONGHORN_DS_YAML=$(mktemp /tmp/longhorn-ds-XXXXXX.yaml)
 
-        # base64 编码安装脚本，避免 YAML 特殊字符冲突
         INSTALL_SCRIPT=$(base64 -w0 << 'SCRIPT'
 set -e
 NODE=$(cat /etc/hostname 2>/dev/null || hostname)
@@ -841,7 +888,7 @@ spec:
       - operator: Exists
       initContainers:
       - name: installer
-        image: ${REGISTRY}/library/busybox:1.36
+        image: ${IMG_PREFIX}/library/busybox:1.36
         securityContext:
           privileged: true
         command:
@@ -850,7 +897,7 @@ spec:
         - nsenter --mount=/proc/1/ns/mnt --net=/proc/1/ns/net -- sh -c "echo ${INSTALL_SCRIPT} | base64 -d | sh"
       containers:
       - name: pause
-        image: ${REGISTRY}/library/busybox:1.36
+        image: ${IMG_PREFIX}/library/busybox:1.36
         command: ["sleep", "infinity"]
 YAML
         kubectl apply -f "${LONGHORN_DS_YAML}"
@@ -865,7 +912,6 @@ YAML
             -n kube-system --ignore-not-found
     fi
 
-    # ---- 最终验证 ----
     echo ""
     echo -e "${B}── 本机依赖验证 ──${N}"
     systemctl is-active iscsid &>/dev/null \
@@ -882,7 +928,6 @@ YAML
     pause
 }
 
-
 # ----------------------------------------------------------------
 do_longhorn() {
     title "⑩ 安装 Longhorn 分布式存储"
@@ -896,24 +941,16 @@ do_longhorn() {
     echo "  - 请确保已执行选项 9（前提依赖安装）"
     echo ""
 
-    # 检查前提依赖
     if ! systemctl is-active iscsid &>/dev/null; then
         warn "iscsid 未运行，建议先执行选项 9 安装前提依赖"
-        read -rp "$(echo -e "${Y}是否继续? [y/N]: ${N}")" force < ${TTY_INPUT}
-        [[ "${force,,}" != "y" ]] && { warn "已取消"; pause; return; }
+        confirm "是否继续? [y/N]: " n || { warn "已取消"; pause; return; }
     fi
 
-    read -rp "$(echo -e "${Y}存储路径 [默认 /var/lib/longhorn]: ${N}")" DATA_PATH < ${TTY_INPUT}
-    DATA_PATH="${DATA_PATH:-/var/lib/longhorn}"
-
-    read -rp "$(echo -e "${Y}副本数 [默认 3]: ${N}")" REPLICA_COUNT < ${TTY_INPUT}
-    REPLICA_COUNT="${REPLICA_COUNT:-3}"
-
-    read -rp "$(echo -e "${Y}是否设为默认 StorageClass? [Y/n]: ${N}")" DEFAULT_SC < ${TTY_INPUT}
-    DEFAULT_SC="${DEFAULT_SC:-y}"
-
-    read -rp "$(echo -e "${Y}确认安装? [y/N]: ${N}")" yn < ${TTY_INPUT}
-    [[ "${yn,,}" != "y" ]] && { warn "已取消"; pause; return; }
+    local DATA_PATH REPLICA_COUNT DEFAULT_SC IS_DEFAULT LB_IP
+    ask DATA_PATH     "存储路径 [默认 /var/lib/longhorn]: " "/var/lib/longhorn"
+    ask REPLICA_COUNT "副本数 [默认 3]: " 3
+    ask DEFAULT_SC    "是否设为默认 StorageClass? [Y/n]: " y
+    confirm "确认安装? [y/N]: " n || { warn "已取消"; pause; return; }
 
     info "添加 Longhorn helm repo..."
     helm repo add longhorn ${NEXUS_LONGHORN}/ 2>/dev/null || true
@@ -921,10 +958,9 @@ do_longhorn() {
 
     kubectl create namespace longhorn-system --dry-run=client -o yaml | kubectl apply -f -
 
-    # 生成 values 文件
-    LONGHORN_VALUES="/tmp/longhorn-values.yaml"
+    local LONGHORN_VALUES="/tmp/longhorn-values.yaml"
 
-    [[ "${DEFAULT_SC,,}" == "y" || "${DEFAULT_SC,,}" == "" ]] &&         IS_DEFAULT="true" || IS_DEFAULT="false"
+    if [[ "${DEFAULT_SC,,}" == "y" ]]; then IS_DEFAULT="true"; else IS_DEFAULT="false"; fi
 
     cat > "${LONGHORN_VALUES}" << VALEOF
 defaultSettings:
@@ -950,10 +986,13 @@ VALEOF
     echo ""
 
     info "安装 Longhorn..."
-    helm upgrade --install longhorn longhorn/longhorn         --namespace longhorn-system         -f "${LONGHORN_VALUES}"
+    helm upgrade --install longhorn longhorn/longhorn \
+        --namespace longhorn-system \
+        -f "${LONGHORN_VALUES}"
 
     info "等待 Longhorn 就绪（约2-3分钟）..."
-    kubectl rollout status deployment/longhorn-ui         -n longhorn-system --timeout=300s || true
+    kubectl rollout status deployment/longhorn-ui \
+        -n longhorn-system --timeout=300s || true
 
     echo ""
     echo -e "${B}── Longhorn Pod 状态 ──${N}"
@@ -962,10 +1001,15 @@ VALEOF
     echo -e "${B}── StorageClass ──${N}"
     kubectl get storageclass
 
-    LB_IP=$(kubectl get svc -n longhorn-system longhorn-frontend         -o jsonpath="{.status.loadBalancer.ingress[0].ip}" 2>/dev/null || echo "")
+    LB_IP=$(kubectl get svc -n longhorn-system longhorn-frontend \
+        -o jsonpath="{.status.loadBalancer.ingress[0].ip}" 2>/dev/null || echo "")
     echo ""
     info "Longhorn 安装完成 ✓"
-    [[ -n "$LB_IP" ]] && echo -e "${B}Longhorn UI: http://${LB_IP}:80${N}" ||         echo -e "${Y}查看 UI 地址: kubectl get svc -n longhorn-system${N}"
+    if [[ -n "$LB_IP" ]]; then
+        echo -e "${B}Longhorn UI: http://${LB_IP}:80${N}"
+    else
+        echo -e "${Y}查看 UI 地址: kubectl get svc -n longhorn-system${N}"
+    fi
     echo ""
     echo -e "${Y}使用示例（PVC）:${N}"
     cat << 'EXAMPLE'
@@ -985,19 +1029,11 @@ EXAMPLE
 }
 
 # ----------------------------------------------------------------
-do_ingress_nginx() {
-    title "⑬ 安装 Ingress-Nginx（hostNetwork DaemonSet 模式）"
-    need_kubectl || return
-    need_helm    || return
+# 交互选择节点，结果放入全局数组 SELECTED_NODES，并清除未选节点的 ingress 标签
+select_ingress_nodes() {
+    local label="$1"   # nginx / traefik
+    local ALL_NODES MASTER_NODES i NODE m IS_MASTER choice idx node s SKIP NODE_CHOICES
 
-    echo -e "${B}说明:${N}"
-    echo "  - hostNetwork 模式，直接监听节点 80/443 端口"
-    echo "  - DaemonSet 部署，每个选中节点都运行一个 Pod"
-    echo "  - 无需 LoadBalancer，用节点 IP 直接访问"
-    echo "  - 适合不需要 Cilium LB 的场景"
-    echo ""
-
-    # ---- 显示所有节点，让用户选择 ----
     echo -e "${B}当前集群节点:${N}"
     kubectl get nodes -o wide
     echo ""
@@ -1007,7 +1043,7 @@ do_ingress_nginx() {
         --selector='node-role.kubernetes.io/control-plane' \
         -o jsonpath='{.items[*].metadata.name}'))
 
-    echo -e "${B}请选择部署 ingress-nginx 的节点（输入编号，多个用空格分隔）:${N}"
+    echo -e "${B}请选择部署节点（输入编号，多个用空格分隔）:${N}"
     echo -e "${Y}建议只选 Worker 节点${N}"
     echo ""
     for i in "${!ALL_NODES[@]}"; do
@@ -1019,7 +1055,7 @@ do_ingress_nginx() {
         echo -e "  $((i+1))) ${NODE}${IS_MASTER}"
     done
     echo ""
-    read -rp "$(echo -e "${Y}请输入节点编号（如: 2 3 4）: ${N}")" NODE_CHOICES < ${TTY_INPUT}
+    ask NODE_CHOICES "请输入节点编号（如: 2 3 4）: "
 
     SELECTED_NODES=()
     for choice in $NODE_CHOICES; do
@@ -1033,7 +1069,7 @@ do_ingress_nginx() {
 
     if [[ ${#SELECTED_NODES[@]} -eq 0 ]]; then
         err "未选择任何节点，取消安装"
-        pause; return
+        return 1
     fi
 
     echo ""
@@ -1041,29 +1077,49 @@ do_ingress_nginx() {
     for n in "${SELECTED_NODES[@]}"; do echo "  $n"; done
     echo ""
 
-    read -rp "$(echo -e "${Y}worker-processes [默认 4]: ${N}")" WORKER_PROC < ${TTY_INPUT}
-    WORKER_PROC="${WORKER_PROC:-4}"
+    # 标签打到选中节点（真正打标签前由调用方确认，这里仅保存全部节点列表）
+    ALL_NODES_G=("${ALL_NODES[@]}")
+    return 0
+}
 
-    read -rp "$(echo -e "${Y}upstream-keepalive-connections [默认 500]: ${N}")" KEEPALIVE < ${TTY_INPUT}
-    KEEPALIVE="${KEEPALIVE:-500}"
-
-    read -rp "$(echo -e "${Y}确认安装? [y/N]: ${N}")" yn < ${TTY_INPUT}
-    [[ "${yn,,}" != "y" ]] && { warn "已取消"; pause; return; }
-
-    # ---- 打标签 ingress=nginx ----
-    info "给选中节点打标签 ingress=nginx..."
+apply_ingress_label() {
+    local label="$1" node s SKIP
+    info "给选中节点打标签 ingress=${label}..."
     for node in "${SELECTED_NODES[@]}"; do
-        kubectl label node "$node" ingress=nginx --overwrite
-        info "  $node ← ingress=nginx ✓"
+        kubectl label node "$node" ingress="${label}" --overwrite
+        info "  $node ← ingress=${label} ✓"
     done
-    # 清除其他节点的标签
-    for node in "${ALL_NODES[@]}"; do
+    for node in "${ALL_NODES_G[@]}"; do
         SKIP=false
         for s in "${SELECTED_NODES[@]}"; do
             [[ "$s" == "$node" ]] && SKIP=true && break
         done
         [[ "$SKIP" == "false" ]] && kubectl label node "$node" ingress- 2>/dev/null || true
     done
+}
+
+# ----------------------------------------------------------------
+do_ingress_nginx() {
+    title "⑫ 安装 Ingress-Nginx（hostNetwork DaemonSet 模式）"
+    need_kubectl || return
+    need_helm    || return
+
+    echo -e "${B}说明:${N}"
+    echo "  - hostNetwork 模式，直接监听节点 80/443 端口"
+    echo "  - DaemonSet 部署，每个选中节点都运行一个 Pod"
+    echo "  - 无需 LoadBalancer，用节点 IP 直接访问"
+    echo "  - 适合不需要 Cilium LB 的场景"
+    echo ""
+
+    SELECTED_NODES=(); ALL_NODES_G=()
+    select_ingress_nodes nginx || { pause; return; }
+
+    local WORKER_PROC KEEPALIVE node NODE_IP
+    ask WORKER_PROC "worker-processes [默认 4]: " 4
+    ask KEEPALIVE   "upstream-keepalive-connections [默认 500]: " 500
+    confirm "确认安装? [y/N]: " n || { warn "已取消"; pause; return; }
+
+    apply_ingress_label nginx
 
     info "添加 ingress-nginx helm repo..."
     helm repo add ingress-nginx ${NEXUS_INGRESS_NGINX}/ 2>/dev/null || true
@@ -1071,7 +1127,7 @@ do_ingress_nginx() {
 
     kubectl create namespace ingress-nginx --dry-run=client -o yaml | kubectl apply -f -
 
-    NGINX_VALUES="/tmp/ingress-nginx-values.yaml"
+    local NGINX_VALUES="/tmp/ingress-nginx-values.yaml"
     cat > "${NGINX_VALUES}" << VALEOF
 controller:
   kind: DaemonSet
@@ -1119,7 +1175,6 @@ VALEOF
     kubectl get pods -n ingress-nginx -o wide
     echo ""
 
-    # 显示节点 IP 访问方式
     echo -e "${B}── 访问地址（节点 IP 直接访问）──${N}"
     for node in "${SELECTED_NODES[@]}"; do
         NODE_IP=$(kubectl get node "$node" \
@@ -1154,17 +1209,7 @@ EXAMPLE
     pause
 }
 
-do_status() {
-    title "查看集群状态"
-    echo -e "${B}── Nodes ──${N}"
-    kubectl get nodes -o wide 2>/dev/null || warn "kubectl 不可用"
-    echo -e "\n${B}── kube-system Pods ──${N}"
-    kubectl get pods -n kube-system 2>/dev/null || true
-    pause
-}
-
 # ----------------------------------------------------------------
-
 do_traefik() {
     title "⑪ 安装 Traefik Ingress Controller（生产多副本）"
     need_kubectl || return
@@ -1178,80 +1223,18 @@ do_traefik() {
     echo "  - Dashboard 默认关闭"
     echo ""
 
-    # ---- 显示所有节点让用户选择 ----
-    echo -e "${B}当前集群节点:${N}"
-    kubectl get nodes -o wide
-    echo ""
+    SELECTED_NODES=(); ALL_NODES_G=()
+    select_ingress_nodes traefik || { pause; return; }
 
-    ALL_NODES=($(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'))
-    MASTER_NODES=($(kubectl get nodes \
-        --selector='node-role.kubernetes.io/control-plane' \
-        -o jsonpath='{.items[*].metadata.name}'))
+    local REPLICAS HTTP_PORT HTTPS_PORT DASHBOARD DASHBOARD_SECTION LB_IP
+    local do_test_ingress clean_test RESULT
+    ask REPLICAS   "副本数 [默认 ${#SELECTED_NODES[@]}]: " "${#SELECTED_NODES[@]}"
+    ask HTTP_PORT  "HTTP 端口 [默认 80]: " 80
+    ask HTTPS_PORT "HTTPS 端口 [默认 443]: " 443
+    ask DASHBOARD  "是否开启 Dashboard? [y/N]: " n
+    confirm "确认安装? [y/N]: " n || { warn "已取消"; pause; return; }
 
-    echo -e "${B}请选择 Traefik 可以调度的节点（输入编号，多个用空格分隔）:${N}"
-    echo -e "${Y}建议只选 Worker 节点，不选 Master${N}"
-    echo ""
-    for i in "${!ALL_NODES[@]}"; do
-        NODE="${ALL_NODES[$i]}"
-        IS_MASTER=""
-        for m in "${MASTER_NODES[@]}"; do
-            [[ "$m" == "$NODE" ]] && IS_MASTER=" ${R}[master]${N}" && break
-        done
-        echo -e "  $((i+1))) ${NODE}${IS_MASTER}"
-    done
-    echo ""
-    read -rp "$(echo -e "${Y}请输入节点编号（如: 2 3 4）: ${N}")" NODE_CHOICES < ${TTY_INPUT}
-
-    SELECTED_NODES=()
-    for choice in $NODE_CHOICES; do
-        idx=$((choice-1))
-        if [[ $idx -ge 0 && $idx -lt ${#ALL_NODES[@]} ]]; then
-            SELECTED_NODES+=("${ALL_NODES[$idx]}")
-        else
-            warn "无效编号: $choice，跳过"
-        fi
-    done
-
-    if [[ ${#SELECTED_NODES[@]} -eq 0 ]]; then
-        err "未选择任何节点，取消安装"
-        pause; return
-    fi
-
-    echo ""
-    echo -e "${B}已选择节点:${N}"
-    for n in "${SELECTED_NODES[@]}"; do echo "  $n"; done
-    echo ""
-
-    read -rp "$(echo -e "${Y}副本数 [默认 ${#SELECTED_NODES[@]}]: ${N}")" REPLICAS < ${TTY_INPUT}
-    REPLICAS="${REPLICAS:-${#SELECTED_NODES[@]}}"
-
-    read -rp "$(echo -e "${Y}HTTP 端口 [默认 80]: ${N}")" HTTP_PORT < ${TTY_INPUT}
-    HTTP_PORT="${HTTP_PORT:-80}"
-
-    read -rp "$(echo -e "${Y}HTTPS 端口 [默认 443]: ${N}")" HTTPS_PORT < ${TTY_INPUT}
-    HTTPS_PORT="${HTTPS_PORT:-443}"
-
-    read -rp "$(echo -e "${Y}是否开启 Dashboard? [y/N]: ${N}")" DASHBOARD < ${TTY_INPUT}
-    DASHBOARD="${DASHBOARD:-n}"
-
-    read -rp "$(echo -e "${Y}确认安装? [y/N]: ${N}")" yn < ${TTY_INPUT}
-    [[ "${yn,,}" != "y" ]] && { warn "已取消"; pause; return; }
-
-    # ---- 打标签 ingress=traefik ----
-    info "给选中节点打标签 ingress=traefik..."
-    for node in "${SELECTED_NODES[@]}"; do
-        kubectl label node "$node" ingress=traefik --overwrite
-        info "  $node ← ingress=traefik ✓"
-    done
-
-    # 清除其他节点的标签
-    for node in "${ALL_NODES[@]}"; do
-        SKIP=false
-        for s in "${SELECTED_NODES[@]}"; do
-            [[ "$s" == "$node" ]] && SKIP=true && break
-        done
-        [[ "$SKIP" == "false" ]] && kubectl label node "$node" ingress- 2>/dev/null || true
-    done
+    apply_ingress_label traefik
 
     info "添加 Traefik helm repo..."
     helm repo add traefik ${NEXUS_HELM}/helm.traefik/ 2>/dev/null || true
@@ -1259,7 +1242,7 @@ do_traefik() {
 
     kubectl create namespace traefik --dry-run=client -o yaml | kubectl apply -f -
 
-    TRAEFIK_VALUES="/tmp/traefik-values.yaml"
+    local TRAEFIK_VALUES="/tmp/traefik-values.yaml"
 
     if [[ "${DASHBOARD,,}" == "y" ]]; then
         DASHBOARD_SECTION="ingressRoute:
@@ -1359,11 +1342,10 @@ VALEOF
 
     # ---- 测试 Ingress ----
     echo ""
-    read -rp "$(echo -e "${Y}是否部署 whoami 测试验证 Ingress 路由? [y/N]: ${N}")" do_test_ingress < ${TTY_INPUT}
-    if [[ "${do_test_ingress,,}" == "y" ]]; then
+    if confirm "是否部署 whoami 测试验证 Ingress 路由? [y/N]: " n; then
         info "部署 whoami 测试服务..."
         kubectl create deployment whoami \
-            --image=traefik/whoami \
+            --image="${IMG_PREFIX}/traefik/whoami:latest" \
             --namespace default \
             --dry-run=client -o yaml | kubectl apply -f -
         kubectl expose deployment whoami \
@@ -1403,15 +1385,13 @@ YAML
             warn "手动测试: curl -H 'Host: whoami.local' http://${LB_IP}"
         fi
         echo ""
-        read -rp "$(echo -e "${Y}是否清理测试资源? [Y/n]: ${N}")" clean_test < ${TTY_INPUT}
-        clean_test="${clean_test:-y}"
-        if [[ "${clean_test,,}" == "y" ]]; then
+        if confirm "是否清理测试资源? [Y/n]: " y; then
             kubectl delete ingress whoami-test -n default --ignore-not-found
             kubectl delete svc whoami -n default --ignore-not-found
             kubectl delete deployment whoami -n default --ignore-not-found
             info "测试资源已清理 ✓"
         else
-            warn "手动清理: kubectl delete deploy,svc,ingress whoami whoami-test -n default"
+            warn "手动清理: kubectl delete ingress whoami-test -n default; kubectl delete svc,deploy whoami -n default"
         fi
     fi
 
@@ -1439,6 +1419,16 @@ EXAMPLE
     pause
 }
 
+# ----------------------------------------------------------------
+do_status() {
+    title "查看集群状态"
+    echo -e "${B}── Nodes ──${N}"
+    kubectl get nodes -o wide 2>/dev/null || warn "kubectl 不可用"
+    echo -e "\n${B}── kube-system Pods ──${N}"
+    kubectl get pods -n kube-system 2>/dev/null || true
+    pause
+}
+
 # ================================================================
 #  主菜单
 # ================================================================
@@ -1446,13 +1436,13 @@ while true; do
     clear
     echo -e "${C}${B}"
     echo "  ╔══════════════════════════════════════════════╗"
-    echo "  ║   K8s 集群安装菜单  (sxxpqp 运智运维)   ║"
+    echo "  ║   K8s 集群安装菜单  (sxxpqp 运智运维)        ║"
     echo "  ╚══════════════════════════════════════════════╝"
     echo -e "${N}"
     echo "  1) 内核参数优化          (k8skerneloptimize.sh)"
     echo "  2) 安装 Kubernetes       (installk8s.sh)"
     echo "  3) 安装 Helm             (install-helm.sh)"
-    echo "  4) 配置镜像加速源        (统一代理 ${REGISTRY})"
+    echo "  4) 配置镜像加速源        (Harbor 代理 ${HARBOR_HOST})"
     echo "  5) 安装 Cilium CNI       (eBPF + Hubble UI)"
     echo "  6) 安装 Rancher          (多集群管理平台)"
     echo "  7) Cilium 网络连通性验证 (测试Pod互通/DNS/跨节点)"
@@ -1464,7 +1454,7 @@ while true; do
     echo " 13) 查看集群状态"
     echo "  0) 退出"
     echo ""
-    read -rp "$(echo -e "${Y}请选择 [0-13]: ${N}")" choice < ${TTY_INPUT}
+    read -rp "$(echo -e "${Y}请选择 [0-13]: ${N}")" choice < "${TTY_INPUT}"
 
     case "$choice" in
         1)  do_kernel          ;;
