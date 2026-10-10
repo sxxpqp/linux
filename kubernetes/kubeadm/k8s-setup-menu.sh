@@ -24,7 +24,7 @@ URL_HELM="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/s
 #   google_containers-> registry.k8s.io
 #   ghcr             -> ghcr.io
 #   quay             -> quay.io
-HARBOR_HOST="hub.ihome.sxxpqp.top:8443"
+HARBOR_HOST="huball.ihome.sxxpqp.top:8443"
 # 脚本内部用到的 docker.io 镜像前缀 (直接走 Harbor 的 dockerhub 项目)
 IMG_PREFIX="${HARBOR_HOST}/dockerhub"
 
