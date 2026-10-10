@@ -19,6 +19,33 @@ CONTAINERD_SHA256="${CONTAINERD_SHA256:-}"
 CNI_PLUGINS_SHA256="${CNI_PLUGINS_SHA256:-}"
 RUNC_SHA256="${RUNC_SHA256:-}"
 
+# ---- glibc 兼容性检测 ----
+# containerd 2.x 官方二进制要求 glibc >= 2.34，而 CentOS 7 是 2.17，
+# 直接装 2.x 会报: /lib64/libc.so.6: version `GLIBC_2.34' not found (required by containerd)
+# 这里检测到老 glibc 且请求的是 2.x 时，自动回退到兼容的 1.7 系列，避免安装中断。
+GLIBC_VERSION="$(ldd --version 2>/dev/null | head -n 1 | awk '{ print $NF }')"
+CONTAINERD_FALLBACK_VERSION="${CONTAINERD_FALLBACK_VERSION:-1.7.27}"
+
+ver_ge() {
+  # 用法: ver_ge 2.34 2.17  -> 2.34 >= 2.17 为真(返回 0)
+  local IFS=. a=($1) b=($2) i n m
+  for i in 0 1 2; do
+    n="${a[$i]:-0}"; m="${b[$i]:-0}"
+    (( m > n )) && return 0
+    (( m < n )) && return 1
+  done
+  return 0
+}
+
+if [[ "$CONTAINERD_VERSION" == 2.* && -n "$GLIBC_VERSION" ]] && ! ver_ge 2.34 "$GLIBC_VERSION"; then
+  echo "WARN: 宿主机 glibc=${GLIBC_VERSION}，不满足 containerd 2.x 所需 glibc>=2.34（如 CentOS 7）" >&2
+  echo "WARN: 已自动回退到 containerd ${CONTAINERD_FALLBACK_VERSION}（1.7 系列，兼容老 glibc）" >&2
+  echo "WARN: 如需强制 2.x，请升级系统到 glibc>=2.34（RHEL9 / Ubuntu 22.04+）后重试" >&2
+  CONTAINERD_VERSION="$CONTAINERD_FALLBACK_VERSION"
+  CONTAINERD_PKG="containerd-${CONTAINERD_VERSION}-linux-amd64.tar.gz"
+  CONTAINERD_DOWNLOAD_URL="${CONTAINERD_DOWNLOAD_URL:-https://nexus.ihome.sxxpqp.top:8443/repository/raw-github/containerd/containerd/releases/download/v${CONTAINERD_VERSION}/${CONTAINERD_PKG}}"
+fi
+
 case "$CONTAINERD_VERSION" in
   1.*) CONTAINERD_CONFIG_MAJOR=1 ;;
   2.*) CONTAINERD_CONFIG_MAJOR=2 ;;
