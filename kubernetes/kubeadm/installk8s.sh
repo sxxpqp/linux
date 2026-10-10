@@ -173,13 +173,33 @@ _use_default_version() {
 # ══════════════════════════════════════════════
 install_containerd() {
     title "安装 containerd"
-    if command -v containerd &>/dev/null; then
-        ok "containerd 已安装，跳过"
-    else
-        info "安装 containerd..."
-        curl -fsSLk https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/install.sh | bash
-        ok "containerd 安装完成"
+
+    # CentOS7/RHEL7 的 glibc=2.17，跑不了 containerd 2.x(需 glibc>=2.34)，用 1.7 系列
+    # 关键: 只对老系统生效，新系统仍按 install.sh 默认行为(2.x)
+    # 可覆盖: CENTOS7_CONTAINERD_VERSION=1.7.18 bash k8s-setup-menu.sh
+    CENTOS7_CONTAINERD_VERSION="${CENTOS7_CONTAINERD_VERSION:-1.7.27}"
+
+    # 清理历史坏二进制: glibc 不兼容的 containerd 装了也起不来，
+    # 且还会骗过下面"已安装"的 command -v 判断，必须清掉
+    if command -v containerd &>/dev/null && ! containerd --version &>/dev/null; then
+        warn "检测到无法运行(疑似 glibc 不兼容)的 containerd，清理后重装"
+        rm -f /usr/bin/containerd /usr/local/bin/containerd
     fi
+
+    if command -v containerd &>/dev/null && containerd --version &>/dev/null; then
+        ok "containerd 已安装且可执行，跳过"
+        return
+    fi
+
+    info "安装 containerd..."
+    local INSTALL_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/install.sh"
+    if [[ "$OS_ID" =~ ^(centos|rhel|rocky|almalinux)$ ]] && [[ "$OS_VER" == "7" ]]; then
+        warn "系统为 ${OS_ID} ${OS_VER}（glibc 2.17），containerd 2.x 无法运行，改用 1.7 系列 ${CENTOS7_CONTAINERD_VERSION}"
+        curl -fsSLk "$INSTALL_URL" | CONTAINERD_VERSION="${CENTOS7_CONTAINERD_VERSION}" bash
+    else
+        curl -fsSLk "$INSTALL_URL" | bash
+    fi
+    ok "containerd 安装完成"
 }
 
 # ══════════════════════════════════════════════
