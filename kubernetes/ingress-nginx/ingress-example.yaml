@@ -42,14 +42,14 @@ spec:
     - http:
         paths:
           - path: /api(/|$)(.*)
-            pathType: Prefix
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: uc-api-svc
                 port:
                   number: 8103
           - path: /monitor(/|$)(.*)
-            pathType: Prefix
+            pathType: ImplementationSpecific
             backend:
               service:
                 name: omvision-api-svc
