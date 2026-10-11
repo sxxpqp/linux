@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kubeadm/installk8s.sh
 # ================================================================
 #  K8s 组件安装脚本
@@ -7,9 +7,12 @@
 #  版本: 1.24 ~ 1.32
 # ================================================================
 set -euo pipefail
+export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 
 # ---- curl|bash 执行时 stdin 被管道占用，所有 read 显式从 /dev/tty 读取 ----
 TTY_INPUT=/dev/tty
+
+trap 'rm -f "${_TMP_SH:-}"' EXIT
 
 # ──────────────────────────────────────────────
 # 全局配置（按需修改）
@@ -82,7 +85,11 @@ select_version() {
         echo -e "  $((i+1))) ${VERSIONS[$i]}${MARK}"
     done
     echo ""
-    read -rp "请选择版本编号 [默认 ${DEFAULT_CHOICE} 即 1.28]: " choice < ${TTY_INPUT}
+    # 无 tty(自动化/管道执行)时无法交互，直接用默认版本
+    if ! read -rp "请选择版本编号 [默认 ${DEFAULT_CHOICE} 即 1.28]: " choice < ${TTY_INPUT} 2>/dev/null; then
+        warn "无交互终端，使用默认版本 1.28"
+        choice="${DEFAULT_CHOICE}"
+    fi
     choice="${choice:-${DEFAULT_CHOICE}}"
 
     # 验证输入
@@ -131,9 +138,17 @@ EOF
         PKG_CMD="yum"
         command -v dnf &>/dev/null && PKG_CMD="dnf"
 
-        LATEST_RPM=$($PKG_CMD list available kubelet             --disablerepo="*"             --enablerepo="kubernetes-query"             --config=/tmp/k8s-query.repo             2>/dev/null | grep "^kubelet" |             grep "${K8S_MINOR}" | head -1 | awk '{print $2}' | cut -d: -f2 | cut -d- -f1)
+        _TMP_SH="$(mktemp /tmp/k8s-query.XXXXXX.repo)"
+        cat > "${_TMP_SH}" << EOF
+[kubernetes-query]
+name=Kubernetes Query
+baseurl=${ALIYUN_MIRROR}/kubernetes-new/core/stable/v${K8S_MINOR}/rpm/
+enabled=1
+gpgcheck=0
+EOF
+        LATEST_RPM=$($PKG_CMD list available kubelet             --disablerepo="*"             --enablerepo="kubernetes-query"             --config="${_TMP_SH}"             2>/dev/null | grep "^kubelet" |             grep "${K8S_MINOR}" | head -1 | awk '{print $2}' | cut -d: -f2 | cut -d- -f1)
 
-        rm -f /tmp/k8s-query.repo
+        rm -f "${_TMP_SH}"; _TMP_SH=""
 
         if [[ -n "$LATEST_RPM" ]]; then
             K8S_VERSION_RPM="$LATEST_RPM"
@@ -193,12 +208,16 @@ install_containerd() {
 
     info "安装 containerd..."
     local INSTALL_URL="https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/install.sh"
+    local CT_SCRIPT
+    CT_SCRIPT="$(mktemp /tmp/containerd-install.XXXXXX.sh)"
+    curl -fsSLk "$INSTALL_URL" -o "$CT_SCRIPT"
     if [[ "$OS_ID" =~ ^(centos|rhel|rocky|almalinux)$ ]] && [[ "$OS_VER" == "7" ]]; then
         warn "系统为 ${OS_ID} ${OS_VER}（glibc 2.17），containerd 2.x 无法运行，改用 1.7 系列 ${CENTOS7_CONTAINERD_VERSION}"
-        curl -fsSLk "$INSTALL_URL" | CONTAINERD_VERSION="${CENTOS7_CONTAINERD_VERSION}" bash
+        CONTAINERD_VERSION="${CENTOS7_CONTAINERD_VERSION}" bash "$CT_SCRIPT" </dev/null
     else
-        curl -fsSLk "$INSTALL_URL" | bash
+        bash "$CT_SCRIPT" </dev/null
     fi
+    rm -f "$CT_SCRIPT"
     ok "containerd 安装完成"
 }
 
@@ -208,14 +227,20 @@ install_containerd() {
 common_prepare() {
     title "系统基础配置"
 
+    # firewalld 会拦 Pod/Service 流量(CentOS/RHEL 默认启用),前置检测
+    if systemctl is-active firewalld &>/dev/null; then
+        warn "firewalld 正在运行,会拦 K8s Pod/Service 流量,建议: systemctl disable --now firewalld"
+    fi
+
     info "关闭 Swap..."
     swapoff -a
     sed -ri 's/^([^#].*swap.*)$/#\1/' /etc/fstab
-    sysctl -w vm.swappiness=0
+    sysctl -w vm.swappiness=0 &>/dev/null
     ok "Swap 已关闭"
 
     info "设置 ulimit..."
-    cat >> /etc/security/limits.conf << 'EOF'
+    if ! grep -q "K8s 优化" /etc/security/limits.conf; then
+        cat >> /etc/security/limits.conf << 'EOF'
 # K8s 优化
 * soft nofile 1048576
 * hard nofile 1048576
@@ -224,7 +249,10 @@ common_prepare() {
 * soft memlock unlimited
 * hard memlock unlimited
 EOF
-    ok "ulimit 已配置"
+        ok "ulimit 已配置"
+    else
+        ok "ulimit 已配置过,跳过"
+    fi
 
     info "加载内核模块..."
     modprobe overlay
@@ -328,7 +356,13 @@ EOF
         ok "已追加 fs.may_detach_mounts(CentOS/RHEL 7)"
     fi
 
-    sysctl --system &>/dev/null
+    # 应用并校验:关键转发参数没生效直接报错,不让节点带着错配置进集群
+    sysctl --system >/dev/null
+    local KEY
+    for KEY in net.ipv4.ip_forward net.bridge.bridge-nf-call-iptables net.ipv4.conf.all.rp_filter; do
+        [[ "$(sysctl -n "$KEY" 2>/dev/null)" == "1" || "$(sysctl -n "$KEY" 2>/dev/null)" == "0" ]] || \
+            err "sysctl 参数 ${KEY} 未生效(bridge 模块未加载?),检查 /etc/sysctl.d/99-k8s.conf"
+    done
     ok "sysctl 已应用(/etc/sysctl.d/99-k8s.conf)"
 }
 
@@ -337,6 +371,18 @@ EOF
 # ══════════════════════════════════════════════
 install_k8s_rpm() {
     title "安装 K8s 组件（RPM）"
+
+    # 已装且版本匹配则跳过(与 DEB 分支对称,重复执行幂等)
+    if command -v kubelet &>/dev/null && \
+       command -v kubeadm &>/dev/null && \
+       command -v kubectl &>/dev/null; then
+        INSTALLED=$(kubelet --version 2>/dev/null | awk '{print $2}' | tr -d 'v')
+        if [[ "$INSTALLED" == "${K8S_VERSION_RPM}"* ]]; then
+            ok "K8s 组件 v${K8S_VERSION_RPM} 已安装，跳过"
+            return
+        fi
+        warn "已安装版本 ${INSTALLED}，将升级到 ${K8S_VERSION_RPM}"
+    fi
 
     info "配置 K8s yum 仓库（阿里云镜像 v${K8S_MINOR}）..."
     cat > /etc/yum.repos.d/kubernetes.repo << EOF
