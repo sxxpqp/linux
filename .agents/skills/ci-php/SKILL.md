@@ -5,6 +5,14 @@ description: "PHP 项目 GitLab CI/CD + Dockerfile 生产模板。PHP-FPM + Ngin
 
 # PHP 项目 CI/CD 生产模板
 
+## 镜像仓库配置来源
+
+1. 先读取当前项目的 CI、Dockerfile、部署文件及变量引用，确认推送仓库地址、项目/命名空间、镜像名和凭据变量名；沿用已确认的项目配置。
+2. 用户本次提供的配置优先。不要从其他项目、历史示例或本仓库基础设施表推断业务仓库；不默认旧 Harbor，也不默认阿里云 ACR。
+3. **STOP：项目文件和当前对话都未提供必需配置时，先询问缺失的仓库地址、项目/命名空间，再生成最终可执行配置。** 已提供的不重复询问；只需保留占位草稿时明确标注缺项，不宣称可直接运行。密码通过 CI Secret/变量配置，不要求用户在聊天中粘贴。
+4. 第三方 `FROM` / `image:` 保持上游地址；既有节点 containerd mirror 配置不作为业务推送目标。已有业务镜像仅在用户要求更换时修改。
+
+
 > 提取自 `D:\code\focus` 等真实项目。
 > CI 参数风格参考 `D:\code\ad-rtb\.gitlab-ci.yml`（分支感知环境映射）。
 
@@ -25,7 +33,7 @@ description: "PHP 项目 GitLab CI/CD + Dockerfile 生产模板。PHP-FPM + Ngin
 ### PHP-FPM 镜像 — `Dockerfile`
 
 ```dockerfile
-FROM hub.wishfoxs.com:6443/middleware/php:7.4-fpm
+FROM docker.io/library/php:7.4-fpm
 
 ARG APT_MIRROR=mirrors.aliyun.com
 
@@ -88,7 +96,7 @@ CMD ["php-fpm"]
 ### Nginx 镜像 — `Dockerfile.nginx`
 
 ```dockerfile
-FROM hub.wishfoxs.com:6443/middleware/nginx:1.27-alpine
+FROM docker.io/library/nginx:1.27-alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
@@ -193,6 +201,7 @@ default:
           exit 1
           ;;
       esac
+      : "${IMAGE_REGISTRY:?missing IMAGE_REGISTRY}" "${IMAGE_NAMESPACE:?missing IMAGE_NAMESPACE}"
       export IMAGE_PREFIX
       export K8S_NAMESPACE
       export ENV_FILE
@@ -203,10 +212,10 @@ stages:
   - deploy
 
 variables:
-  KANIKO_IMAGE: "hub.wishfoxs.com:6443/middleware/executor:debug"
-  KUBECTL_IMAGE: "hub.wishfoxs.com:6443/middleware/kubectl:latest"
-  HARBOR_REGISTRY: "hub.wishfoxs.com:6443"
-  HARBOR_PROJECT: "mall"                         # ← 改成本项目的 Harbor 命名空间
+  KANIKO_IMAGE: "gcr.io/kaniko-project/executor:v1.23.2-debug"
+  KUBECTL_IMAGE: "docker.io/bitnami/kubectl:1.31"
+  IMAGE_REGISTRY: ""  # 从当前项目读取；缺失时先询问
+  IMAGE_NAMESPACE: ""  # 从当前项目读取；缺失时先询问
   PHP_IMAGE_NAME: "focus"                        # ← 改成 PHP 镜像名
   NGINX_IMAGE_NAME: "focus-nginx"                # ← 改成 Nginx 镜像名
   VERSION:
@@ -231,18 +240,18 @@ build-php:
     - mkdir -p /kaniko/.docker
     - |
       cat > /kaniko/.docker/config.json <<EOF
-      {"auths":{"${HARBOR_REGISTRY}":{"username":"${HARBOR_USERNAME}","password":"${HARBOR_PASSWORD}"}}}
+      {"auths":{"${IMAGE_REGISTRY}":{"username":"${REGISTRY_USERNAME}","password":"${REGISTRY_PASSWORD}"}}}
       EOF
     - |
-      echo "===== Kaniko 构建 PHP: ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${PHP_IMAGE_NAME}:${IMAGE_TAG} ====="
+      echo "===== Kaniko 构建 PHP: ${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${PHP_IMAGE_NAME}:${IMAGE_TAG} ====="
       echo "ENV_FILE: ${ENV_FILE}"
       /kaniko/executor \
         --context "${CI_PROJECT_DIR}" \
         --dockerfile "${CI_PROJECT_DIR}/Dockerfile" \
-        --destination "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${PHP_IMAGE_NAME}:${IMAGE_TAG}" \
+        --destination "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${PHP_IMAGE_NAME}:${IMAGE_TAG}" \
         --build-arg "ENV_FILE=${ENV_FILE}" \
         --cache=true \
-        --cache-repo "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${PHP_IMAGE_NAME}-cache" \
+        --cache-repo "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${PHP_IMAGE_NAME}-cache" \
         --verbosity=info
 
 # ============================================================
@@ -257,16 +266,16 @@ build-nginx:
     - mkdir -p /kaniko/.docker
     - |
       cat > /kaniko/.docker/config.json <<EOF
-      {"auths":{"${HARBOR_REGISTRY}":{"username":"${HARBOR_USERNAME}","password":"${HARBOR_PASSWORD}"}}}
+      {"auths":{"${IMAGE_REGISTRY}":{"username":"${REGISTRY_USERNAME}","password":"${REGISTRY_PASSWORD}"}}}
       EOF
     - |
-      echo "===== Kaniko 构建 Nginx: ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${NGINX_IMAGE_NAME}:${IMAGE_TAG} ====="
+      echo "===== Kaniko 构建 Nginx: ${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${NGINX_IMAGE_NAME}:${IMAGE_TAG} ====="
       /kaniko/executor \
         --context "${CI_PROJECT_DIR}" \
         --dockerfile "${CI_PROJECT_DIR}/Dockerfile.nginx" \
-        --destination "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${NGINX_IMAGE_NAME}:${IMAGE_TAG}" \
+        --destination "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${NGINX_IMAGE_NAME}:${IMAGE_TAG}" \
         --cache=true \
-        --cache-repo "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${NGINX_IMAGE_NAME}-cache" \
+        --cache-repo "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${NGINX_IMAGE_NAME}-cache" \
         --verbosity=info
 
 # ============================================================
@@ -292,8 +301,8 @@ deploy-k8s:
     - mkdir -p ~/.kube
     - cp $KUBE_CONFIG ~/.kube/config
     - |
-      PHP_IMAGE="${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${PHP_IMAGE_NAME}:${IMAGE_TAG}"
-      NGINX_IMAGE="${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${NGINX_IMAGE_NAME}:${IMAGE_TAG}"
+      PHP_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${PHP_IMAGE_NAME}:${IMAGE_TAG}"
+      NGINX_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${NGINX_IMAGE_NAME}:${IMAGE_TAG}"
 
       echo "===== 发布环境 ====="
       echo "branch=${CI_COMMIT_REF_NAME}"
@@ -345,7 +354,7 @@ spec:
       # initContainer: 把 PHP 镜像里的 /workspace/public 拷贝到 emptyDir（否则 emptyDir 是空的，会覆盖镜像文件）
       initContainers:
         - name: copy-public
-          image: hub.wishfoxs.com:6443/mall/focus:test-1.0.0
+          image: $IMAGE_REGISTRY/$IMAGE_NAMESPACE/focus:test-1.0.0
           command: ['sh', '-c', 'cp -r /workspace/public/* /public/']
           volumeMounts:
             - name: webroot
@@ -353,7 +362,7 @@ spec:
       containers:
         # Nginx 容器
         - name: nginx
-          image: hub.wishfoxs.com:6443/mall/focus-nginx:test-1.0.0
+          image: $IMAGE_REGISTRY/$IMAGE_NAMESPACE/focus-nginx:test-1.0.0
           ports:
             - containerPort: 80
           volumeMounts:
@@ -376,7 +385,7 @@ spec:
 
         # PHP-FPM 容器
         - name: php-fpm
-          image: hub.wishfoxs.com:6443/mall/focus:test-1.0.0
+          image: $IMAGE_REGISTRY/$IMAGE_NAMESPACE/focus:test-1.0.0
           ports:
             - containerPort: 9000
           volumeMounts:
@@ -428,7 +437,7 @@ spec:
 
 ## 检查清单(生成前自查)
 
-- [ ] Dockerfile 基础镜像走 `hub.wishfoxs.com:6443/middleware/...`
+- [ ] Dockerfile 基础镜像保持上游地址并固定版本
 - [ ] PHP-FPM 监听 `127.0.0.1:9000`（非 Unix socket）
 - [ ] 非 root 用户运行（`USER app` 或 `USER 1000:1000`）
 - [ ] 时区设置 `Asia/Shanghai`
@@ -446,7 +455,7 @@ spec:
 - [ ] master 分支 deploy 只允许 manual
 - [ ] K8s Deployment 有 `emptyDir: webroot` 共享 volume
 - [ ] K8s Deployment 有两个容器：`nginx` + `php-fpm`
-- [ ] 变量 `HARBOR_PROJECT` / `PHP_IMAGE_NAME` / `NGINX_IMAGE_NAME` / `K8S_DEPLOYMENT` / namespace 已替换为本项目值
+- [ ] 变量 `IMAGE_NAMESPACE` / `PHP_IMAGE_NAME` / `NGINX_IMAGE_NAME` / `K8S_DEPLOYMENT` / namespace 已替换为本项目值
 
 ---
 

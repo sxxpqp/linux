@@ -5,6 +5,14 @@ description: "Vue + Vite 前端项目 GitLab CI/CD + Dockerfile 生产模板。�
 
 # Vue + Vite 前端 CI/CD 生产模板
 
+## 镜像仓库配置来源
+
+1. 先读取当前项目的 CI、Dockerfile、部署文件及变量引用，确认推送仓库地址、项目/命名空间、镜像名和凭据变量名；沿用已确认的项目配置。
+2. 用户本次提供的配置优先。不要从其他项目、历史示例或本仓库基础设施表推断业务仓库；不默认旧 Harbor，也不默认阿里云 ACR。
+3. **STOP：项目文件和当前对话都未提供必需配置时，先询问缺失的仓库地址、项目/命名空间，再生成最终可执行配置。** 已提供的不重复询问；只需保留占位草稿时明确标注缺项，不宣称可直接运行。密码通过 CI Secret/变量配置，不要求用户在聊天中粘贴。
+4. 第三方 `FROM` / `image:` 保持上游地址；既有节点 containerd mirror 配置不作为业务推送目标。已有业务镜像仅在用户要求更换时修改。
+
+
 > 提取自 `D:\code\admin`、`D:\code\sohu-admin`、`D:\code\dsp-web`、`D:\code\game-combine-h5\game-lottery-h5` 等 30+ 个真实项目。
 > CI 参数风格参考 `D:\code\ad-rtb\.gitlab-ci.yml`、`game-lottery-h5`（分支感知环境映射）。
 
@@ -13,7 +21,7 @@ description: "Vue + Vite 前端项目 GitLab CI/CD + Dockerfile 生产模板。�
 1. **多阶段构建**: build 阶段装依赖 + Vite 构建 → runtime 阶段只拷贝 dist + nginx
 2. **层缓存优化**: 先 COPY package.json/pnpm-lock.yaml → install → 再 COPY 源码，lockfile 不变时命中缓存
 3. **gzip 预压缩**: 构建期 gzip 所有静态资源(>1KB)，运行时 nginx `gzip_static on` 零 CPU 开销
-4. **Kaniko 构建**: 无 Docker daemon，rootless，`--cache=true --cache-repo` 推送到 Harbor
+4. **Kaniko 构建**: 无 Docker daemon，rootless，`--cache=true --cache-repo` 推送到项目已配置的镜像仓库
 5. **SPA fallback**: nginx `try_files $uri $uri/ /index.html` 支持 history 路由
 6. **分支感知环境映射**: test → test namespace, release* → uat namespace, master → prod namespace(手动部署)
 
@@ -41,7 +49,7 @@ description: "Vue + Vite 前端项目 GitLab CI/CD + Dockerfile 生产模板。�
 
 ```dockerfile
 # ---------- Build Stage ----------
-FROM hub.wishfoxs.com:6443/middleware/node:22.21-alpine AS build
+FROM docker.io/library/node:22.21-alpine AS build
 WORKDIR /app
 
 # 1. 先拷贝依赖声明，利用层缓存
@@ -67,7 +75,7 @@ RUN pnpm run build \
  && du -sh dist
 
 # ---------- Runtime Stage ----------
-FROM hub.wishfoxs.com:6443/middleware/nginx:1.27-alpine
+FROM docker.io/library/nginx:1.27-alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
@@ -127,7 +135,7 @@ RUN case "${BUILD_MODE}" in \
 
 ```dockerfile
 # ---------- 构建阶段 ----------
-FROM hub.wishfoxs.com:6443/middleware/node:20-alpine AS build
+FROM docker.io/library/node:20-alpine AS build
 WORKDIR /app
 
 # 1. 私有源配置 + 依赖声明一起拷，锁文件不变命中缓存
@@ -161,7 +169,7 @@ RUN case "${BUILD_MODE}" in \
  && du -sh dist/web/
 
 # ---------- 托管阶段 ----------
-FROM hub.wishfoxs.com:6443/middleware/nginx:1.27-alpine
+FROM docker.io/library/nginx:1.27-alpine
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/web /usr/share/nginx/html
@@ -205,6 +213,7 @@ default:
           exit 1
           ;;
       esac
+      : "${IMAGE_REGISTRY:?missing IMAGE_REGISTRY}" "${IMAGE_NAMESPACE:?missing IMAGE_NAMESPACE}"
       export IMAGE_PREFIX
       export K8S_NAMESPACE
       export IMAGE_TAG="${IMAGE_PREFIX}-${VERSION}"
@@ -214,10 +223,10 @@ stages:
   - deploy
 
 variables:
-  KANIKO_IMAGE: "hub.wishfoxs.com:6443/middleware/executor:debug"
-  KUBECTL_IMAGE: "hub.wishfoxs.com:6443/middleware/kubectl:latest"
-  HARBOR_REGISTRY: "hub.wishfoxs.com:6443"
-  HARBOR_PROJECT: "hmt"                          # ← 改成本项目的 Harbor 命名空间
+  KANIKO_IMAGE: "gcr.io/kaniko-project/executor:v1.23.2-debug"
+  KUBECTL_IMAGE: "docker.io/bitnami/kubectl:1.31"
+  IMAGE_REGISTRY: ""  # 从当前项目读取；缺失时先询问
+  IMAGE_NAMESPACE: ""  # 从当前项目读取；缺失时先询问
   IMAGE_NAME: "hmt-admin"                        # ← 改成镜像名
   VERSION:
     value: "1.0.0"
@@ -244,16 +253,16 @@ build-image:
     - mkdir -p /kaniko/.docker
     - |
       cat > /kaniko/.docker/config.json <<EOF
-      {"auths":{"${HARBOR_REGISTRY}":{"username":"${HARBOR_USERNAME}","password":"${HARBOR_PASSWORD}"}}}
+      {"auths":{"${IMAGE_REGISTRY}":{"username":"${REGISTRY_USERNAME}","password":"${REGISTRY_PASSWORD}"}}}
       EOF
     - |
-      echo "===== Kaniko 构建: ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG} ====="
+      echo "===== Kaniko 构建: ${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} ====="
       /kaniko/executor \
         --context "${CI_PROJECT_DIR}" \
         --dockerfile "${CI_PROJECT_DIR}/Dockerfile" \
-        --destination "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}" \
+        --destination "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}" \
         --cache=true \
-        --cache-repo "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}-cache" \
+        --cache-repo "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}-cache" \
         --verbosity=info
 
 # ============================================================
@@ -284,7 +293,7 @@ deploy-k8s:
 
       echo "===== 更新镜像 ====="
       kubectl set image deployment/${K8S_DEPLOYMENT} \
-        ${K8S_DEPLOYMENT}=${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG} \
+        ${K8S_DEPLOYMENT}=${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} \
         -n ${K8S_NAMESPACE}
 
       echo "===== 强制重启 ====="
@@ -367,7 +376,7 @@ server {
 
 | ✗ 错误做法 | ✓ 正确做法 | 原因 |
 |---|---|---|
-| `FROM node:latest` | `FROM hub.wishfoxs.com:6443/middleware/node:22.21-alpine` | 走 Harbor mirror，固定版本 |
+| `FROM node:latest` | `FROM docker.io/library/node:22.21-alpine` | 保持上游地址，固定版本 |
 | 单阶段构建，运行时镜像带 node + 源码 | 多阶段构建，运行时只留 nginx + dist | 镜像体积 1GB → 50MB |
 | `COPY . .` 在 `npm install` 前 | 先 `COPY package.json` → install → 再 `COPY .` | 层缓存失效，每次全量 install |
 | 运行时 nginx `gzip on` 压缩所有请求 | 构建期 `gzip -9 -k` 预压缩 + `gzip_static on` | 运行时压缩耗 CPU，预压缩零开销 |
@@ -383,7 +392,7 @@ server {
 
 ## 检查清单(生成前自查)
 
-- [ ] Dockerfile 基础镜像走 `hub.wishfoxs.com:6443/middleware/...`
+- [ ] Dockerfile 基础镜像保持上游地址并固定版本
 - [ ] 多阶段构建，运行时只留 nginx + dist
 - [ ] 层缓存优化：先 COPY lockfile → install → 再 COPY 源码
 - [ ] gzip 预压缩脚本正确（覆盖 .js/.css/.html/.svg/.json 等）
@@ -397,7 +406,7 @@ server {
 - [ ] 镜像 tag 格式 `${IMAGE_PREFIX}-${VERSION}`（test-1.0.1 / uat-1.0.1 / prod-1.0.1）
 - [ ] master 分支 deploy 只允许 manual
 - [ ] 先判断构建模式：A 无环境变量 → 直接 `run build`；B 有环境变量 → 优先 `--mode`，最后才 `node build.js`
-- [ ] 变量 `HARBOR_PROJECT` / `IMAGE_NAME` / `K8S_DEPLOYMENT` / namespace 已替换为本项目值
+- [ ] 变量 `IMAGE_NAMESPACE` / `IMAGE_NAME` / `K8S_DEPLOYMENT` / namespace 已替换为本项目值
 - [ ] （B 情况）CI `before_script` 已映射并 export `BUILD_MODE`，kaniko 已传 `--build-arg BUILD_MODE`；大项目已配 `NODE_MAX_OLD_SPACE_SIZE` 并透传 build-arg
 - [ ] （B2 变体）私有源 `.npmrc` 已随依赖声明一起 COPY；产物目录（`dist/web` 等）与 `COPY --from=build` 一致
 

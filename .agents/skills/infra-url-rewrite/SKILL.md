@@ -1,9 +1,17 @@
 ---
 name: infra-url-rewrite
-description: Rewrite public source URLs (non-image) to the user's internal proxies (Nexus / chfs / Aliyun ACR). Use whenever a script, YAML, or command references raw.githubusercontent.com, github.com release ZIPs, upstream Helm chart repos, or other public file/binary downloads. Triggers on phrases like "github 拉不动", "raw 拉不动", "换成 Nexus", "走 chfs", "raw.githubusercontent", "release 下载不动". DO NOT rewrite container image references — containerd mirror config handles those transparently (keep upstream image refs in YAML/Dockerfile unchanged). Also use when authoring new install.sh in this repo — public file URLs should be rewritten by default.
+description: Rewrite public source URLs (non-image) to the user's internal proxies (Nexus / chfs). Use whenever a script, YAML, or command references raw.githubusercontent.com, github.com release ZIPs, upstream Helm chart repos, or other public file/binary downloads. Triggers on phrases like "github 拉不动", "raw 拉不动", "换成 Nexus", "走 chfs", "raw.githubusercontent", "release 下载不动". DO NOT rewrite container image references — containerd mirror config handles those transparently (keep upstream image refs in YAML/Dockerfile unchanged). Also use when authoring new install.sh in this repo — public file URLs should be rewritten by default.
 ---
 
 # 公网 URL → 自建代理改写
+
+## 镜像仓库配置来源
+
+1. 先读取当前项目的 CI、Dockerfile、部署文件及变量引用，确认推送仓库地址、项目/命名空间、镜像名和凭据变量名；沿用已确认的项目配置。
+2. 用户本次提供的配置优先。不要从其他项目、历史示例或本仓库基础设施表推断业务仓库；不默认旧 Harbor，也不默认阿里云 ACR。
+3. **STOP：项目文件和当前对话都未提供必需配置时，先询问缺失的仓库地址、项目/命名空间，再生成最终可执行配置。** 已提供的不重复询问；只需保留占位草稿时明确标注缺项，不宣称可直接运行。密码通过 CI Secret/变量配置，不要求用户在聊天中粘贴。
+4. 第三方 `FROM` / `image:` 保持上游地址；既有节点 containerd mirror 配置不作为业务推送目标。已有业务镜像仅在用户要求更换时修改。
+
 
 > 项目: https://github.com/sxxpqp/linux
 > 项目 AGENTS.md "已知踩坑 #1":GitHub raw / release 直连基本不通。**默认改走自建代理**。
@@ -34,7 +42,7 @@ description: Rewrite public source URLs (non-image) to the user's internal proxi
 - mirror 配置在节点层一次性配好,所有 Pod 自动走代理
 - 真要换 mirror 域名,改 `docker/containerd/mirrors.sh` 一处,推到所有节点重启 containerd 即可,**不用扫全仓库 sed**
 
-**唯一例外:自己构建推阿里 ACR** — `image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>` 是显式写,不是改写(mirrors.sh 给 ACR 配了 direct hosts.toml,走 ACR 不走 Harbor)。
+**业务自建镜像**使用项目已配置或用户明确提供的完整地址；它是业务产物地址，不是上游镜像的代理改写。未找到仓库配置时先询问，不默认阿里云或旧 Harbor。
 
 ## 改写映射表(权威源)
 
@@ -50,17 +58,18 @@ description: Rewrite public source URLs (non-image) to the user's internal proxi
 | 二进制 / 离线包 | chfs 优先;其次 `nexus.ihome.sxxpqp.top:8443/repository/raw-...` |
 | `https://gitlab.com/<…>/raw/<…>` 等其他 raw 源 | 同 Nexus raw,新建对应 proxy repo |
 
-### 镜像 push(自己构建只走阿里 ACR)
+### 镜像 push（先确认项目配置）
 
-Harbor 是纯拉取代理,**不接受 push**。自己 build 的镜像统一推阿里 ACR 命名空间 `sxxpqp`:
+推送地址和项目/命名空间先从当前项目文件读取；缺失时询问用户。凭据沿用项目的 CI Secret 变量，不硬编码用户名和密码。
 
 ```bash
-docker login registry.cn-hangzhou.aliyuncs.com   # 用户名 sxxpqp
-docker tag <local> registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
-docker push      registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>
+# 执行前由已确认的项目配置设置变量；此示例不提供默认仓库
+: "${IMAGE_REGISTRY:?missing IMAGE_REGISTRY}" "${IMAGE_NAMESPACE:?missing IMAGE_NAMESPACE}" "${IMAGE_NAME:?missing IMAGE_NAME}" "${IMAGE_TAG:?missing IMAGE_TAG}"
+docker tag "${LOCAL_IMAGE:?missing LOCAL_IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
+docker push "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}"
 ```
 
-K8s yaml `image:` 字段显式写 `registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>`(国内节点直连阿里就够快,且不依赖 containerd mirror)。
+现有 ihome Harbor proxy-cache 项目用于拉取，不作为默认推送目标；用户另行提供的 Harbor 普通项目可按其配置推送。K8s 业务 `image:` 使用同一已确认的完整产物地址。
 
 ### S3 / 对象存储
 
@@ -95,8 +104,8 @@ image: ghcr.io/projectcalico/operator:v1.34.0
 image: registry.k8s.io/autoscaling/vpa-recommender:1.0.0
 image: docker.io/library/nginx:alpine
 
-# ✓ 自建镜像显式写阿里 ACR
-image: registry.cn-hangzhou.aliyuncs.com/sxxpqp/my-app:v1.2.3
+# ✓ 自建镜像填写项目已确认的完整产物地址（生成最终 YAML 前替换占位）
+image: <已确认仓库>/<已确认项目>/my-app:v1.2.3
 ```
 
 ### Shell install.sh(项目标准头)
@@ -163,7 +172,7 @@ ctr -n k8s.io image pull docker.io/library/nginx:alpine  # 验证
   │   └─ 【保持上游不动】 不论是不是 mirrors.sh 列表里的 5 条上游:
   │       - 列表内(docker.io / ghcr.io / quay.io / registry.k8s.io / ACR):节点 containerd 已经配好,自动转发
   │       - 列表外(gcr.io / mcr.microsoft.com / 业务自建):直连,也不动 image,不预防性加 mirror
-  │       特例:自己 build 的 → 显式写 registry.cn-hangzhou.aliyuncs.com/sxxpqp/...
+  │       特例:自己 build 的 → 读取项目仓库配置，缺失时询问用户
   │
   ├─ 是 raw 文件?(raw.githubusercontent.com / gitlab.com/.../raw/...)
   │   └─ 替换前缀为 Nexus raw 代理
@@ -186,7 +195,7 @@ ctr -n k8s.io image pull docker.io/library/nginx:alpine  # 验证
 | 业务 install.sh 里抄 `sed 's#registry.k8s.io#registry.aliyuncs.com/google_containers#g' config.toml` | 这条只在 `docker/containerd/install.sh` 里改 `sandbox_image`(节点 bootstrap),业务脚本不动 config.toml,不动 image |
 | `curl https://raw.githubusercontent.com/...` | NEXUS_RAW 代理 |
 | GitHub release 直接 `wget` | 先 chfs |
-| 把推送目标写成 dockerhub.ihome.sxxpqp.top | Harbor 不接受 push,改阿里 ACR |
+| 把推送目标写成 dockerhub.ihome.sxxpqp.top | 现有拉取代理不作为推送目标；从项目读取业务仓库，缺失时询问 |
 | 用 `harbor.iot.store:8085` 这种老地址 | 看"历史 / 弃用"表替换(仅 containerd 配置 / 文档) |
 
 ## 何时调用此 skill

@@ -1,9 +1,17 @@
 ---
 name: ci-gitlab-kaniko
-description: Use when a project needs a GitLab CI pipeline that builds an image with Kaniko, pushes it to Aliyun ACR, and optionally deploys it to Kubernetes. Do not use for containerd mirror setup or language-specific build instructions.
+description: Use when a project needs a GitLab CI pipeline that builds an image with Kaniko, pushes it to the project's configured registry, and optionally deploys it to Kubernetes. Do not use for containerd mirror setup or language-specific build instructions.
 ---
 
 # GitLab + Kaniko CI 基线
+
+## 镜像仓库配置来源
+
+1. 先读取当前项目的 CI、Dockerfile、部署文件及变量引用，确认推送仓库地址、项目/命名空间、镜像名和凭据变量名；沿用已确认的项目配置。
+2. 用户本次提供的配置优先。不要从其他项目、历史示例或本仓库基础设施表推断业务仓库；不默认旧 Harbor，也不默认阿里云 ACR。
+3. **STOP：项目文件和当前对话都未提供必需配置时，先询问缺失的仓库地址、项目/命名空间，再生成最终可执行配置。** 已提供的不重复询问；只需保留占位草稿时明确标注缺项，不宣称可直接运行。密码通过 CI Secret/变量配置，不要求用户在聊天中粘贴。
+4. 第三方 `FROM` / `image:` 保持上游地址；既有节点 containerd mirror 配置不作为业务推送目标。已有业务镜像仅在用户要求更换时修改。
+
 
 语言技能只负责项目检测、依赖安装和产物构建；流水线公共部分统一按本技能执行。
 
@@ -11,17 +19,17 @@ description: Use when a project needs a GitLab CI pipeline that builds an image 
 
 - Dockerfile `FROM` 和 K8s 第三方 `image:` 保持上游地址，例如 `docker.io/library/nginx:1.27-alpine`、`gcr.io/distroless/static-debian12:nonroot`。
 - 节点通过 containerd mirror 加速；不要在 CI 或 YAML 里写 Harbor 代理域名，也不要用 `sed` 改 image。
-- 自己构建的镜像推送阿里 ACR：
+- 自己构建的镜像推送到项目文件或用户明确提供的仓库；下面两个空值必须补齐：
 
 ```yaml
 variables:
-  IMAGE_REGISTRY: registry.cn-hangzhou.aliyuncs.com
-  IMAGE_NAMESPACE: sxxpqp
+  IMAGE_REGISTRY: ""  # 从当前项目读取；缺失时先询问
+  IMAGE_NAMESPACE: ""  # 从当前项目读取；缺失时先询问
   IMAGE_NAME: change-me
   IMAGE_TAG: "${CI_COMMIT_REF_SLUG}-${CI_PIPELINE_IID}"
 ```
 
-ACR 用户名、密码使用 GitLab masked/protected variables，不写入仓库、日志或 Dockerfile。
+仓库用户名、密码使用 GitLab masked/protected variables，不写入仓库、日志或 Dockerfile。
 
 ## Pipeline 基线
 
@@ -56,10 +64,11 @@ build-image:
     name: gcr.io/kaniko-project/executor:v1.23.2-debug
     entrypoint: [""]
   script:
+    - ': "${IMAGE_REGISTRY:?missing IMAGE_REGISTRY}" "${IMAGE_NAMESPACE:?missing IMAGE_NAMESPACE}"'
     - mkdir -p /kaniko/.docker
     - |
       cat > /kaniko/.docker/config.json <<EOF
-      {"auths":{"${IMAGE_REGISTRY}":{"username":"${ACR_USERNAME}","password":"${ACR_PASSWORD}"}}}
+      {"auths":{"${IMAGE_REGISTRY}":{"username":"${REGISTRY_USERNAME}","password":"${REGISTRY_PASSWORD}"}}}
       EOF
     - /kaniko/executor --context "${CI_PROJECT_DIR}" --dockerfile "${CI_PROJECT_DIR}/Dockerfile" --destination "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}" --cache=true --cache-repo "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}-cache" --verbosity=info
 ```
@@ -96,8 +105,8 @@ deploy-k8s:
 ## 生成前检查
 
 - [ ] 所有版本可复现：基础镜像、构建工具和运行时不用 `latest`
-- [ ] ACR 凭据来自 masked/protected variables
+- [ ] 仓库凭据来自 masked/protected variables
 - [ ] `FROM`/第三方 `image:` 没有被改成 Harbor 地址
 - [ ] 镜像 tag 含环境和唯一流水线标识
 - [ ] 构建成功后才允许 deploy，deploy 等待 rollout 完成
-- [ ] `KUBE_CONFIG`、ACR 密码、应用 Secret 不进入镜像、仓库或日志
+- [ ] `KUBE_CONFIG`、仓库密码、应用 Secret 不进入镜像、仓库或日志

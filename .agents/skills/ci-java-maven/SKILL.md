@@ -5,6 +5,14 @@ description: "Java Maven 项目 GitLab CI/CD + Dockerfile 生产模板。多阶�
 
 # Java Maven 项目 CI/CD 生产模板
 
+## 镜像仓库配置来源
+
+1. 先读取当前项目的 CI、Dockerfile、部署文件及变量引用，确认推送仓库地址、项目/命名空间、镜像名和凭据变量名；沿用已确认的项目配置。
+2. 用户本次提供的配置优先。不要从其他项目、历史示例或本仓库基础设施表推断业务仓库；不默认旧 Harbor，也不默认阿里云 ACR。
+3. **STOP：项目文件和当前对话都未提供必需配置时，先询问缺失的仓库地址、项目/命名空间，再生成最终可执行配置。** 已提供的不重复询问；只需保留占位草稿时明确标注缺项，不宣称可直接运行。密码通过 CI Secret/变量配置，不要求用户在聊天中粘贴。
+4. 第三方 `FROM` / `image:` 保持上游地址；既有节点 containerd mirror 配置不作为业务推送目标。已有业务镜像仅在用户要求更换时修改。
+
+
 > 提取自 `D:\code\ad-rtb`、`D:\code\user-center`、`D:\code\gateway` 等 8 个真实项目。
 > CI 参数风格参考 `D:\code\ad-rtb\.gitlab-ci.yml`（分支感知环境映射 + Maven profile 映射）。
 
@@ -24,7 +32,7 @@ description: "Java Maven 项目 GitLab CI/CD + Dockerfile 生产模板。多阶�
 
 ```dockerfile
 # ---------- Runtime Stage ----------
-FROM hub.wishfoxs.com:6443/middleware/eclipse-temurin:11-jre-alpine
+FROM docker.io/library/eclipse-temurin:11-jre-alpine
 
 # 创建非 root 用户
 RUN addgroup -g 10001 -S app && adduser -u 10001 -S app -G app
@@ -49,7 +57,7 @@ ENTRYPOINT ["java", "-jar", "/app/app.jar"]
 ### 变体: JDK 17
 
 ```dockerfile
-FROM hub.wishfoxs.com:6443/middleware/eclipse-temurin:17-jre-alpine
+FROM docker.io/library/eclipse-temurin:17-jre-alpine
 ```
 
 ### 变体: 多模块项目(jar 在子模块 target 下)
@@ -115,11 +123,11 @@ stages:
   - deploy
 
 variables:
-  MAVEN_IMAGE: "hub.wishfoxs.com:6443/middleware/maven:3.8.6-openjdk-11"
-  KANIKO_IMAGE: "hub.wishfoxs.com:6443/middleware/executor:debug"
-  KUBECTL_IMAGE: "hub.wishfoxs.com:6443/middleware/kubectl:latest"
-  HARBOR_REGISTRY: "hub.wishfoxs.com:6443"
-  HARBOR_PROJECT: "ad"                           # ← 改成本项目的 Harbor 命名空间
+  MAVEN_IMAGE: "docker.io/library/maven:3.8.6-openjdk-11"
+  KANIKO_IMAGE: "gcr.io/kaniko-project/executor:v1.23.2-debug"
+  KUBECTL_IMAGE: "docker.io/bitnami/kubectl:1.31"
+  IMAGE_REGISTRY: ""  # 从当前项目读取；缺失时先询问
+  IMAGE_NAMESPACE: ""  # 从当前项目读取；缺失时先询问
   IMAGE_NAME: "ad-rtb"                           # ← 改成镜像名
   VERSION:
     value: "1.0.0"
@@ -175,7 +183,7 @@ build-image:
     - mkdir -p /kaniko/.docker
     - |
       cat > /kaniko/.docker/config.json <<EOF
-      {"auths":{"${HARBOR_REGISTRY}":{"username":"${HARBOR_USERNAME}","password":"${HARBOR_PASSWORD}"}}}
+      {"auths":{"${IMAGE_REGISTRY}":{"username":"${REGISTRY_USERNAME}","password":"${REGISTRY_PASSWORD}"}}}
       EOF
     - |
       # 找到 jar 文件(适配多模块项目)
@@ -190,11 +198,11 @@ build-image:
       mkdir -p ${CI_PROJECT_DIR}/target
       cp "$JAR" ${CI_PROJECT_DIR}/target/app.jar
 
-      echo "===== Kaniko 构建: ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG} ====="
+      echo "===== Kaniko 构建: ${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} ====="
       /kaniko/executor \
         --context "${CI_PROJECT_DIR}" \
         --dockerfile "${CI_PROJECT_DIR}/Dockerfile" \
-        --destination "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}" \
+        --destination "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}" \
         --cache=true \
         --verbosity=info
 
@@ -226,7 +234,7 @@ deploy-k8s:
 
       echo "===== 更新镜像 ====="
       kubectl set image deployment/${K8S_DEPLOYMENT} \
-        ${K8S_DEPLOYMENT}=${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG} \
+        ${K8S_DEPLOYMENT}=${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} \
         -n ${K8S_NAMESPACE}
 
       echo "===== 强制重启 ====="
@@ -243,7 +251,7 @@ deploy-k8s:
 
 | ✗ 错误做法 | ✓ 正确做法 | 原因 |
 |---|---|---|
-| `FROM openjdk:11` | `FROM hub.wishfoxs.com:6443/middleware/eclipse-temurin:11-jre-alpine` | 走 Harbor mirror，用 JRE 不用 JDK，alpine 更小 |
+| `FROM openjdk:11` | `FROM docker.io/library/eclipse-temurin:11-jre-alpine` | 使用上游固定版本 JRE；运行时按项目选择 |
 | Dockerfile 里 `mvn package` | Maven 打包在 CI stage 完成，Dockerfile 只 COPY jar | Docker 构建环境不可控，Maven 缓存无法复用 |
 | 没设 `MAVEN_OPTS` | `export MAVEN_OPTS="-Dmaven.repo.local=${CI_PROJECT_DIR}/.m2/repository"` | 指定本地仓库路径，cache 才能命中 |
 | cache 没设 `policy: pull-push` | package 阶段 `policy: pull-push`，其他阶段 `cache: []` | 只有 package 需要写缓存，其他阶段只读或不读 |
@@ -258,7 +266,7 @@ deploy-k8s:
 
 ## 检查清单(生成前自查)
 
-- [ ] Dockerfile 基础镜像走 `hub.wishfoxs.com:6443/middleware/...`
+- [ ] Dockerfile 基础镜像保持上游地址并固定版本
 - [ ] Dockerfile 只 COPY jar，不编译
 - [ ] 非 root 用户运行（`USER 10001:10001`）
 - [ ] 时区设置 `Asia/Shanghai`
@@ -273,7 +281,7 @@ deploy-k8s:
 - [ ] 镜像 tag 格式 `${IMAGE_PREFIX}-${VERSION}`（test-1.0.1 / uat-1.0.1 / prod-1.0.1）
 - [ ] master 分支 deploy 只允许 manual
 - [ ] artifacts `expire_in: 1 hour`
-- [ ] 变量 `HARBOR_PROJECT` / `IMAGE_NAME` / `K8S_DEPLOYMENT` / namespace 已替换为本项目值
+- [ ] 变量 `IMAGE_NAMESPACE` / `IMAGE_NAME` / `K8S_DEPLOYMENT` / namespace 已替换为本项目值
 
 ---
 

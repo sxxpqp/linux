@@ -5,6 +5,14 @@ description: "Go 项目 GitLab CI/CD + Dockerfile 生产模板。多阶段构建
 
 # Go 项目 CI/CD 生产模板
 
+## 镜像仓库配置来源
+
+1. 先读取当前项目的 CI、Dockerfile、部署文件及变量引用，确认推送仓库地址、项目/命名空间、镜像名和凭据变量名；沿用已确认的项目配置。
+2. 用户本次提供的配置优先。不要从其他项目、历史示例或本仓库基础设施表推断业务仓库；不默认旧 Harbor，也不默认阿里云 ACR。
+3. **STOP：项目文件和当前对话都未提供必需配置时，先询问缺失的仓库地址、项目/命名空间，再生成最终可执行配置。** 已提供的不重复询问；只需保留占位草稿时明确标注缺项，不宣称可直接运行。密码通过 CI Secret/变量配置，不要求用户在聊天中粘贴。
+4. 第三方 `FROM` / `image:` 保持上游地址；既有节点 containerd mirror 配置不作为业务推送目标。已有业务镜像仅在用户要求更换时修改。
+
+
 > 提取自 `D:\code\tracking-gateway`、`D:\code\user-gateway`、`D:\code\tracking-collector` 等 11 个真实项目。
 > CI 参数风格参考 `D:\code\ad-rtb\.gitlab-ci.yml`（分支感知环境映射）。
 
@@ -15,7 +23,7 @@ description: "Go 项目 GitLab CI/CD + Dockerfile 生产模板。多阶段构建
 3. **GOPROXY 加速**: `https://goproxy.cn,direct` 国内拉取 Go 模块
 4. **静态编译**: `CGO_ENABLED=0 -trimpath -ldflags="-s -w"` 最小化二进制体积
 5. **非 root 运行**: runtime 镜像创建 `app` 用户(UID 10001)，`USER 10001:10001`
-6. **Kaniko 构建**: 无 Docker daemon，rootless，`--cache=true --cache-repo` 推送到 Harbor
+6. **Kaniko 构建**: 无 Docker daemon，rootless，`--cache=true --cache-repo` 推送到项目已配置的镜像仓库
 7. **分支感知环境映射**: test → test namespace, release* → uat namespace, master → prod namespace(手动部署)
 
 ---
@@ -24,7 +32,7 @@ description: "Go 项目 GitLab CI/CD + Dockerfile 生产模板。多阶段构建
 
 ```dockerfile
 # ---------- Build Stage ----------
-FROM hub.wishfoxs.com:6443/middleware/golang:1.23-alpine AS builder
+FROM docker.io/library/golang:1.23-alpine AS builder
 
 WORKDIR /src
 
@@ -41,7 +49,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -trimpath -ldflags="-s -w" -o /out/app .
 
 # ---------- Runtime Stage ----------
-FROM hub.wishfoxs.com:6443/middleware/golang:1.23-alpine
+FROM docker.io/library/golang:1.23-alpine
 
 # 创建非 root 用户
 RUN addgroup -g 10001 -S app && adduser -u 10001 -S app -G app
@@ -73,7 +81,7 @@ COPY --from=builder /out/service-b /app/service-b
 
 ```dockerfile
 # Runtime Stage 换成 distroless
-FROM hub.wishfoxs.com:6443/middleware/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot
 
 COPY --from=builder /out/app /app
 USER nonroot:nonroot
@@ -115,6 +123,7 @@ default:
           exit 1
           ;;
       esac
+      : "${IMAGE_REGISTRY:?missing IMAGE_REGISTRY}" "${IMAGE_NAMESPACE:?missing IMAGE_NAMESPACE}"
       export IMAGE_PREFIX
       export K8S_NAMESPACE
       export IMAGE_TAG="${IMAGE_PREFIX}-${VERSION}"
@@ -124,10 +133,10 @@ stages:
   - deploy
 
 variables:
-  KANIKO_IMAGE: "hub.wishfoxs.com:6443/middleware/executor:debug"
-  KUBECTL_IMAGE: "hub.wishfoxs.com:6443/middleware/kubectl:latest"
-  HARBOR_REGISTRY: "hub.wishfoxs.com:6443"
-  HARBOR_PROJECT: "bigdata"                      # ← 改成本项目的 Harbor 命名空间
+  KANIKO_IMAGE: "gcr.io/kaniko-project/executor:v1.23.2-debug"
+  KUBECTL_IMAGE: "docker.io/bitnami/kubectl:1.31"
+  IMAGE_REGISTRY: ""  # 从当前项目读取；缺失时先询问
+  IMAGE_NAMESPACE: ""  # 从当前项目读取；缺失时先询问
   IMAGE_NAME: "tracking-gateway"                 # ← 改成镜像名
   VERSION:
     value: "1.0.0"
@@ -151,16 +160,16 @@ build-image:
     - mkdir -p /kaniko/.docker
     - |
       cat > /kaniko/.docker/config.json <<EOF
-      {"auths":{"${HARBOR_REGISTRY}":{"username":"${HARBOR_USERNAME}","password":"${HARBOR_PASSWORD}"}}}
+      {"auths":{"${IMAGE_REGISTRY}":{"username":"${REGISTRY_USERNAME}","password":"${REGISTRY_PASSWORD}"}}}
       EOF
     - |
-      echo "===== Kaniko 构建: ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG} ====="
+      echo "===== Kaniko 构建: ${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} ====="
       /kaniko/executor \
         --context "${CI_PROJECT_DIR}" \
         --dockerfile "${CI_PROJECT_DIR}/Dockerfile" \
-        --destination "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}" \
+        --destination "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG}" \
         --cache=true \
-        --cache-repo "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}-cache" \
+        --cache-repo "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}-cache" \
         --verbosity=info
 
 # ============================================================
@@ -191,7 +200,7 @@ deploy-k8s:
 
       echo "===== 更新镜像 ====="
       kubectl set image deployment/${K8S_DEPLOYMENT} \
-        ${K8S_DEPLOYMENT}=${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG} \
+        ${K8S_DEPLOYMENT}=${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_NAME}:${IMAGE_TAG} \
         -n ${K8S_NAMESPACE}
 
       echo "===== 强制重启 ====="
@@ -208,7 +217,7 @@ deploy-k8s:
 
 | ✗ 错误做法 | ✓ 正确做法 | 原因 |
 |---|---|---|
-| `FROM golang:latest` | `FROM hub.wishfoxs.com:6443/middleware/golang:1.23-alpine` | 走 Harbor mirror，固定版本 |
+| `FROM golang:latest` | `FROM docker.io/library/golang:1.23-alpine` | 保持上游地址，固定版本 |
 | 单阶段构建，运行时镜像带 Go 工具链 + 源码 | 多阶段构建，运行时只留二进制 | 镜像体积 1GB → 15MB |
 | `COPY . .` 在 `go mod download` 前 | 先 `COPY go.mod go.sum` → download → 再 `COPY .` | 层缓存失效，每次全量 download |
 | `go build` 不带 `-trimpath -ldflags="-s -w"` | 静态编译 + 去调试符号 | 二进制体积减小 30-50% |
@@ -223,7 +232,7 @@ deploy-k8s:
 
 ## 检查清单(生成前自查)
 
-- [ ] Dockerfile 基础镜像走 `hub.wishfoxs.com:6443/middleware/...`
+- [ ] Dockerfile 基础镜像保持上游地址并固定版本
 - [ ] 多阶段构建，运行时只留二进制
 - [ ] 层缓存优化：先 COPY go.mod/go.sum → download → 再 COPY 源码
 - [ ] `GOPROXY=https://goproxy.cn,direct` 设置正确
@@ -235,7 +244,7 @@ deploy-k8s:
 - [ ] .gitlab-ci.yml 有 `--cache=true --cache-repo`
 - [ ] 镜像 tag 格式 `${IMAGE_PREFIX}-${VERSION}`（test-1.0.1 / uat-1.0.1 / prod-1.0.1）
 - [ ] master 分支 deploy 只允许 manual
-- [ ] 变量 `HARBOR_PROJECT` / `IMAGE_NAME` / `K8S_DEPLOYMENT` / namespace 已替换为本项目值
+- [ ] 变量 `IMAGE_NAMESPACE` / `IMAGE_NAME` / `K8S_DEPLOYMENT` / namespace 已替换为本项目值
 
 ---
 

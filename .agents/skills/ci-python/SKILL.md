@@ -5,6 +5,14 @@ description: "Python 项目 GitLab CI/CD + Dockerfile 生产模板。FastAPI + U
 
 # Python 项目 CI/CD 生产模板
 
+## 镜像仓库配置来源
+
+1. 先读取当前项目的 CI、Dockerfile、部署文件及变量引用，确认推送仓库地址、项目/命名空间、镜像名和凭据变量名；沿用已确认的项目配置。
+2. 用户本次提供的配置优先。不要从其他项目、历史示例或本仓库基础设施表推断业务仓库；不默认旧 Harbor，也不默认阿里云 ACR。
+3. **STOP：项目文件和当前对话都未提供必需配置时，先询问缺失的仓库地址、项目/命名空间，再生成最终可执行配置。** 已提供的不重复询问；只需保留占位草稿时明确标注缺项，不宣称可直接运行。密码通过 CI Secret/变量配置，不要求用户在聊天中粘贴。
+4. 第三方 `FROM` / `image:` 保持上游地址；既有节点 containerd mirror 配置不作为业务推送目标。已有业务镜像仅在用户要求更换时修改。
+
+
 > 提取自 `D:\code\ai-ad-gen`、`D:\code\wishes_abroad` 等真实项目。
 > CI 参数风格参考 `D:\code\ad-rtb\.gitlab-ci.yml`（分支感知环境映射）。
 
@@ -16,7 +24,7 @@ description: "Python 项目 GitLab CI/CD + Dockerfile 生产模板。FastAPI + U
 4. **apt 镜像加速**: 清华源替换 Debian 默认源
 5. **系统依赖**: `build-essential` + `ffmpeg`（音视频处理常用）
 6. **分支感知环境映射**: test → test namespace, release* → uat namespace, master → prod namespace(手动部署)
-7. **Kaniko 构建**: 无 Docker daemon，rootless，`--cache=true --cache-repo` 推送到 Harbor
+7. **Kaniko 构建**: 无 Docker daemon，rootless，`--cache=true --cache-repo` 推送到项目已配置的镜像仓库
 
 ---
 
@@ -25,7 +33,7 @@ description: "Python 项目 GitLab CI/CD + Dockerfile 生产模板。FastAPI + U
 ### 单阶段构建（推荐，适合大多数 FastAPI 项目）
 
 ```dockerfile
-FROM hub.wishfoxs.com:6443/middleware/python:3.13
+FROM docker.io/library/python:3.13
 
 WORKDIR /app
 
@@ -109,6 +117,7 @@ default:
           exit 1
           ;;
       esac
+      : "${IMAGE_REGISTRY:?missing IMAGE_REGISTRY}" "${IMAGE_NAMESPACE:?missing IMAGE_NAMESPACE}"
       export IMAGE_PREFIX
       export K8S_NAMESPACE
       export IMAGE_TAG="${IMAGE_PREFIX}-${VERSION}"
@@ -118,10 +127,10 @@ stages:
   - deploy
 
 variables:
-  KANIKO_IMAGE: "hub.wishfoxs.com:6443/middleware/executor:debug"
-  KUBECTL_IMAGE: "hub.wishfoxs.com:6443/middleware/kubectl:latest"
-  HARBOR_REGISTRY: "hub.wishfoxs.com:6443"
-  HARBOR_PROJECT: "wishfox-ai"                   # ← 改成本项目的 Harbor 命名空间
+  KANIKO_IMAGE: "gcr.io/kaniko-project/executor:v1.23.2-debug"
+  KUBECTL_IMAGE: "docker.io/bitnami/kubectl:1.31"
+  IMAGE_REGISTRY: ""  # 从当前项目读取；缺失时先询问
+  IMAGE_NAMESPACE: ""  # 从当前项目读取；缺失时先询问
   MODULE: "ai-ad-gen-server"                     # ← 改成镜像名 / Deployment 名
   VERSION:
     value: "1.0.0"
@@ -142,16 +151,16 @@ build-images:
     - mkdir -p /kaniko/.docker
     - |
       cat > /kaniko/.docker/config.json <<EOF
-      {"auths":{"${HARBOR_REGISTRY}":{"username":"${HARBOR_USERNAME}","password":"${HARBOR_PASSWORD}"}}}
+      {"auths":{"${IMAGE_REGISTRY}":{"username":"${REGISTRY_USERNAME}","password":"${REGISTRY_PASSWORD}"}}}
       EOF
     - |
-      echo "===== Kaniko 构建: ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${MODULE}:${IMAGE_TAG} ====="
+      echo "===== Kaniko 构建: ${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${MODULE}:${IMAGE_TAG} ====="
       /kaniko/executor \
         --context "${CI_PROJECT_DIR}" \
         --dockerfile "${CI_PROJECT_DIR}/Dockerfile" \
-        --destination "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${MODULE}:${IMAGE_TAG}" \
+        --destination "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${MODULE}:${IMAGE_TAG}" \
         --cache=true \
-        --cache-repo "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${MODULE}-cache" \
+        --cache-repo "${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${MODULE}-cache" \
         --verbosity=info
 
 # ============================================================
@@ -175,7 +184,7 @@ deploy-k8s:
     - mkdir -p ~/.kube
     - cp $KUBE_CONFIG ~/.kube/config
     - |
-      IMAGE="${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${MODULE}:${IMAGE_TAG}"
+      IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${MODULE}:${IMAGE_TAG}"
 
       echo "===== 发布环境 ====="
       echo "branch=${CI_COMMIT_REF_NAME}"
@@ -216,7 +225,7 @@ spec:
     spec:
       containers:
         - name: ai-ad-gen-server
-          image: hub.wishfoxs.com:6443/wishfox-ai/ai-ad-gen-server:test-1.0.0
+          image: $IMAGE_REGISTRY/$IMAGE_NAMESPACE/ai-ad-gen-server:test-1.0.0
           ports:
             - containerPort: 80
           livenessProbe:
@@ -261,7 +270,7 @@ spec:
 | `pip install` 不走镜像 | `pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/` | 国内直连 PyPI 极慢，构建超时 |
 | `apt` 不走镜像 | `sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g'` | Debian 默认源国内慢 |
 | `COPY . .` 后再 install | 先 `COPY requirements.txt` → install → 再 `COPY` 源码 | 源码改动时不重新 install，层缓存命中 |
-| `python:3.12` 公共镜像 | `hub.wishfoxs.com:6443/middleware/python:3.13` | 走 Harbor 镜像加速，避免 Docker Hub 拉取失败 |
+| `python:3.12` 公共镜像 | `docker.io/library/python:3.13` | 保持上游地址，拉取加速由构建环境配置 |
 | 开发端口 8001 写死 | 容器内 EXPOSE 80，开发环境 8001 | 容器内统一 80，K8s Service 映射简单 |
 | `python app.py` 启动 | `uvicorn app.main:app --host 0.0.0.0 --port 80` | FastAPI 必须用 ASGI server，uvicorn 是官方推荐 |
 | `pip install -r requirements.txt` 带缓存 | `pip install --no-cache-dir` | 镜像体积膨胀，Docker 层已缓存 |
@@ -273,7 +282,7 @@ spec:
 
 ## 检查清单(生成前自查)
 
-- [ ] Dockerfile 基础镜像走 `hub.wishfoxs.com:6443/middleware/python:3.13`
+- [ ] Dockerfile 基础镜像保持上游地址，版本按项目选择
 - [ ] apt 源替换为清华镜像 (`mirrors.tuna.tsinghua.edu.cn`)
 - [ ] pip 源替换为阿里云镜像 (`mirrors.aliyun.com/pypi/simple/`)
 - [ ] 层缓存优化：先 `COPY requirements.txt` → `pip install` → 再 `COPY` 源码
@@ -287,7 +296,7 @@ spec:
 - [ ] .gitlab-ci.yml Kaniko auth 正确（`/kaniko/.docker/config.json`）
 - [ ] 镜像 tag 格式 `${IMAGE_PREFIX}-${VERSION}`（test-1.0.1 / uat-1.0.1 / prod-1.0.1）
 - [ ] master 分支 deploy 只允许 manual
-- [ ] 变量 `HARBOR_PROJECT` / `MODULE` / namespace 已替换为本项目值
+- [ ] 变量 `IMAGE_NAMESPACE` / `MODULE` / namespace 已替换为本项目值
 
 ---
 

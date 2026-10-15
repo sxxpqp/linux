@@ -1,9 +1,17 @@
 ---
 name: k8s-yaml-prod
-description: Production-grade Kubernetes YAML standards calibrated to this repo's actual conventions (Jenkins $VARS templating, Harbor imagePullSecrets, tcpSocket probes, multi-cluster overlays under devops/<env>/). Use BEFORE writing or modifying any K8s YAML for production — Deployment / StatefulSet / DaemonSet / Service / Ingress / HPA / PDB / NetworkPolicy / Job / CronJob. Triggers on:写 yaml,写 deployment,写 statefulset,k8s yaml,生产 yaml,业务 pod 模板,加 service,加 ingress,加 hpa,加 networkpolicy,写 cronjob,改副本数,加 probe,加 resources,deploy 模板. Provides必查清单 + 本仓库基线模板 + 各 kind 关键字段 + 反模式。
+description: Production-grade Kubernetes YAML standards calibrated to this repo's actual conventions (Jenkins $VARS templating, project-specific imagePullSecrets, tcpSocket probes, multi-cluster overlays under devops/<env>/). Use BEFORE writing or modifying any K8s YAML for production — Deployment / StatefulSet / DaemonSet / Service / Ingress / HPA / PDB / NetworkPolicy / Job / CronJob. Triggers on:写 yaml,写 deployment,写 statefulset,k8s yaml,生产 yaml,业务 pod 模板,加 service,加 ingress,加 hpa,加 networkpolicy,写 cronjob,改副本数,加 probe,加 resources,deploy 模板. Provides必查清单 + 本仓库基线模板 + 各 kind 关键字段 + 反模式。
 ---
 
 # K8s 生产 YAML 标准
+
+## 镜像仓库配置来源
+
+1. 先读取当前项目的 CI、Dockerfile、部署文件及变量引用，确认推送仓库地址、项目/命名空间、镜像名和凭据变量名；沿用已确认的项目配置。
+2. 用户本次提供的配置优先。不要从其他项目、历史示例或本仓库基础设施表推断业务仓库；不默认旧 Harbor，也不默认阿里云 ACR。
+3. **STOP：项目文件和当前对话都未提供必需配置时，先询问缺失的仓库地址、项目/命名空间，再生成最终可执行配置。** 已提供的不重复询问；只需保留占位草稿时明确标注缺项，不宣称可直接运行。密码通过 CI Secret/变量配置，不要求用户在聊天中粘贴。
+4. 第三方 `FROM` / `image:` 保持上游地址；既有节点 containerd mirror 配置不作为业务推送目标。已有业务镜像仅在用户要求更换时修改。
+
 
 > 项目: https://github.com/sxxpqp/linux
 > **不是教科书,是本仓库实际在跑的标准**。模板提取自 `devops/java/host-cluster/saas/pod-saas.yaml` 等真实生产 yaml,补上常被遗漏的项。
@@ -15,7 +23,7 @@ description: Production-grade Kubernetes YAML standards calibrated to this repo'
 | 1 | `resources.requests` + `limits` 都写,CPU + memory | 节点资源争抢,被 OOMKilled,调度不准 |
 | 2 | `livenessProbe` + `readinessProbe` 至少各一个 | Pod 假死时不重启 / 流量打到没 ready 的 Pod |
 | 3 | `image` 用具体 tag(`:v1.2.3` / `:SNAPSHOT-${BUILD_NUMBER}`),**不用 `:latest`** | 节点缓存的 latest 不一致,回滚没目标 |
-| 4 | `imagePullSecrets: harbor-repository` 必带 | 私有 Harbor 拉不到镜像 |
+| 4 | 私有仓库按项目配置使用当前 namespace 已存在的 `imagePullSecrets`；公共镜像无需强加 | 仓库或凭据不匹配会导致拉取失败 |
 | 5 | `imagePullPolicy`:固定 tag 用 `IfNotPresent`,SNAPSHOT 用 `Always` | 浪费拉取带宽 / 节点缓存了旧镜像 |
 | 6 | `terminationGracePeriodSeconds`:HTTP 服务 30,长任务调大 | SIGTERM 后被 SIGKILL,连接没优雅断 |
 | 7 | `securityContext`(关键场景):`runAsNonRoot: true` + `allowPrivilegeEscalation: false` | 容器逃逸 / 提权风险 |
@@ -108,7 +116,7 @@ spec:
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
       imagePullSecrets:
-        - name: harbor-repository
+        - name: $IMAGE_PULL_SECRET  # 仅私有仓库需要；从项目读取，缺失时询问
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       terminationGracePeriodSeconds: 30
@@ -298,7 +306,7 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure  # Job 必填,Always 不允许
-          imagePullSecrets: [{ name: harbor-repository }]
+          imagePullSecrets: [{ name: $IMAGE_PULL_SECRET }]  # 仅私有仓库需要
           containers:
             - name: $JOB_NAME
               image: ...
@@ -366,9 +374,10 @@ spec:
 
 ## 镜像地址写哪个
 
-- **从 Harbor 拉**(业务镜像、第三方代理):`$REGISTRY` 由 Jenkins 注入,通常是 `dockerhub.ihome.sxxpqp.top:8443` 等。yaml 里写 `$REGISTRY` 占位
-- **从阿里 ACR 拉**(自己构建并推过的):直接写 `registry.cn-hangzhou.aliyuncs.com/sxxpqp/<name>:<tag>`,国内节点直连快
-- **不要**写 `docker.io/library/xxx`、`gcr.io/xxx` 等公网地址 → 见 skill `infra-url-rewrite` 改写规则
+- 第三方镜像保持 `docker.io/...`、`gcr.io/...` 等上游地址，节点 mirror 独立配置，不改 `image:` 为代理域名。
+- 业务镜像从当前项目 CI/部署配置读取完整地址和变量来源；文件未提供、用户也未提供时先询问，不默认旧 Harbor 或阿里云 ACR。
+- 已有 Jenkins `$REGISTRY/$DOCKERHUB_NAMESPACE/...` 模板仅在本项目确实定义这些变量时沿用；不得把历史示例值当新项目默认值。
+- `imagePullSecrets` 按目标仓库和 namespace 的实际配置决定，不默认 `harbor-repository`；公共镜像省略。
 
 ## 何时调用此 skill
 
