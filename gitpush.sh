@@ -7,14 +7,52 @@ msg="${1:-update}"
 # ── 防护检查 ────────────────────────────────────────────────────────────────
 
 # 1. 检查敏感文件（私钥 / 证书 / 凭据）
-# SENSITIVE_PATTERN='\.(key|pem|p12|pfx|crt|cer|secret)$|^(id_rsa|id_ed25519)(\..*)?$|kubeconfig$|\.env(\..+)?$'
-# sensitive=$(git diff --cached --name-only | grep -Eie "$SENSITIVE_PATTERN" || true)
-# if [[ -n "$sensitive" ]]; then
-#   echo "❌ 检测到敏感文件，已中止提交："
-#   echo "$sensitive"
-#   echo "   如确认要提交，请先手动 git add 并绕过本脚本直接 git commit。"
-#   exit 1
-# fi
+SENSITIVE_PATTERN='\\.(key|pem|p12|pfx|crt|cer|secret)$|(^|/)(id_rsa|id_ed25519)(\\..*)?$|(^|/)kubeconfig$|(^|/)\\.env(\\..+)?
+
+# 2. 检查大文件（> 5 MB）
+large=$(git diff --cached --name-only --diff-filter=ACMR -z | while IFS= read -r -d '' f; do
+  [[ -f "$f" ]] || continue
+  size=$(wc -c < "$f")
+  (( size > 5242880 )) && printf '%s (%s MB)\\n' "$f" "$((size / 1048576))"
+done)
+if [[ -n "$large" ]]; then
+  printf '❌ 检测到超过 5 MB 的文件，已中止提交：\\n%s\\n' "$large"
+  exit 1
+fi
+
+# ── 正式提交 ────────────────────────────────────────────────────────────────
+
+if [[ "${1:-}" == "--dry-run" ]]; then
+  echo "Dry-run: 未暂存、提交或推送任何文件。"
+  git status --short
+  exit 0
+fi
+
+git add .
+# Check newly staged files before committing.
+sensitive=$(git diff --cached --name-only --diff-filter=ACMR | grep -Ei "$SENSITIVE_PATTERN" || true)
+if [[ -n "$sensitive" ]]; then
+  printf '❌ 检测到敏感文件，已中止提交：\\n%s\\n' "$sensitive"
+  exit 1
+fi
+large=$(git diff --cached --name-only --diff-filter=ACMR -z | while IFS= read -r -d '' f; do
+  [[ -f "$f" ]] || continue
+  size=$(wc -c < "$f")
+  (( size > 5242880 )) && printf '%s\\n' "$f"
+done)
+if [[ -n "$large" ]]; then
+  printf '❌ 检测到超过 5 MB 的文件，已中止提交：\\n%s\\n' "$large"
+  exit 1
+fi
+git diff --cached --quiet && { echo "没有待提交的变更"; exit 0; }
+git commit -m "$msg"
+git push
+
+sensitive=$(git diff --cached --name-only --diff-filter=ACMR | grep -Ei "$SENSITIVE_PATTERN" || true)
+if [[ -n "$sensitive" ]]; then
+  printf '❌ 检测到敏感文件，已中止提交：\\n%s\\n' "$sensitive"
+  exit 1
+fi
 
 # 2. 检查大文件（> 5 MB）
 # large=$(git diff --cached --name-only | while read f; do
