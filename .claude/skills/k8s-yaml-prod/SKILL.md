@@ -68,30 +68,28 @@ spec:
             limits:                    # 上限,memory 超了会 OOMKill
               cpu: 4000m
               memory: 4000Mi
-          # 推荐 httpGet — 验证到应用层(业务真能响应),比 tcpSocket(只测 TCP 监听)更准
-          # 业务必须暴露 /actuator/health/{liveness,readiness}(Spring Boot)或 /healthz(nodejs)
-          # 没有健康端点时再退回 tcpSocket(见下方"探针选型"段)
+          # 探针基线(仓库现状:devops/ 下 38 个探针全是 tcpSocket):
+          # 老 Java 业务没有 actuator 健康端点,tcpSocket 是当前可用方案。
+          # 应用一旦暴露 /actuator/health/{liveness,readiness}(Spring Boot)
+          # 或 /healthz(nodejs),优先换 httpGet —— 理由见下方"探针选型"段。
           livenessProbe:
-            httpGet:
-              path: /actuator/health/liveness   # nodejs 用 /healthz 或 /live
+            tcpSocket:
               port: $PORT
-              scheme: HTTP                       # HTTPS 接口用 HTTPS + httpHeaders
-            initialDelaySeconds: 60              # Java 启动慢,nodejs 30 即可
+            initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 5
           readinessProbe:
-            httpGet:
-              path: /actuator/health/readiness   # nodejs 用 /ready
+            tcpSocket:
               port: $PORT
             initialDelaySeconds: 60
-            periodSeconds: 20                    # readiness 比 liveness 稀疏点 OK
+            periodSeconds: 20
             timeoutSeconds: 3
             failureThreshold: 5
           # ★ 建议补:Pod 启动期间不让 liveness 误杀(K8s 1.16+)
+          # 用 httpGet 时需要与 liveness 同端点;保持 tcpSocket 时同理
           startupProbe:
-            httpGet:
-              path: /actuator/health/liveness    # 与 liveness 同端点即可
+            tcpSocket:
               port: $PORT
             initialDelaySeconds: 30
             periodSeconds: 10
@@ -124,10 +122,12 @@ spec:
 
 ## 探针选型(三选一)
 
+**基线是 `tcpSocket`** —— 仓库现有 38 个探针全是它,因为老 Java 业务没有 actuator 端点。应用**一旦暴露健康端点就升级到 `httpGet`**,别停在 tcpSocket。
+
 | 探针类型 | 何时用 | 例子 | 注意 |
 |---|---|---|---|
-| **`httpGet`(首选)** | 应用暴露了 HTTP 健康端点 | `/actuator/health/{liveness,readiness}`(Spring Boot)/ `/healthz` / `/ready` | 探针 hit 算业务请求,确保端点**不依赖 DB / 下游**;依赖了就只能在 readiness 里检 |
-| **`tcpSocket`(退回)** | 应用没暴露 HTTP 端点(纯 TCP 服务、第三方镜像不让改) | `tcpSocket: { port: $PORT }` | 只能验证端口在 listen,不能验证业务真在工作 |
+| **`tcpSocket`(基线)** | 应用没暴露 HTTP 健康端点(老 Java 业务、第三方镜像不让改) | `tcpSocket: { port: $PORT }` | 只验证端口在 listen。业务死循环 / 内存泄漏 / DB 连接池满 / 线程池打满**完全测不出**,Pod 假死但端口还 listen 时永远不重启 |
+| **`httpGet`(有端点就升)** | 应用暴露了 HTTP 健康端点 | `/actuator/health/{liveness,readiness}`(Spring Boot)/ `/healthz` / `/ready` | 验证到应用层。确保端点**不依赖 DB / 下游**,依赖了就只能放 readiness |
 | **`exec`** | 进程内独立健康脚本(如 redis-cli ping) | `exec: { command: ["redis-cli", "ping"] }` | 频繁 exec 有性能代价,probe 间隔别太密 |
 
 ### Spring Boot Actuator 健康端点推荐
@@ -337,14 +337,14 @@ spec:
 | `image: $APP_NAME:latest` | `image: $APP_NAME:v1.2.3` 或 `:SNAPSHOT-$BUILD_NUMBER` | latest 没版本约束,回滚没目标 |
 | 没 `resources` 段 | requests + limits 都写 | 没 requests 调度不准;没 limits 一个 Pod 吃光节点 |
 | 只 `readinessProbe` 不要 `livenessProbe` | 都要 | 假死时永远不重启 |
-| 探针用 `tcpSocket` 当首选 | 优先 `httpGet` 接 `/actuator/health/{liveness,readiness}` 或 `/healthz`;没端点才退回 tcpSocket | tcpSocket 只测端口在 listen,业务死循环 / 内存泄漏 / DB 连接池满 完全测不出 |
+| 应用已暴露健康端点却仍用 `tcpSocket` | 有端点就用 `httpGet` 接 `/actuator/health/{liveness,readiness}` 或 `/healthz` | tcpSocket 只测端口在 listen,业务死循环 / 内存泄漏 / DB 连接池满 / 线程池打满完全测不出 |
 | `liveness` 用 HTTP `/`(业务主页)探活 | 用专门 `/actuator/health/liveness` 或 `/healthz`(轻量端点) | `/` 可能依赖业务 → 业务慢 / DB 抖就误杀 |
 | `liveness` 端点查 DB / 下游 | liveness **只测进程自己**;依赖检查放 readiness | DB 一抖整个 Pod 被重启 → 雪崩 |
 | `liveness` 比 `readiness` 严格 | liveness 要**宽松**,readiness 才严格 | 一旦 liveness 失败直接杀 Pod;readiness 失败只是摘流 |
 | 无 `imagePullSecrets`,从 Harbor 拉 | `imagePullSecrets: [{ name: harbor-repository }]` | 私有 Harbor 拉不到 |
 | `replicas: 1` 还不配 PDB | ≥2 副本 + PodDisruptionBudget | 节点重启时业务断 |
 | `hostPath: /var/data` 当业务存储 | PVC + StorageClass | 节点漂移数据丢 |
-| Secret 明文 commit yaml | Sealed Secrets / External Secrets / SOPS | git 里出现密码 |
+| Secret 明文 commit 到公开仓库 | 本仓库是私有内网归档,保留真实值;**推到 GitHub 前先确认** | 公开仓库出现密码会被扫;私有内网脱敏反而丢信息 |
 | `kubectl apply -f x.yaml`(不带 namespace) | yaml 里明确 `namespace: xxx` 或 `kubectl apply -n` | 装到错的 ns |
 | ConfigMap 改了不 rollout | `kubectl rollout restart deploy/$APP` | Pod 启动时挂载的 cm 不会自动重读 |
 | `kubectl create namespace x` | `kubectl create ns x --dry-run=client -o yaml \| kubectl apply -f -` | 后者幂等 |

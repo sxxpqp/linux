@@ -5,7 +5,7 @@ description: Use when a repository contains pom.xml with Maven jar packaging and
 
 # Java Maven CI/CD
 
-公共流水线、ACR、Kaniko、分支映射和 Kubernetes 发布使用 `ci-gitlab-kaniko`。
+公共流水线、镜像仓库、Kaniko、分支映射和 Kubernetes 发布使用 `ci-gitlab-kaniko`。
 
 ## 识别项目
 
@@ -50,7 +50,7 @@ MAVEN_SKIP_TESTS: "false"
 - [ ] Maven 默认运行测试
 - [ ] 多模块最终 jar 路径明确
 - [ ] Dockerfile `FROM` 保持上游、版本固定
-- [ ] 使用 `ci-gitlab-kaniko` 推送 ACR 并等待 rollout
+- [ ] 使用 `ci-gitlab-kaniko` 推送镜像并等待 rollout
 
 ## 何时不要用
 

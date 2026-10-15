@@ -5,7 +5,7 @@ description: Use when a repository contains requirements.txt or pyproject.toml w
 
 # Python CI/CD
 
-公共流水线、ACR、Kaniko、分支映射和 Kubernetes 发布使用 `ci-gitlab-kaniko`。
+公共流水线、镜像仓库、Kaniko、分支映射和 Kubernetes 发布使用 `ci-gitlab-kaniko`。
 
 ## 识别项目
 
@@ -41,7 +41,7 @@ PYTHON_VERSION: "3.13"
 MODULE: service-name
 ```
 
-依赖安装必须先复制 lock/requirements 文件再复制源码。公共技能负责 ACR push、受保护的 kubeconfig、环境映射和 rollout status。
+依赖安装必须先复制 lock/requirements 文件再复制源码。公共技能负责镜像仓库、受保护的 kubeconfig、环境映射和 rollout status。
 
 ## 检查清单
 
@@ -50,7 +50,7 @@ MODULE: service-name
 - [ ] 默认非 root UID 10001
 - [ ] 使用固定版本基础镜像
 - [ ] 私有源凭据不进入镜像和日志
-- [ ] 使用 `ci-gitlab-kaniko` 发布 ACR/Kubernetes
+- [ ] 使用 `ci-gitlab-kaniko` 发布镜像/Kubernetes
 
 ## 何时不要用
 

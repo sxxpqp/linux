@@ -5,7 +5,7 @@ description: Use when a repository contains composer.json and a PHP application 
 
 # PHP CI/CD
 
-公共流水线、ACR、Kaniko、分支映射和 Kubernetes 发布使用 `ci-gitlab-kaniko`。
+公共流水线、镜像仓库、Kaniko、分支映射和 Kubernetes 发布使用 `ci-gitlab-kaniko`。
 
 ## 架构
 
@@ -66,7 +66,7 @@ PHP_IMAGE_NAME: service-name
 NGINX_IMAGE_NAME: service-name-nginx
 ```
 
-两个镜像可在同一 stage 并行构建；deploy job 必须按实际容器名更新两个镜像。公共技能负责 ACR、受保护变量和 rollout status。
+两个镜像可在同一 stage 并行构建；deploy job 必须按实际容器名更新两个镜像。公共技能负责镜像仓库、受保护变量和 rollout status。
 
 ## 检查清单
 
@@ -76,7 +76,7 @@ NGINX_IMAGE_NAME: service-name-nginx
 - [ ] PHP 和 Nginx 容器的 volume 路径一致
 - [ ] 默认非 root UID 10001
 - [ ] Nginx 有 `/healthz` 和 PHP 转发
-- [ ] 使用 `ci-gitlab-kaniko` 推送 ACR 并等待 rollout
+- [ ] 使用 `ci-gitlab-kaniko` 推送镜像并等待 rollout
 
 ## 何时不要用
 

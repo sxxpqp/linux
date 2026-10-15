@@ -284,7 +284,7 @@ timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
 ```
 
 新增 `eval_mode` 列：`full_test`（跑了子agent测试）或 `dry_run`（模拟推演）。
-如果要记录历史，先创建 `.claude/skills/darwin-skill/results.tsv`；不存在时不要声称已有历史数据。
+上面的示例行是**格式示意，不是本仓库的真实历史**。要记录历史先创建 `.claude/skills/darwin-skill/results.tsv`；文件不存在时不得声称已有历史数据、不得引用具体分数。
 
 ---
 

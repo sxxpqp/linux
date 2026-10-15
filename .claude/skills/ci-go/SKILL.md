@@ -5,7 +5,7 @@ description: Use when a repository contains go.mod and the user asks for GitLab 
 
 # Go CI/CD
 
-公共流水线、ACR、Kaniko、分支映射和 Kubernetes 发布规则必须使用 `ci-gitlab-kaniko`。
+公共流水线、镜像仓库、Kaniko、分支映射和 Kubernetes 发布规则必须使用 `ci-gitlab-kaniko`。
 
 ## 识别项目
 
@@ -55,7 +55,7 @@ GO_VERSION: "1.23"
 - [ ] 运行时不包含 Go 工具链和源码
 - [ ] 默认使用非 root 用户
 - [ ] 基础镜像固定版本且保持上游地址
-- [ ] 公共 CI 使用 ACR push 和 rollout status
+- [ ] 公共 CI 的镜像仓库和 rollout status 由 `ci-gitlab-kaniko` 决定
 - [ ] 多模块项目的 `go build` 路径与产物一致
 
 ## 何时不要用

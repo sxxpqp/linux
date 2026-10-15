@@ -5,7 +5,7 @@ description: Use when package.json depends on react and vite and the user asks f
 
 # React + Vite CI/CD
 
-公共流水线、ACR、Kaniko、分支映射和 Kubernetes 发布使用 `ci-gitlab-kaniko`。
+公共流水线、镜像仓库、Kaniko、分支映射和 Kubernetes 发布使用 `ci-gitlab-kaniko`。
 
 ## Dockerfile
 
@@ -61,7 +61,7 @@ MODULE: react-app
 - [ ] gzip 仅处理实际存在的 `dist`
 - [ ] nginx 有 SPA fallback 和 `/healthz`
 - [ ] 基础镜像固定版本且保持上游地址
-- [ ] 使用 `ci-gitlab-kaniko` 推送 ACR 并等待 rollout
+- [ ] 使用 `ci-gitlab-kaniko` 推送镜像并等待 rollout
 
 ## 何时不要用
 

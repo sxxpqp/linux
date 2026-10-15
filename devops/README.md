@@ -13,4 +13,4 @@ Jenkins on K8s 流水线配置，Java/Node.js 项目构建部署。
 | [turingcloud-device/](turingcloud-device/) | TuringCloud 设备服务 Jenkinsfile + Pod Template YAML | ✅ 生产验证 |
 | [turingcloud-web/](turingcloud-web/) | TuringCloud Web 服务 Jenkinsfile | ✅ 生产验证 |
 | [docker-build/](docker-build/) | Docker 镜像构建相关 | 验证过 |
-| [gitlab/](gitlab/) | GitLab CI/CD 集成配置 | 验证过 |
+| [gitlab-ci/](gitlab-ci/) | GitLab CI/CD 集成配置 | 验证过 |

@@ -5,7 +5,7 @@ description: Use when package.json depends on vue/vite or the project is uni-app
 
 # Vue + Vite CI/CD
 
-公共流水线、ACR、Kaniko、分支映射和 Kubernetes 发布使用 `ci-gitlab-kaniko`。
+公共流水线、镜像仓库、Kaniko、分支映射和 Kubernetes 发布使用 `ci-gitlab-kaniko`。
 
 ## 构建模式
 
@@ -18,6 +18,45 @@ description: Use when package.json depends on vue/vite or the project is uni-app
 | 多入口、自定义产物或项目编排脚本 | 最后才使用项目已有的 `node build.js` |
 | uni-app | 使用项目实际的 `build:h5` 或平台构建命令 |
 | Nuxt | 按 Nuxt 的 `.output`/启动方式，不套 SPA `dist` 模板 |
+
+判断原则：**能用 `--mode` 就不要上 `node build.js`**。`--mode` 是 Vite 原生环境加载机制，可移植、可缓存；`build.js` 是项目私有编排，只在多入口/非标准产物时才需要。
+
+### 环境变量注入 → `--mode`（优先）
+
+标准 Vite 工程只是用 `.env.staging` / `.env.pre` / `.env.production` 切环境，CI 只传一个 `--build-arg BUILD_MODE`，Dockerfile 里 `case` 映射成具体 mode：
+
+```dockerfile
+ARG BUILD_MODE=production
+ARG NODE_MAX_OLD_SPACE_SIZE=8192
+ENV NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}"
+RUN case "${BUILD_MODE}" in \
+      staging)    VITE_MODE=staging ;;
+      pre)        VITE_MODE=pre ;;
+      production) VITE_MODE=production ;;
+      *) echo "Unsupported BUILD_MODE: ${BUILD_MODE}" && exit 1 ;;
+    esac \
+ && npm run build -- --mode ${VITE_MODE} \
+ && test -d dist
+```
+
+三个容易漏的点：
+
+- **`NODE_MAX_OLD_SPACE_SIZE`**：大项目(页面/组件多)Vite 构建容易 `JavaScript heap out of memory`。默认给 8192，CI 变量 `NODE_MAX_OLD_SPACE_SIZE` 透传 build-arg。
+- **`test -d dist` 产物目录守卫**：`.env.<mode>` 里的 `VITE_APP_outputDir` 可能把产物目录改成 `dist/web` 之类，导致 runtime stage `COPY --from=build /app/dist` 落空。守卫住，失败要早。
+- **私有 npm 源**：`.npmrc` 必须跟 `package.json` / lockfile 一起 COPY，否则 `@scope/*` 私有包装不上。
+
+项目自带命名脚本(`npm run stage` / `build:pre` / `build:prod`，本质仍是 `vite build --mode`)时，`case` 直接映射到脚本名即可，参考 `D:\code\game-combine-h5\game-lottery-h5\Dockerfile`。
+
+### 自定义 build.js（最后手段）
+
+来源 `xet-live-h5`：项目自带 `node build.js` 编排构建，`BUILD_TYPE` 选入口(web/app)、`VITE_MODE` 选环境，产物是 `dist/web` / `dist/app` 而非 `dist`：
+
+```dockerfile
+RUN BUILD_TYPE=web BUILD_TAG="${BUILD_TAG}" VITE_MODE="${VITE_MODE}" node build.js \
+    && test -d dist/web
+```
+
+runtime stage 的 `COPY --from=build /app/dist/web` 和 gzip 的 `find` 路径都要跟着改成 `dist/web`。
 
 ## Dockerfile：标准 Vite SPA
 
@@ -58,9 +97,10 @@ server {
 NODE_VERSION: "22"
 BUILD_MODE: production
 MODULE: vue-app
+NODE_MAX_OLD_SPACE_SIZE: "8192"
 ```
 
-`BUILD_MODE` 必须限制在项目已存在的 mode 集合内；自定义 build.js 只在标准 `--mode` 无法表达多入口/多产物时使用，并验证实际产物目录。
+`BUILD_MODE` 必须限制在项目已存在的 mode 集合内；自定义 build.js 只在标准 `--mode` 无法表达多入口/多产物时使用，并验证实际产物目录。`NODE_MAX_OLD_SPACE_SIZE` 由 kaniko 用 `--build-arg` 透传。
 
 ## 检查清单
 
@@ -69,7 +109,9 @@ MODULE: vue-app
 - [ ] lockfile 安装失败直接终止
 - [ ] SPA 产物确认存在后才进入 runtime stage
 - [ ] nginx 有 `/healthz`，SPA 项目有 fallback
-- [ ] 使用 `ci-gitlab-kaniko` 推送 ACR 并等待 rollout
+- [ ] 使用 `ci-gitlab-kaniko` 推送镜像并等待 rollout
+- [ ] 大项目已配 `NODE_MAX_OLD_SPACE_SIZE` 并透传 build-arg
+- [ ] 构建后有 `test -d <产物目录>` 守卫，目录与 runtime stage 的 `COPY` 路径一致
 
 ## 何时不要用
 
