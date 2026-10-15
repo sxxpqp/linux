@@ -1,0 +1,23 @@
+name: Repository quality checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  shell-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            bash -n "$file"
+          done < <(git ls-files -z '*.sh')
+      - name: Lint gitpush.sh
+        shell: bash
+        run: |
+          shellcheck gitpush.sh
