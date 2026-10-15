@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "prompt": "namespace 卡 Terminating，operator 仍在运行；帮我定位原因。",
+    "expected": "先检查 namespace conditions、资源、API discovery、controller，不直接强制 finalize。"
+  },
+  {
+    "id": 2,
+    "prompt": "报 failed calling webhook，集群有多个名字包含 operator 的 webhook；只清 Calico 残留。",
+    "expected": "核实精确归属与后端，列出目标后确认，不宽泛匹配删除。"
+  }
+]

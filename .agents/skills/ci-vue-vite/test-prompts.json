@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "prompt": "Vue + Vite 用 .env.staging 和 .env.production，生成 CI 并透传 BUILD_MODE。",
+    "expected": "按项目脚本构建，环境参数传递完整。"
+  },
+  {
+    "id": 2,
+    "prompt": "Nuxt 项目 npm run build 生成 .output/server/index.mjs，能直接套 Nginx SPA 吗？",
+    "expected": "识别 SSR，使用 Node 服务；仅 generate 静态产物使用 Nginx。"
+  },
+  {
+    "id": 3,
+    "prompt": "以后需要 Harbor 时由我提供地址和项目名，当前未提供；生成配置时不要沿用旧 Harbor。",
+    "expected": "不默认旧 Harbor，不猜地址、项目名或凭据；确需 Harbor 时请求缺失配置；未指定新建镜像目标时遵循仓库 ACR 约定，第三方 FROM/image 保持上游。"
+  }
+]

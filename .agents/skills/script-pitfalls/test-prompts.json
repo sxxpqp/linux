@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "prompt": "安装脚本通过 curl 下载后执行，其中 systemctl status 和 read 可能卡住。",
+    "expected": "下载与执行分离，处理 stdin 与 pager，保留必要错误信息。"
+  },
+  {
+    "id": 2,
+    "prompt": "卸载脚本默认剥所有 finalizer，并 grep operator 批量删除 webhook；检查问题。",
+    "expected": "发现强制清理与宽泛删除风险，使用正常控制器清理及精确目标。"
+  }
+]

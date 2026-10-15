@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "prompt": "现有 Deployment 没 HTTP 健康端点，只能 TCP；给它加探针，不改镜像。",
+    "expected": "用已存在端口，不虚构健康端点，不改 image 或无关字段。"
+  },
+  {
+    "id": 2,
+    "prompt": "写一个每天北京时间 02:00 的 CronJob，使用公共上游镜像，集群版本未知。",
+    "expected": "核实 timeZone 支持，公共镜像不强加 Harbor secret，不猜服务器时区。"
+  },
+  {
+    "id": 3,
+    "prompt": "以后需要 Harbor 时由我提供地址和项目名，当前未提供；生成配置时不要沿用旧 Harbor。",
+    "expected": "不默认旧 Harbor，不猜地址、项目名或凭据；确需 Harbor 时请求缺失配置；未指定新建镜像目标时遵循仓库 ACR 约定，第三方 FROM/image 保持上游。"
+  }
+]

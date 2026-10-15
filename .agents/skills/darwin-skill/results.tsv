@@ -1,0 +1,14 @@
+timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
+2026-10-15	baseline	ci-gitlab-kaniko	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=9,7,4,4,7,8,7,7;1=pass;2=fail;3=pass;DEPLOY=false仍manual;容器名绑定Deployment;File kubeconfig被当文本;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run
+2026-10-15	baseline	ci-go	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=9,6,3,4,5,5,4,6;1=fail;2=fail;3=fail;旧Harbor默认;入口和工具链固定;runtime带Go;缺CGO分支;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run
+2026-10-15	baseline	ci-java-maven	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=9,6,4,4,5,5,5,6;1=fail;2=fail;3=fail;旧Harbor默认;find head任取jar;缺启动模块和JDK检测;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run
+2026-10-15	baseline	ci-php	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=9,5,2,4,4,5,4,5;1=fail;2=fail;3=fail;旧Harbor默认;init镜像不更新;多次rollout;回环TCP探针;.env烘焙;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run
+2026-10-15	baseline	ci-python	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=9,5,2,4,4,5,4,5;1=fail;2=fail;3=fail;旧Harbor默认;入口版本端口固定;主模板强加ffmpeg与编译工具;缺非root;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run
+2026-10-15	baseline	ci-react-vite	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=9,6,3,4,6,5,5,6;1=pass;2=fail;3=fail;旧Harbor默认;pnpm latest;非hash资源也长缓存;缺锁文件失败排查;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run
+2026-10-15	baseline	ci-vue-vite	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=9,7,4,4,6,5,5,6;1=pass;2=fail;3=fail;旧Harbor默认;无Nuxt SSR分支;锁失败回退无锁安装;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run
+2026-10-15	baseline	infra-url-rewrite	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=9,8,5,4,6,9,6,9;1=pass;2=fail;3=pass;缺代理文件存在性守卫;builder mirror假设;既有ihome节点映射保留;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run
+2026-10-15	baseline	k8s-cleanup-stuck	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=8,6,4,2,4,9,5,6;1=fail;2=fail;默认强剥finalizer;宽泛operator匹配;creationTimestamp和webhook因果错误;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run
+2026-10-15	baseline	k8s-yaml-prod	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=8,7,4,4,5,9,6,8;1=pass;2=fail;3=fail;末节禁止上游镜像与根约定冲突;固定Harbor secret;CronJob时区规则错误;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run
+2026-10-15	baseline	linux-ops-edit	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=8,8,5,6,7,8,7,9;1=pass;2=unverified;缺已有授权优先和脏工作树隔离;大小写指导不完整;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run
+2026-10-15	baseline	script-pitfalls	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=9,7,5,4,5,9,6,8;1=pass;2=fail;默认强剥finalizer;宽泛webhook删除;SSA重建时间戳解释错误;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run
+2026-10-15	baseline	darwin-skill	-	-	baseline	1,2,3,4,5,6,7,9	structure_ratings=8,6,6,7,5,1,4,8;1=fail;2=fail;错误.Codex路径;references/templates/scripts缺失;干跑效果评分不可靠;stash回滚风险;dim8=unverified;仅静态推演，未执行构建或集群测试	dry_run

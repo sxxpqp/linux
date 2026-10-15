@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "prompt": "Go 服务入口 ./cmd/api，go.mod 指定版本；生成 Dockerfile 和 GitLab CI。",
+    "expected": "从项目选工具链和入口，运行时不含编译器，推阿里 ACR。"
+  },
+  {
+    "id": 2,
+    "prompt": "Go 项目依赖 CGO 和本地动态库，要用 distroless/static 运行。",
+    "expected": "识别静态运行时不兼容，不强行 CGO_ENABLED=0，给出匹配运行库方案。"
+  },
+  {
+    "id": 3,
+    "prompt": "以后需要 Harbor 时由我提供地址和项目名，当前未提供；生成配置时不要沿用旧 Harbor。",
+    "expected": "不默认旧 Harbor，不猜地址、项目名或凭据；确需 Harbor 时请求缺失配置；未指定新建镜像目标时遵循仓库 ACR 约定，第三方 FROM/image 保持上游。"
+  }
+]

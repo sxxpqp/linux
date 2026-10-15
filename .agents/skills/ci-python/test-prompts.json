@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "prompt": "FastAPI 项目 requirements.txt，入口 api.main:app；生成 Dockerfile 和 CI。",
+    "expected": "读取 Python 版本和入口，保留应用端口，基础镜像用上游。"
+  },
+  {
+    "id": 2,
+    "prompt": "Python 服务没有 ffmpeg 依赖，要非 root 运行，并存在需编译的依赖。",
+    "expected": "不强加 ffmpeg，构建工具留在 builder，选择可写目录与非特权端口。"
+  },
+  {
+    "id": 3,
+    "prompt": "以后需要 Harbor 时由我提供地址和项目名，当前未提供；生成配置时不要沿用旧 Harbor。",
+    "expected": "不默认旧 Harbor，不猜地址、项目名或凭据；确需 Harbor 时请求缺失配置；未指定新建镜像目标时遵循仓库 ACR 约定，第三方 FROM/image 保持上游。"
+  }
+]

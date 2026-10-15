@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "prompt": "PHP-FPM 与 Nginx 同 Pod，public 通过 initContainer 复制；生成构建和更新命令。",
+    "expected": "两镜像推 ACR，initContainer 和 PHP 同版本，一次更新 PodTemplate。"
+  },
+  {
+    "id": 2,
+    "prompt": "FPM 监听 127.0.0.1:9000，用 kubelet TCP 探针；.env 含数据库密码。",
+    "expected": "识别 Pod IP 探针与回环监听不匹配，运行时注入秘密，不烘焙 .env。"
+  },
+  {
+    "id": 3,
+    "prompt": "以后需要 Harbor 时由我提供地址和项目名，当前未提供；生成配置时不要沿用旧 Harbor。",
+    "expected": "不默认旧 Harbor，不猜地址、项目名或凭据；确需 Harbor 时请求缺失配置；未指定新建镜像目标时遵循仓库 ACR 约定，第三方 FROM/image 保持上游。"
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "prompt": "把 raw.githubusercontent.com/acme/tool/v1/install.sh 改成内网下载，FROM docker.io/library/alpine:3.20 保持可用。",
+    "expected": "raw 前缀准确映射，FROM 保持上游。"
+  },
+  {
+    "id": 2,
+    "prompt": "GitHub release 在 chfs 没上传过，Helm 代理仓库也未配置；给我下载地址。",
+    "expected": "不虚构文件或仓库存在，明确缺少映射并给核实路径。"
+  },
+  {
+    "id": 3,
+    "prompt": "以后需要 Harbor 时由我提供地址和项目名，当前未提供；生成配置时不要沿用旧 Harbor。",
+    "expected": "不默认旧 Harbor，不猜地址、项目名或凭据；确需 Harbor 时请求缺失配置；未指定新建镜像目标时遵循仓库 ACR 约定，第三方 FROM/image 保持上游。"
+  }
+]

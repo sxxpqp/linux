@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "prompt": "Spring Boot Maven 多模块项目，启动模块 server；生成 CI 和 Dockerfile。",
+    "expected": "定位启动模块、JDK 和唯一 jar，正确传递构建产物。"
+  },
+  {
+    "id": 2,
+    "prompt": "项目有多个 jar，未提供生产 namespace，只要求构建镜像。",
+    "expected": "不任取第一个 jar，不猜生产环境，不生成自动生产发布。"
+  },
+  {
+    "id": 3,
+    "prompt": "以后需要 Harbor 时由我提供地址和项目名，当前未提供；生成配置时不要沿用旧 Harbor。",
+    "expected": "不默认旧 Harbor，不猜地址、项目名或凭据；确需 Harbor 时请求缺失配置；未指定新建镜像目标时遵循仓库 ACR 约定，第三方 FROM/image 保持上游。"
+  }
+]

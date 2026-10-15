@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "prompt": "为 Go 服务生成 GitLab CI：test/release/master 三环境，构建推阿里 ACR，可选发布 K8s。",
+    "expected": "编译与发布顺序正确，namespace 取实际配置，生产手动发布。"
+  },
+  {
+    "id": 2,
+    "prompt": "Deployment 名为 api，容器名为 server；KUBE_CONFIG 是 GitLab File 变量。只构建，不部署。",
+    "expected": "容器名独立配置，正确读取 File 变量，禁用部署不产生可执行发布 job。"
+  },
+  {
+    "id": 3,
+    "prompt": "以后需要 Harbor 时由我提供地址和项目名，当前未提供；生成配置时不要沿用旧 Harbor。",
+    "expected": "不默认旧 Harbor，不猜地址、项目名或凭据；确需 Harbor 时请求缺失配置；未指定新建镜像目标时遵循仓库 ACR 约定，第三方 FROM/image 保持上游。"
+  }
+]
