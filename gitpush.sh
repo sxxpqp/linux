@@ -13,7 +13,7 @@ SENSITIVE_PATTERN='\\.(key|pem|p12|pfx|crt|cer|secret)$|(^|/)(id_rsa|id_ed25519)
 large=$(git diff --cached --name-only --diff-filter=ACMR -z | while IFS= read -r -d '' f; do
   [[ -f "$f" ]] || continue
   size=$(wc -c < "$f")
-  (( size > 5242880 )) && printf '%s (%s MB)\\n' "$f" "$((size / 1048576))"
+  if (( size > 5242880 )); then printf '%s (%s MB)\\n' "$f" "$((size / 1048576))"; fi
 done)
 if [[ -n "$large" ]]; then
   printf '❌ 检测到超过 5 MB 的文件，已中止提交：\\n%s\\n' "$large"
@@ -38,7 +38,7 @@ fi
 large=$(git diff --cached --name-only --diff-filter=ACMR -z | while IFS= read -r -d '' f; do
   [[ -f "$f" ]] || continue
   size=$(wc -c < "$f")
-  (( size > 5242880 )) && printf '%s\\n' "$f"
+  if (( size > 5242880 )); then printf '%s\\n' "$f"; fi
 done)
 if [[ -n "$large" ]]; then
   printf '❌ 检测到超过 5 MB 的文件，已中止提交：\\n%s\\n' "$large"
