@@ -23,11 +23,11 @@ if [[ "$action" == help ]]; then
 前置依赖：Bash、GNU Make、kubectl，以及可用的 Docker Linux containers。
 Windows 使用 Docker Desktop（Linux containers 模式）；Linux 使用 Docker Engine。
   make kind-install                  安装 kind v0.33.0（需要 Go 和可用的 GOPROXY）
-  make kind-up                       创建/恢复集群，自动启用 kindnet CNI + Traefik Ingress
+  make kind-up                       创建/恢复集群，kindnet + ingress-nginx，master 映射 80/443
   make kind-up WORKERS=2              创建 1 control-plane + 2 worker（已有集群不改拓扑）
   make kind-up workers=2              同上，WORKERS/workers 均支持，冲突值会报错
   make kind-status                   查看节点、Pod 和 StorageClass
-  make kind-ingress                  前台转发 Ingress 到 localhost:8080/8443，Ctrl+C 停止转发
+  make kind-ingress                  检查 ingress-nginx 就绪与 master 的 80/443 映射
   make kind-check FILE=path/to.yaml   服务端 dry-run，校验实际 API/准入规则
   make kind-apply FILE=path/to.yaml   部署到指定 kind 集群
   make kind-load IMAGE=app:test       加载宿主 Docker 中已有的镜像
@@ -43,9 +43,10 @@ Windows 使用 Docker Desktop（Linux containers 模式）；Linux 使用 Docker
 若此前已设置 KUBECONFIG，请先保存原值，切回时恢复原值。
 可选 KIND_NAME=linux-lab；KIND_NODE_IMAGE 指定上游 kindest/node 镜像。
 独立 kubeconfig: ~/.kube/kind-<集群名>.config，不修改默认 context。
-默认 kindnet + local-path + Traefik Ingress；Ingress 使用 ingressClassName: traefik。
-kind-up 等待网络与入口控制器就绪；浏览器访问前另开终端运行 make kind-ingress。
-入口只监听本机回环地址；卸载集群时会一并移除集群内的 CNI 和 Ingress。
+默认 kindnet + local-path + ingress-nginx；Ingress 使用 ingressClassName: nginx。
+复用 docker/kind/ingress-nginx.yaml；master 映射宿主机 80/443，无需 port-forward。
+宿主机监听 0.0.0.0:80/443；端口须空闲，局域网可达性取决于宿主机防火墙。
+旧集群若没有端口映射，须确认后 kind-down 再 kind-up；脚本不自动删除重建。
 13.8 GB 内存建议先单节点；资源上限在 Docker Desktop / WSL 设置中调整。
 check/apply 支持 YAML 文件或目录；CRD 需先安装，Jenkins $VARS 模板需先渲染。
 EOF
@@ -76,6 +77,15 @@ need docker
 docker info >/dev/null 2>&1 || fail 'Docker 不可用，请先启动 Docker，并确认当前用户有权限。'
 [[ $(docker info --format '{{.OSType}}') == linux ]] || fail '需要 Docker Linux containers。'
 kube() { kubectl --kubeconfig "$config" --context "kind-$name" "$@"; }
+check_ingress_ports() {
+    local port bindings
+    for port in 80 443; do
+        bindings=$(docker port "${name}-control-plane" "${port}/tcp") \
+            || fail "master 缺少 ${port} 端口映射；确认数据可删除后 make kind-down KIND_NAME=${name}，再 make kind-up KIND_NAME=${name} WORKERS=${workers}。"
+        grep -Eq ":${port}$" <<<"$bindings" \
+            || fail "master 未映射宿主机 ${port}；端口映射不能原地补齐，请确认后重建集群。"
+    done
+}
 
 if [[ "$action" == down ]]; then
     [[ -t 0 ]] || fail '删除需要交互确认，请在终端运行。'
@@ -103,10 +113,13 @@ if [[ "$action" == up ]]; then
                 printf 'kubeadmConfigPatches:\n- |\n  kind: KubeletConfiguration\n  failCgroupV1: false\n'
             fi
             printf 'nodes:\n- role: control-plane\n'
+            printf '  labels:\n    ingress-ready: "true"\n'
+            printf '  extraPortMappings:\n  - containerPort: 80\n    hostPort: 80\n    listenAddress: "0.0.0.0"\n    protocol: TCP\n  - containerPort: 443\n    hostPort: 443\n    listenAddress: "0.0.0.0"\n    protocol: TCP\n'
             for ((i=0; i<workers; i++)); do printf '%s\n' '- role: worker'; done
         } | kind "${args[@]}" --config -
     else
         echo '[1/4] 集群已存在，保留现有拓扑。'
+        check_ingress_ports
         nodes=$(kind get nodes --name "$name")
         [[ -n "$nodes" ]] || fail '集群没有节点。'
         while IFS= read -r node; do
@@ -141,6 +154,7 @@ if [[ "$action" == up ]]; then
         kube -n kube-system get daemonset/kindnet deployment/coredns >/dev/null \
             || fail '上次 kind 初始化未完成（缺少 kindnet/CoreDNS）；请检查日志，确认后使用 make kind-down 重建。'
     fi
+    check_ingress_ports
     echo '[2/4] 复用仓库 mirrors.sh 配置节点镜像加速...'
     nodes=$(kind get nodes --name "$name")
     [[ -n "$nodes" ]] || fail '集群没有节点。'
@@ -154,17 +168,21 @@ if [[ "$action" == up ]]; then
     kube -n kube-system rollout status daemonset/kindnet --timeout=180s
     kube wait --for=condition=Ready nodes --all --timeout=180s
     kube -n kube-system rollout status deployment/coredns --timeout=180s
-    echo '[4/4] 安装并等待 Traefik Ingress 就绪...'
-    manifest="$root/kubernetes/kind/ingress.yaml"
+    legacy_ingress=$(kube -n kind-ingress get deployment traefik --ignore-not-found -o name)
+    [[ -z "$legacy_ingress" ]] \
+        || fail '此集群仍有旧 Traefik；请确认数据后 kind-down 再 kind-up，不自动删除旧控制器。'
+    echo '[4/4] 安装并等待 ingress-nginx 就绪...'
+    kube label node "${name}-control-plane" ingress-ready=true --overwrite
+    manifest="$root/docker/kind/ingress-nginx.yaml"
     case "${OSTYPE:-}" in
         msys*|cygwin*) manifest=$(cygpath -m "$manifest") ;;
     esac
     kube apply -f "$manifest"
-    kube -n kind-ingress rollout status deployment/traefik --timeout=180s
+    kube -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=180s
     kube get nodes -o wide
-    kube get ingressclass traefik
+    kube get ingressclass nginx
     printf '独立 kubeconfig: %s\n' "$config"
-    echo '入口控制器已就绪；另开终端 make kind-ingress，访问 http://127.0.0.1:8080 或 https://127.0.0.1:8443。'
+    echo '入口已就绪：宿主机 80/443 → master → ingress-nginx；直接访问 http://127.0.0.1 或 https://127.0.0.1，按业务 Ingress 提供 Host。'
     exit 0
 fi
 
@@ -176,11 +194,13 @@ case "$action" in
         kube get pods -A
         kube get storageclass
         kube get ingressclass
-        kube -n kind-ingress get deployment,service ;;
+        kube -n ingress-nginx get deployment,service ;;
     ingress)
         need kubectl
-        echo '转发 Ingress 到本机 8080/8443；Ctrl+C 只停止转发，不卸载控制器。'
-        kube -n kind-ingress port-forward --address=127.0.0.1 service/traefik 8080:80 8443:443 ;;
+        check_ingress_ports
+        kube -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=180s
+        kube get ingressclass nginx
+        echo '入口直接监听宿主机 80/443，无需持续运行本命令；按业务 Ingress 设置 Host。' ;;
     check|apply)
         need kubectl
         [[ -n ${FILE:-} && -e "$FILE" ]] || fail '请指定存在的 FILE=文件或目录。'
