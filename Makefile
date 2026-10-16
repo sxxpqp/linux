@@ -9,11 +9,11 @@ export KIND_NAME WORKERS FILE IMAGE
 ROOT := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 KIND_SCRIPT := $(ROOT)kubernetes/kind/deploy-kind.sh
 
-.PHONY: help kind-install kind-up kind-status kind-check kind-apply kind-load kind-logs kind-down kind-uninstall kind-config
+.PHONY: help kind-install kind-up kind-status kind-check kind-apply kind-load kind-logs kind-down kind-uninstall kind-config kind-ingress
 help:
 	@bash "$(KIND_SCRIPT)" help
 
-kind-install kind-up kind-status kind-check kind-apply kind-load kind-logs kind-down kind-config:
+kind-install kind-up kind-status kind-check kind-apply kind-load kind-logs kind-down kind-config kind-ingress:
 	@bash "$(KIND_SCRIPT)" "$(@:kind-%=%)"
 
 kind-uninstall: kind-down

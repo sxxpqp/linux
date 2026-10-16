@@ -23,9 +23,10 @@ if [[ "$action" == help ]]; then
 前置依赖：Bash、GNU Make、kubectl，以及可用的 Docker Linux containers。
 Windows 使用 Docker Desktop（Linux containers 模式）；Linux 使用 Docker Engine。
   make kind-install                  安装 kind v0.33.0（需要 Go 和可用的 GOPROXY）
-  make kind-up                       创建单节点集群，复用仓库 containerd mirror 脚本
+  make kind-up                       创建/恢复集群，自动启用 kindnet CNI + Traefik Ingress
   make kind-up WORKERS=2              创建 1 control-plane + 2 worker（已有集群不改拓扑）
   make kind-status                   查看节点、Pod 和 StorageClass
+  make kind-ingress                  前台转发 Ingress 到 localhost:8080/8443，Ctrl+C 停止转发
   make kind-check FILE=path/to.yaml   服务端 dry-run，校验实际 API/准入规则
   make kind-apply FILE=path/to.yaml   部署到指定 kind 集群
   make kind-load IMAGE=app:test       加载宿主 Docker 中已有的镜像
@@ -41,7 +42,9 @@ Windows 使用 Docker Desktop（Linux containers 模式）；Linux 使用 Docker
 若此前已设置 KUBECONFIG，请先保存原值，切回时恢复原值。
 可选 KIND_NAME=linux-lab；KIND_NODE_IMAGE 指定上游 kindest/node 镜像。
 独立 kubeconfig: ~/.kube/kind-<集群名>.config，不修改默认 context。
-默认 kindnet + local-path；不自动部署生产 CNI、Ingress 或业务服务。
+默认 kindnet + local-path + Traefik Ingress；Ingress 使用 ingressClassName: traefik。
+kind-up 等待网络与入口控制器就绪；浏览器访问前另开终端运行 make kind-ingress。
+入口只监听本机回环地址；卸载集群时会一并移除集群内的 CNI 和 Ingress。
 13.8 GB 内存建议先单节点；资源上限在 Docker Desktop / WSL 设置中调整。
 check/apply 支持 YAML 文件或目录；CRD 需先安装，Jenkins $VARS 模板需先渲染。
 EOF
@@ -64,7 +67,7 @@ case "$action" in
         go install sigs.k8s.io/kind@v0.33.0
         printf '安装完成，请确保 Go 的 bin 目录在 PATH 中。\n'
         exit 0 ;;
-    up|status|check|apply|load|logs|down) ;;
+    up|status|check|apply|load|logs|down|ingress) ;;
     *) fail "未知动作: $action（运行 help 查看用法）" ;;
 esac
 need kind
@@ -86,7 +89,7 @@ if [[ "$action" == up ]]; then
     [[ "$workers" =~ ^[0-2]$ ]] || fail 'WORKERS 允许 0、1、2（适用于小内存测试环境）。'
     clusters=$(kind get clusters)
     if ! grep -Fxq "$name" <<<"$clusters"; then
-        echo '[1/3] 创建 kind 集群...'
+        echo '[1/4] 创建 kind 集群...'
         args=(create cluster --name "$name" --kubeconfig "$config" --retain --wait 180s)
         [[ -z ${KIND_NODE_IMAGE:-} ]] || args+=(--image "$KIND_NODE_IMAGE")
         mkdir -p -- "$(dirname -- "$config")"
@@ -102,7 +105,7 @@ if [[ "$action" == up ]]; then
             for ((i=0; i<workers; i++)); do printf '%s\n' '- role: worker'; done
         } | kind "${args[@]}" --config -
     else
-        echo '[1/3] 集群已存在，保留现有拓扑。'
+        echo '[1/4] 集群已存在，保留现有拓扑。'
         nodes=$(kind get nodes --name "$name")
         [[ -n "$nodes" ]] || fail '集群没有节点。'
         while IFS= read -r node; do
@@ -137,7 +140,7 @@ if [[ "$action" == up ]]; then
         kube -n kube-system get daemonset/kindnet deployment/coredns >/dev/null \
             || fail '上次 kind 初始化未完成（缺少 kindnet/CoreDNS）；请检查日志，确认后使用 make kind-down 重建。'
     fi
-    echo '[2/3] 复用仓库 mirrors.sh 配置节点镜像加速...'
+    echo '[2/4] 复用仓库 mirrors.sh 配置节点镜像加速...'
     nodes=$(kind get nodes --name "$name")
     [[ -n "$nodes" ]] || fail '集群没有节点。'
     while IFS= read -r node; do
@@ -146,11 +149,21 @@ if [[ "$action" == up ]]; then
             || fail "$node 未启用 certs.d，请检查 kind 节点镜像的 containerd 配置。"
         docker exec -i "$node" bash < "$root/docker/containerd/mirrors.sh"
     done <<<"$nodes"
-    echo '[3/3] 等待节点与 DNS 就绪...'
+    echo '[3/4] 等待 CNI、节点与 DNS 就绪...'
+    kube -n kube-system rollout status daemonset/kindnet --timeout=180s
     kube wait --for=condition=Ready nodes --all --timeout=180s
     kube -n kube-system rollout status deployment/coredns --timeout=180s
+    echo '[4/4] 安装并等待 Traefik Ingress 就绪...'
+    manifest="$root/kubernetes/kind/ingress.yaml"
+    case "${OSTYPE:-}" in
+        msys*|cygwin*) manifest=$(cygpath -m "$manifest") ;;
+    esac
+    kube apply -f "$manifest"
+    kube -n kind-ingress rollout status deployment/traefik --timeout=180s
     kube get nodes -o wide
+    kube get ingressclass traefik
     printf '独立 kubeconfig: %s\n' "$config"
+    echo '入口控制器已就绪；另开终端 make kind-ingress，访问 http://127.0.0.1:8080 或 https://127.0.0.1:8443。'
     exit 0
 fi
 
@@ -160,7 +173,13 @@ case "$action" in
         need kubectl
         kube get nodes -o wide
         kube get pods -A
-        kube get storageclass ;;
+        kube get storageclass
+        kube get ingressclass
+        kube -n kind-ingress get deployment,service ;;
+    ingress)
+        need kubectl
+        echo '转发 Ingress 到本机 8080/8443；Ctrl+C 只停止转发，不卸载控制器。'
+        kube -n kind-ingress port-forward --address=127.0.0.1 service/traefik 8080:80 8443:443 ;;
     check|apply)
         need kubectl
         [[ -n ${FILE:-} && -e "$FILE" ]] || fail '请指定存在的 FILE=文件或目录。'
