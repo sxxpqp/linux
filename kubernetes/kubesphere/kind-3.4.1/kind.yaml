@@ -11,5 +11,10 @@ nodes:
     hostPort: 30880
     listenAddress: "127.0.0.1"
     protocol: TCP
+- role: worker
+  image: kindest/node:v1.24.7
+- role: worker
+  image: kindest/node:v1.24.7  
+  # worker 节点number
 # 此旧节点镜像内含 legacy registry.mirrors，创建时不要叠加 config_path，二者冲突会使 CRI 插件失败。
 # 需要 certs.d 时先备份并移除节点 config.toml 的 legacy mirrors 配置，再启用 config_path。

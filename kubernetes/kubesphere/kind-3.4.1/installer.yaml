@@ -295,7 +295,7 @@ spec:
       serviceAccountName: ks-installer
       containers:
       - name: installer
-        image: kubesphere/ks-installer:v3.4.1
+        image: registry.cn-beijing.aliyuncs.com/kubesphereio/ks-installer:v3.4.1
         imagePullPolicy: "IfNotPresent"
         resources:
           limits:
