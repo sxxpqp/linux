@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# 系统: Windows + Git Bash + GNU Make + Docker Desktop (Linux containers)
+# 系统: Linux / Windows Git Bash / WSL2 (GNU Make + Docker Linux containers)
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kind/deploy-kind.sh
 # 用法: bash kubernetes/kind/deploy-kind.sh up (在完整仓库中执行，或 make kind-up)
 set -euo pipefail
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 export KIND_EXPERIMENTAL_PROVIDER=docker
-# Git Bash 调用 docker.exe 时，保留传给容器的 /etc、/kind 等 Linux 路径。
-export MSYS_NO_PATHCONV=1
+# 仅 Git Bash 需要防止 docker.exe 的容器内路径被转换为 Windows 路径。
+case "${OSTYPE:-}" in
+    msys*|cygwin*) export MSYS_NO_PATHCONV=1 ;;
+esac
 
 action=${1:-help}
 name=${KIND_NAME:-linux-lab}
@@ -17,7 +19,9 @@ need() { command -v "$1" >/dev/null 2>&1 || fail "缺少 $1，请先安装；kin
 
 if [[ "$action" == help ]]; then
     cat <<'EOF'
-在 Windows 的 Git Bash 中进入仓库根目录运行（GNU Make 已安装，Docker Desktop 已启动并使用 Linux containers）：
+在 Linux / WSL2 / Windows Git Bash 中进入仓库根目录运行：
+前置依赖：Bash、GNU Make、kubectl，以及可用的 Docker Linux containers。
+Windows 使用 Docker Desktop（Linux containers 模式）；Linux 使用 Docker Engine。
   make kind-install                  安装 kind v0.33.0（需要 Go 和可用的 GOPROXY）
   make kind-up                       创建单节点集群，复用仓库 containerd mirror 脚本
   make kind-up WORKERS=2              创建 1 control-plane + 2 worker（已有集群不改拓扑）
