@@ -77,7 +77,8 @@ CONTEXT=${CONTEXT//$'\r'/}
 [[ -n "$CONTEXT" ]] || { echo "没有可用的 kubectl context" >&2; exit 2; }
 kube() { kubectl --context "$CONTEXT" --request-timeout=30s "$@"; }
 echo "[1/3] 检查通过，目标集群 context: $CONTEXT"
-openssl x509 -in "$CERT_FILE" -noout -subject -dates
+# 显示实际覆盖的域名和有效期，避免 subject 中文省份在终端中乱码。
+openssl x509 -in "$CERT_FILE" -noout -ext subjectAltName -dates
 
 # 临时文件和正式备份都可能包含私钥，只允许当前用户访问。
 work_dir=$(mktemp -d)
