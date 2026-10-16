@@ -163,8 +163,12 @@ for ns in "${namespaces[@]}"; do
   if [[ -z "$run_backup_dir" ]]; then
     mkdir -p -- "$BACKUP_DIR"
     chmod 700 -- "$BACKUP_DIR"
-    # 随机后缀避免同一秒多次运行覆盖历史备份。
-    run_backup_dir=$(mktemp -d "$BACKUP_DIR/run-$(date +%Y%m%d-%H%M%S)-XXXXXX")
+    # 时间精确到秒；目录已存在时停止，避免复用或覆盖历史备份。
+    run_backup_dir="$BACKUP_DIR/$(date +%Y%m%d-%H%M%S)"
+    if ! mkdir -m 700 -- "$run_backup_dir"; then
+      echo "无法创建备份目录（可能同一秒已执行过），停止更新: $run_backup_dir" >&2
+      exit 1
+    fi
     echo "本次原始 Secret 配置备份(YAML): $run_backup_dir（含私钥，请妥善保存）"
   fi
   if ! (set -o noclobber; kubectl patch --local -f "$snapshot" --type=json -p '[]' -o yaml > "$run_backup_dir/$ns-$SECRET_NAME.yaml"); then
