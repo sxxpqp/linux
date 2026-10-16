@@ -35,12 +35,15 @@ Windows 使用 Docker Desktop（Linux containers 模式）；Linux 使用 Docker
   make kind-down                     输入集群名确认后删除，包含集群内数据
   make kind-uninstall                kind-down 的别名，只删除集群，保留 Docker/kind 工具
   make -s kind-config                仅输出 kubeconfig 路径（不需要 Docker 在线）
-当前终端切换到测试集群（Linux / Git Bash）：
-  export KUBECONFIG="$(make -s kind-config)"
+  make -s kind-use                   输出 export 命令，需配合下面的 eval 在当前终端生效
+  make -s kind-unuse                 输出 unset 命令，不依赖配置文件或 Docker
+当前终端切换到测试集群（Bash / Zsh / Git Bash / WSL）：
+  eval "$(make -s kind-use)"
   kubectl config current-context
-恢复默认配置（此前未设置 KUBECONFIG 时）：
-  unset KUBECONFIG
-若此前已设置 KUBECONFIG，请先保存原值，切回时恢复原值。
+取消设置，恢复使用默认 ~/.kube/config：
+  eval "$(make -s kind-unuse)"
+make 子进程不能修改当前终端环境，直接 make kind-use 不会切换。
+kind-unuse 只 unset KUBECONFIG；若此前有自定义值，请先保存，切回时自行恢复。
 可选 KIND_NAME=linux-lab；KIND_NODE_IMAGE 指定上游 kindest/node 镜像。
 独立 kubeconfig: ~/.kube/kind-<集群名>.config，不修改默认 context。
 默认 kindnet + local-path + ingress-nginx；Ingress 使用 ingressClassName: nginx。
@@ -52,15 +55,23 @@ check/apply 支持 YAML 文件或目录；CRD 需先安装，Jenkins $VARS 模�
 EOF
     exit 0
 fi
+if [[ "$action" == unuse ]]; then
+    printf 'unset KUBECONFIG\n'
+    exit 0
+fi
 [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || fail 'KIND_NAME 只能包含小写字母、数字和中间连字符。'
 config="${HOME}/.kube/kind-${name}.config"
 # 关闭 MSYS 路径转换后，原生 kind.exe/kubectl.exe 必须接收 Windows 路径。
 case "${OSTYPE:-}" in
     msys*|cygwin*) config=$(cygpath -m "$config") ;;
 esac
-if [[ "$action" == config ]]; then
+if [[ "$action" == config || "$action" == use ]]; then
     [[ -f "$config" ]] || fail '没有测试集群 kubeconfig，请先 make kind-up。'
-    printf '%s\n' "$config"
+    if [[ "$action" == use ]]; then
+        printf 'export KUBECONFIG=%q\n' "$config"
+    else
+        printf '%s\n' "$config"
+    fi
     exit 0
 fi
 case "$action" in
