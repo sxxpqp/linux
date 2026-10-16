@@ -64,12 +64,17 @@ if [[ "$action" == up ]]; then
     clusters=$(kind get clusters)
     if ! grep -Fxq "$name" <<<"$clusters"; then
         echo '[1/3] 创建 kind 集群...'
-        args=(create cluster --name "$name" --kubeconfig "$config" --wait 180s)
+        args=(create cluster --name "$name" --kubeconfig "$config" --retain --wait 180s)
         [[ -z ${KIND_NODE_IMAGE:-} ]] || args+=(--image "$KIND_NODE_IMAGE")
         mkdir -p -- "$(dirname -- "$config")"
         # kind 从 stdin 读取配置，避免在仓库留下临时 YAML。
         {
-            printf 'kind: Cluster\napiVersion: kind.x-k8s.io/v1alpha4\nnodes:\n- role: control-plane\n'
+            printf 'kind: Cluster\napiVersion: kind.x-k8s.io/v1alpha4\n'
+            if [[ $(docker info --format '{{.CgroupVersion}}') == 1 ]]; then
+                echo '检测到 cgroup v1：为测试节点设置 failCgroupV1=false；宿主建议升级 cgroup v2。' >&2
+                printf 'kubeadmConfigPatches:\n- |\n  kind: KubeletConfiguration\n  failCgroupV1: false\n'
+            fi
+            printf 'nodes:\n- role: control-plane\n'
             for ((i=0; i<workers; i++)); do printf '%s\n' '- role: worker'; done
         } | kind "${args[@]}" --config -
     else
