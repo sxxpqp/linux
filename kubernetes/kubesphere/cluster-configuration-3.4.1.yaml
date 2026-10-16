@@ -1,0 +1,66 @@
+# 仅用于独立 kind 测试；最小组件，关闭 DevOps/日志/服务网格以控制资源占用。
+apiVersion: installer.kubesphere.io/v1alpha1
+kind: ClusterConfiguration
+metadata:
+  name: ks-installer
+  namespace: kubesphere-system
+  labels:
+    version: v3.4.1
+spec:
+  zone: cn
+  persistence:
+    storageClass: standard
+  authentication:
+    # 部署时在本机生成符合复杂度要求的密码，并通过运行时 patch 注入；不将密码提交仓库。
+    jwtSecret: ""
+  etcd:
+    monitoring: false
+    endpointIps: localhost
+    port: 2379
+    tlsEnable: true
+  common:
+    core:
+      console:
+        type: NodePort
+        port: 30880
+    redis:
+      enabled: false
+    openldap:
+      enabled: false
+    es:
+      enabled: false
+    opensearch:
+      enabled: false
+  alerting:
+    enabled: false
+  auditing:
+    enabled: false
+  devops:
+    enabled: false
+  events:
+    enabled: false
+  logging:
+    enabled: false
+  metrics_server:
+    enabled: false
+  multicluster:
+    clusterRole: none
+  network:
+    networkpolicy:
+      enabled: false
+    ippool:
+      type: none
+    topology:
+      type: none
+  openpitrix:
+    store:
+      enabled: false
+  servicemesh:
+    enabled: false
+  edgeruntime:
+    enabled: false
+    kubeedge:
+      enabled: false
+  gatekeeper:
+    enabled: false
+  telemetry_enabled: false
