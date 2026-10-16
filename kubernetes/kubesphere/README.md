@@ -6,6 +6,7 @@ KubeSphere 多集群管理、配置示例与运维。
 
 | 文件 | 说明 |
 |---|---|
+| [kind-3.4.1/Makefile](kind-3.4.1/Makefile) | 本地测试三步：`make kind` → `make mirrors` → `make ks-install`；`make deploy` 串行执行全部步骤 |
 | [onpremises-3.4.1/Makefile](onpremises-3.4.1/Makefile) | 已有自建 K8s 安装：全部节点预检 → 备份并更新 containerd 镜像源 → 拉取验证 → 安装 ks-installer；默认只读预检 |
 | [install.md](install.md) | KubeKey 部署指南：CentOS/Ubuntu 依赖安装（关闭防火墙、chrony 时间同步、关闭 SELinux、安装 socat/conntrack）、KubeKey 工具获取、all-in-one 快速安装、多节点集群创建（./kk create config）、节点增删、集群升级、kubectl 自动补全 |
 | [config-sample.yaml](config-sample.yaml) | KubeKey Cluster CRD（kubekey.kubesphere.io/v1alpha2）：4 节点配置（etcd+control-plane 3 节点 + worker 1 节点）、KubeVIP 高可用（internalLoadbalancer: kube-vip）、Calico 网络、Docker 运行时、K8s v1.21.5、KubeSphere v3.3.2 ks-installer 详细配置（监控/日志/告警/DevOps/服务网格等组件开关） |
@@ -14,6 +15,18 @@ KubeSphere 多集群管理、配置示例与运维。
 | [imagepull.sh](imagepull.sh) | 镜像策略批量修改：patch KubeSphere 系统组件（ks-apiserver/ks-console/ks-controller-manager/ks-installer/minio）的 imagePullPolicy 为 IfNotPresent；Docker tag 重命名（从阿里云 registry 到本地仓库）；rsync 分发镜像到各节点 |
 | [tf.md](tf.md) | TensorFlow ROCm GPU 训练部署：Dockerfile 构建 rocm4.1-tf2.4-dev 镜像（依赖 opencv/lxml/tqdm/seaborn/yolov3_tf2）、K8s Deployment（NFS 挂载 /data/nfs/tf、amd.com/gpu:4、阿里云镜像仓库）、yolov3-tf2 模型下载与权重转换 |
 | [nvidia-device-plugin.md](nvidia-device-plugin.md) | NVIDIA GPU 支持：nvidia-docker2 安装、daemon.json 配置 nvidia runtime、K8s nvidia-device-plugin 部署 |
+
+## kind 测试环境：三步安装
+
+```bash
+cd kubernetes/kubesphere/kind-3.4.1
+make kind        # 1. 安装配套 kind 工具并创建 Kubernetes 集群
+make mirrors     # 2. 为全部 master/worker 设置镜像加速源
+make ks-install  # 3. 安装 ks-installer 并等待 KubeSphere 就绪
+# 或 make deploy，严格按上述顺序执行
+```
+
+第二步复用 `docker/containerd/mirrors.sh --kind-config`，先备份 kind 节点配置，移除旧 registry.mirrors 并启用 certs.d，然后写加速源、逐节点重启 containerd 并验证拉取；任何节点失败就停止。普通节点执行不带参数的 `mirrors.sh` 时行为不变。安装器镜像继续使用原有 `INSTALLER_SOURCE`，清单 image 保持上游名称。控制台 `http://127.0.0.1:30880`；`make status` / `make logs` 查看状态，`make login` 显示密码文件位置。原 `up` / `install` 等命令保留兼容，日常使用上面三个入口。
 
 ## 自建 Kubernetes 安装 KubeSphere 3.4.1
 

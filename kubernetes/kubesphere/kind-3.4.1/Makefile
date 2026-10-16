@@ -1,5 +1,5 @@
-SHELL := /bin/bash
-.SHELLFLAGS := -eu -o pipefail -c
+# macOS 自带 Make 3.81 不识别 .SHELLFLAGS，将失败即停选项直接交给 Bash。
+SHELL := /bin/bash -eu -o pipefail
 .DEFAULT_GOAL := help
 
 DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
@@ -13,13 +13,14 @@ INSTALLER_SOURCE ?= registry.cn-beijing.aliyuncs.com/kubesphereio/ks-installer:v
 INSTALLER_IMAGE := docker.io/kubesphere/ks-installer:v3.4.1
 KUBECTL = kubectl --kubeconfig "$(KUBE_CONFIG)" --context "kind-$(KIND_NAME)"
 
-.PHONY: help tools up guard images install deploy status wait logs login use unuse down
+.PHONY: help kind mirrors ks-install tools up guard images install deploy status wait logs login use unuse down
 help:
 	@printf '%s\n' \
-	  'KubeSphere 3.4.1 / Kubernetes 1.24.7 / kind v0.17.0 单节点测试环境' \
-	  'make deploy   创建集群 → 安装 → 等待就绪（需要 Docker、kubectl、Go、openssl、Python 3）' \
-	  'make up       创建或检查独立集群；现有拓扑、端口不会自动重建' \
-	  'make install  加载 ARM64/AMD64 安装器并部署；密码保存在本机，不提交仓库' \
+	  'KubeSphere 3.4.1 / Kubernetes 1.24.7 / kind v0.17.0 测试环境' \
+	  '1. make kind        安装配套 kind 工具并创建集群' \
+	  '2. make mirrors     为全部 kind 节点设置镜像加速源并验证 CRI' \
+	  '3. make ks-install  加载安装器、安装 KubeSphere 并等待就绪' \
+	  'make deploy         按以上三步串行执行（需要 Docker、kubectl、Go、openssl、Python 3）' \
 	  'make status   查看节点、Pod、PVC 与控制台 Service' \
 	  'make wait     等待核心服务和监控 Pod 就绪' \
 	  'make logs     查看安装器最近 80 行日志' \
@@ -28,7 +29,33 @@ help:
 	  'make down     输入集群名确认后删除该测试集群及数据' \
 	  '默认控制台：http://127.0.0.1:30880；kind.yaml 固定映射该端口' \
 	  'KIND_NAME 可覆盖；同时运行多个本目录集群时，须另行调整 kind.yaml 端口。' \
-	  'make up/install 不修改默认 context；只有 make use 才切换。'
+	  '以上三步不修改默认 context；只有 make use 才切换。'
+
+kind: up
+
+mirrors: tools guard
+	@nodes=$$("$(KIND_BIN)" get nodes --name "$(KIND_NAME)"); \
+	test -n "$$nodes" || { echo 'ERROR: 未找到 kind 节点。' >&2; exit 1; }; \
+	for node in $$nodes; do \
+	  echo "设置镜像加速源: $$node"; \
+	  docker exec -i "$$node" bash -s -- --kind-config < "$(ROOT)/docker/containerd/mirrors.sh"; \
+	  docker exec "$$node" systemctl --no-pager restart containerd; \
+	  docker exec "$$node" crictl --runtime-endpoint unix:///run/containerd/containerd.sock info >/dev/null; \
+	  docker exec "$$node" crictl --runtime-endpoint unix:///run/containerd/containerd.sock \
+	    --image-endpoint unix:///run/containerd/containerd.sock pull docker.io/library/busybox:1.36; \
+	  $(KUBECTL) wait --for=condition=Ready "node/$$node" --timeout=180s; \
+	done
+
+ks-install: guard
+	@nodes=$$("$(KIND_BIN)" get nodes --name "$(KIND_NAME)"); \
+	test -n "$$nodes"; \
+	for node in $$nodes; do \
+	  docker exec "$$node" test -s /etc/containerd/certs.d/docker.io/hosts.toml \
+	    || { echo 'ERROR: 请先执行 make mirrors。' >&2; exit 1; }; \
+	done
+	@$(MAKE) --no-print-directory -f "$(DIR)Makefile" install
+	@$(MAKE) --no-print-directory -f "$(DIR)Makefile" wait
+	@$(MAKE) --no-print-directory -f "$(DIR)Makefile" login
 
 tools:
 	@if ! test -x "$(KIND_BIN)" || ! "$(KIND_BIN)" version | grep -q 'kind v0.17.0 '; then \
@@ -88,11 +115,11 @@ install: images
 	  '/^[ ]+jwtSecret:/ {printf "    adminPassword: %s\n", ENVIRON["KS_ADMIN_PASSWORD_JSON"]} {print}' \
 	  "$(DIR)cluster-configuration.yaml" | $(KUBECTL) apply -f -
 
-# 递归执行以保证 make -j deploy 也不会先安装后创建集群。
-deploy: up
-	@$(MAKE) --no-print-directory -f "$(DIR)Makefile" install
-	@$(MAKE) --no-print-directory -f "$(DIR)Makefile" wait
-	@$(MAKE) --no-print-directory -f "$(DIR)Makefile" login
+# 递归执行确保 make -j deploy 仍严格按三步顺序执行。
+deploy:
+	@$(MAKE) --no-print-directory -f "$(DIR)Makefile" kind
+	@$(MAKE) --no-print-directory -f "$(DIR)Makefile" mirrors
+	@$(MAKE) --no-print-directory -f "$(DIR)Makefile" ks-install
 
 status: guard
 	@$(KUBECTL) get nodes -o wide

@@ -3,6 +3,7 @@
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/mirrors.sh
 # 配置 containerd 全部镜像加速源, 每个节点跑一次。
 # 用法: bash mirrors.sh
+# kind 旧节点兼容: bash mirrors.sh --kind-config（备份后启用 certs.d，不重启服务）
 #
 # ============================================================
 #  加速源完整映射(统一 Harbor Proxy Cache + 旧 K8s 别名 + ACR direct)
@@ -24,6 +25,34 @@
 # ============================================================
 
 set -euo pipefail
+export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
+
+# 仅显式 kind 模式处理旧节点的 legacy mirrors；普通节点执行行为不变。
+if [[ "${1:-}" == --kind-config ]]; then
+  [[ $# == 1 && -d /kind ]] || { echo 'ERROR: --kind-config 仅允许在 kind 节点内执行' >&2; exit 1; }
+  config=/etc/containerd/config.toml
+  grep -F '[plugins."io.containerd.grpc.v1.cri".registry]' "$config" >/dev/null \
+    || { echo 'ERROR: 未识别的 kind containerd 配置，停止修改' >&2; exit 1; }
+  backup=$(mktemp -d /etc/containerd/kind-mirrors-backup.XXXXXXXX)
+  cp -a "$config" "$backup/config.toml"
+  if [[ -d /etc/containerd/certs.d ]]; then cp -a /etc/containerd/certs.d "$backup/"; fi
+  awk '
+    /^[[:space:]]*\[/ {
+      registry = ($0 ~ /^[[:space:]]*\[plugins\."io.containerd.grpc.v1.cri"\.registry\][[:space:]]*$/)
+      legacy = ($0 ~ /^[[:space:]]*\[plugins\."io.containerd.grpc.v1.cri"\.registry\.mirrors(\.|\])/)
+    }
+    legacy {next}
+    registry && /^[[:space:]]*config_path[[:space:]]*=/ {next}
+    {print}
+    registry && /^[[:space:]]*\[/ {print "  config_path = \"/etc/containerd/certs.d\""}
+  ' "$config" > "$backup/config.new.toml"
+  containerd --config "$backup/config.new.toml" config dump >/dev/null
+  cat "$backup/config.new.toml" > "$config"
+  echo "✓ kind containerd 已启用 certs.d，原配置备份: $backup"
+elif [[ $# != 0 ]]; then
+  echo '用法: bash mirrors.sh [--kind-config]' >&2
+  exit 1
+fi
 
 # 可指定临时目录验证生成结果；正常节点执行保持默认路径。
 CERTS_DIR="${CERTS_DIR:-/etc/containerd/certs.d}"
