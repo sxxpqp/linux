@@ -1,0 +1,4 @@
+# Kubernetes 节点名（kubectl get nodes） SSH目标（免密；非 root 需 sudo -n）
+# 必须填写全部节点，以下为格式示例，请按实际名称/IP修改。
+master01 root@master01
+worker01 root@worker01
