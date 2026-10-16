@@ -3,6 +3,8 @@
 > 源: https://github.com/sxxpqp/linux/blob/main/kubernetes/argocd/README.md
 > 状态: 学习笔记(YAML 已落盘,未在 K8s 1.28 集群跑全流程验证)
 
+发布流程：[CI + Argo CD 多环境发布约定](gitops-release-workflow.md)（测试/预发分支、发布 tag、生产 MR 审核与回退）。
+
 裸金属 GitOps 控制面。**为什么选 v2.13.3** —— K8s 1.28 集群下 ArgoCD **唯一**官方背书的"最新可用"版本:
 
 - v2.13 是覆盖 K8s 1.28 的**最后一个** ArgoCD minor(再往上 v2.14 起步就是 K8s 1.29)
