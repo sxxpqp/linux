@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 系统: Linux / WSL2 (Bash + GNU Make + Docker Linux containers)
+# 系统: Windows + Git Bash + GNU Make + Docker Desktop (Linux containers)
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kind/deploy-kind.sh
 # 用法: bash kubernetes/kind/deploy-kind.sh up (在完整仓库中执行，或 make kind-up)
 set -euo pipefail
@@ -17,7 +17,7 @@ need() { command -v "$1" >/dev/null 2>&1 || fail "缺少 $1，请先安装；kin
 
 if [[ "$action" == help ]]; then
     cat <<'EOF'
-在仓库根目录运行（Linux / WSL2，Docker 已启动）：
+在 Windows 的 Git Bash 中进入仓库根目录运行（GNU Make 已安装，Docker Desktop 已启动并使用 Linux containers）：
   make kind-install                  安装 kind v0.33.0（需要 Go 和可用的 GOPROXY）
   make kind-up                       创建单节点集群，复用仓库 containerd mirror 脚本
   make kind-up WORKERS=2              创建 1 control-plane + 2 worker（已有集群不改拓扑）
@@ -30,7 +30,7 @@ if [[ "$action" == help ]]; then
 可选 KIND_NAME=linux-lab；KIND_NODE_IMAGE 指定上游 kindest/node 镜像。
 独立 kubeconfig: ~/.kube/kind-<集群名>.config，不修改默认 context。
 默认 kindnet + local-path；不自动部署生产 CNI、Ingress 或业务服务。
-13.8 GB 内存建议先单节点；Docker Desktop/WSL2 的资源上限在宿主侧设置。
+13.8 GB 内存建议先单节点；资源上限在 Docker Desktop / WSL 设置中调整。
 check/apply 支持 YAML 文件或目录；CRD 需先安装，Jenkins $VARS 模板需先渲染。
 EOF
     exit 0
