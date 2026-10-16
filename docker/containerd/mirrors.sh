@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
+# 系统: Linux / kind 节点容器 (containerd)
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/docker/containerd/mirrors.sh
 # 配置 containerd 全部镜像加速源, 每个节点跑一次。
 # 用法: bash mirrors.sh
 #
 # ============================================================
-#  加速源完整映射(4 个 Harbor pull-through + 1 个 ACR direct)
+#  加速源完整映射(统一 Harbor Proxy Cache + 旧 K8s 别名 + ACR direct)
 # ============================================================
 #
-#  docker.io            → dockerhub.ihome.sxxpqp.top:8443
-#  registry.k8s.io      → k8s.ihome.sxxpqp.top:8443
-#  quay.io              → quay.ihome.sxxpqp.top:8443
-#  ghcr.io              → ghcr.ihome.sxxpqp.top:8443
+#  docker.io            → huball.ihome.sxxpqp.top:8443/v2/dockerhub
+#  registry.k8s.io      → huball.ihome.sxxpqp.top:8443/v2/google_containers
+#  k8s.gcr.io           → huball.ihome.sxxpqp.top:8443/v2/google_containers
+#  quay.io              → huball.ihome.sxxpqp.top:8443/v2/quay
+#  ghcr.io              → huball.ihome.sxxpqp.top:8443/v2/ghcr
 #
 #  自建服务:
 #  registry.cn-hangzhou.aliyuncs.com/sxxpqp/  → 阿里云 ACR(直连,推送目标)
@@ -23,7 +25,8 @@
 
 set -euo pipefail
 
-CERTS_DIR="/etc/containerd/certs.d"
+# 可指定临时目录验证生成结果；正常节点执行保持默认路径。
+CERTS_DIR="${CERTS_DIR:-/etc/containerd/certs.d}"
 
 # ============================================================
 # docker.io → Harbor proxy
@@ -32,11 +35,12 @@ mkdir -p "$CERTS_DIR/docker.io"
 cat > "$CERTS_DIR/docker.io/hosts.toml" <<'EOF'
 server = "https://registry-1.docker.io"
 
-[host."https://dockerhub.ihome.sxxpqp.top:8443"]
+[host."https://huball.ihome.sxxpqp.top:8443/v2/dockerhub"]
   capabilities = ["pull", "resolve"]
   skip_verify = true
+  override_path = true
 EOF
-echo "✓ docker.io → dockerhub.ihome.sxxpqp.top:8443"
+echo "✓ docker.io → huball.ihome.sxxpqp.top:8443/v2/dockerhub"
 
 # ============================================================
 # registry.k8s.io → Harbor proxy
@@ -45,11 +49,24 @@ mkdir -p "$CERTS_DIR/registry.k8s.io"
 cat > "$CERTS_DIR/registry.k8s.io/hosts.toml" <<'EOF'
 server = "https://registry.k8s.io"
 
-[host."https://k8s.ihome.sxxpqp.top:8443"]
+[host."https://huball.ihome.sxxpqp.top:8443/v2/google_containers"]
   capabilities = ["pull", "resolve"]
   skip_verify = true
+  override_path = true
 EOF
-echo "✓ registry.k8s.io → k8s.ihome.sxxpqp.top:8443"
+echo "✓ registry.k8s.io → huball.ihome.sxxpqp.top:8443/v2/google_containers"
+
+# 旧 K8s 域名，与安装菜单保持一致。
+mkdir -p "$CERTS_DIR/k8s.gcr.io"
+cat > "$CERTS_DIR/k8s.gcr.io/hosts.toml" <<'EOF'
+server = "https://k8s.gcr.io"
+
+[host."https://huball.ihome.sxxpqp.top:8443/v2/google_containers"]
+  capabilities = ["pull", "resolve"]
+  skip_verify = true
+  override_path = true
+EOF
+echo "✓ k8s.gcr.io → huball.ihome.sxxpqp.top:8443/v2/google_containers"
 
 # ============================================================
 # quay.io → Harbor proxy
@@ -58,11 +75,12 @@ mkdir -p "$CERTS_DIR/quay.io"
 cat > "$CERTS_DIR/quay.io/hosts.toml" <<'EOF'
 server = "https://quay.io"
 
-[host."https://quay.ihome.sxxpqp.top:8443"]
+[host."https://huball.ihome.sxxpqp.top:8443/v2/quay"]
   capabilities = ["pull", "resolve"]
   skip_verify = true
+  override_path = true
 EOF
-echo "✓ quay.io → quay.ihome.sxxpqp.top:8443"
+echo "✓ quay.io → huball.ihome.sxxpqp.top:8443/v2/quay"
 
 # ============================================================
 # ghcr.io → Harbor proxy
@@ -71,11 +89,12 @@ mkdir -p "$CERTS_DIR/ghcr.io"
 cat > "$CERTS_DIR/ghcr.io/hosts.toml" <<'EOF'
 server = "https://ghcr.io"
 
-[host."https://ghcr.ihome.sxxpqp.top:8443"]
+[host."https://huball.ihome.sxxpqp.top:8443/v2/ghcr"]
   capabilities = ["pull", "resolve"]
   skip_verify = true
+  override_path = true
 EOF
-echo "✓ ghcr.io → ghcr.ihome.sxxpqp.top:8443"
+echo "✓ ghcr.io → huball.ihome.sxxpqp.top:8443/v2/ghcr"
 
 # ============================================================
 # 阿里云 ACR(国内加速,自建 push 目标)
@@ -101,10 +120,11 @@ echo ""
 echo "=================================="
 echo "  加速源映射(全部):"
 echo "=================================="
-echo "  docker.io            → dockerhub.ihome.sxxpqp.top:8443"
-echo "  registry.k8s.io      → k8s.ihome.sxxpqp.top:8443"
-echo "  quay.io              → quay.ihome.sxxpqp.top:8443"
-echo "  ghcr.io              → ghcr.ihome.sxxpqp.top:8443"
+echo "  docker.io            → huball.ihome.sxxpqp.top:8443/v2/dockerhub"
+echo "  registry.k8s.io      → huball.ihome.sxxpqp.top:8443/v2/google_containers"
+echo "  k8s.gcr.io           → huball.ihome.sxxpqp.top:8443/v2/google_containers"
+echo "  quay.io              → huball.ihome.sxxpqp.top:8443/v2/quay"
+echo "  ghcr.io              → huball.ihome.sxxpqp.top:8443/v2/ghcr"
 echo
 echo "自建服务:"
 echo "  registry.cn-hangzhou.aliyuncs.com/sxxpqp/  (阿里云 ACR 推送)"
@@ -117,7 +137,7 @@ find "$CERTS_DIR" -name hosts.toml -exec echo "  {}" \;
 
 echo ""
 echo "验证:"
-echo "  ctr -n k8s.io image pull docker.io/library/nginx:alpine"
-echo "  ctr -n k8s.io image pull registry.k8s.io/pause:3.9"
-echo "  ctr -n k8s.io image pull quay.io/metallb/controller:v0.14.8"
-echo "  ctr -n k8s.io image pull ghcr.io/cloudnativelabs/gobgp:latest"
+echo "  crictl pull docker.io/library/nginx:alpine"
+echo "  crictl pull registry.k8s.io/pause:3.9"
+echo "  crictl pull quay.io/metallb/controller:v0.14.8"
+echo "  crictl pull ghcr.io/cloudnativelabs/gobgp:latest"
