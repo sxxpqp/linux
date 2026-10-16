@@ -17,7 +17,8 @@ usage() {
   echo "用法: $0 --cert <fullchain.pem> --key <privkey.pem> [--context <集群上下文>] [--apply]"
   echo "默认只预览。加 --apply 才会更新已有的 TLS Secret（默认名称 wishfox）。"
   echo "不会删除 Secret 或重启 Pod；证书能否自动生效取决于 Ingress/应用的热加载能力。"
-  echo "依赖 Bash、kubectl、openssl、jq、date；每次更新都会创建独立备份子目录。"
+  echo "依赖 Bash、kubectl、openssl、date，不需要 jq；每次更新都会创建独立备份子目录。"
+  echo "--cert/--key 传入续签后的新文件；旧证书快过期不影响更新。"
   echo "可设置 SECRET_NAME 和 BACKUP_DIR 环境变量。"
 }
 
@@ -42,7 +43,7 @@ done
   echo "必须提供可读取的 --cert 和 --key 文件" >&2
   exit 2
 }
-for cmd in kubectl openssl jq date; do
+for cmd in kubectl openssl date; do
   command -v "$cmd" >/dev/null || { echo "缺少命令: $cmd" >&2; exit 2; }
 done
 openssl x509 -in "$CERT_FILE" -noout >/dev/null
@@ -73,6 +74,8 @@ work_dir=$(mktemp -d)
 trap 'rm -rf -- "$work_dir"' EXIT
 openssl base64 -A -in "$CERT_FILE" > "$work_dir/cert.b64"
 openssl base64 -A -in "$KEY_FILE" > "$work_dir/key.b64"
+new_cert=$(< "$work_dir/cert.b64")
+new_key=$(< "$work_dir/key.b64")
 
 # 获取命名空间失败时直接退出，不把失败误判为空列表。
 ns_output=$(kube get namespaces -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')
@@ -106,23 +109,35 @@ for ns in "${namespaces[@]}"; do
     ((skipped+=1))
     continue
   fi
-  type=$(jq -er '.type' "$snapshot") || {
+  # kubectl 自己解析这份本地 JSON；--local 不请求 API，不会修改真实 Secret。
+  # 用同一份快照读取类型、身份、版本和数据，避免多次远程查询读到不同对象。
+  if ! fields=$(kubectl patch --local -f "$snapshot" --type=json -p '[]' \
+      -o go-template='{{.metadata.uid}}{{"\n"}}{{.metadata.resourceVersion}}{{"\n"}}{{.type}}{{"\n"}}{{if .immutable}}true{{else}}false{{end}}{{"\n"}}{{if .data}}{{index .data "tls.crt"}}{{else}}-{{end}}{{"\n"}}{{if .data}}{{index .data "tls.key"}}{{else}}-{{end}}'); then
     echo "ERROR $ns: Secret 数据无法解析" >&2
     ((failed+=1))
     continue
-  }
+  fi
+  fields=${fields//$'\r'/}
+  mapfile -t secret_fields <<< "$fields"
+  if [[ ${#secret_fields[@]} -ne 6 ]]; then
+    echo "ERROR $ns: Secret 字段不完整，已保留原样" >&2
+    ((failed+=1))
+    continue
+  fi
+  uid=${secret_fields[0]}
+  resource_version=${secret_fields[1]}
+  type=${secret_fields[2]}
   if [[ "$type" != "kubernetes.io/tls" ]]; then
     echo "SKIP $ns: 类型 $type"
     ((skipped+=1))
     continue
   fi
-  if [[ $(jq -r '.immutable // false' "$snapshot") == true ]]; then
+  if [[ ${secret_fields[3]} == true ]]; then
     echo "ERROR $ns: Secret 为 immutable，不能在不重建的情况下修改，已保留原样" >&2
     ((failed+=1))
     continue
   fi
-  if jq -e --rawfile cert "$work_dir/cert.b64" --rawfile key "$work_dir/key.b64" \
-      '.data["tls.crt"] == $cert and .data["tls.key"] == $key' "$snapshot" >/dev/null; then
+  if [[ ${secret_fields[4]} == "$new_cert" && ${secret_fields[5]} == "$new_key" ]]; then
     echo "跳过 $ns: 已经是这份证书和私钥"
     ((skipped+=1))
     continue
@@ -141,19 +156,18 @@ for ns in "${namespaces[@]}"; do
   fi
   # 证书与私钥放在同一个原子请求里更新；test 操作防止误改并发变更的对象。
   # JSON Patch 只能更新现有对象，Secret 被删除时会失败，不会重新创建。
-  if ! jq -e --rawfile cert "$work_dir/cert.b64" --rawfile key "$work_dir/key.b64" '
-      if (.metadata.uid | type) != "string" or (.metadata.resourceVersion | type) != "string"
-      then error("missing object identity") else
-      [ {op:"test", path:"/metadata/uid", value:.metadata.uid},
-        {op:"test", path:"/metadata/resourceVersion", value:.metadata.resourceVersion},
-        {op:"test", path:"/type", value:"kubernetes.io/tls"},
-        {op:"add", path:"/data/tls.crt", value:$cert},
-        {op:"add", path:"/data/tls.key", value:$key} ] end
-      ' "$snapshot" > "$work_dir/patch.json"; then
-    echo "ERROR $ns: 无法生成安全更新请求，未修改 Secret" >&2
+  # 这两个身份字段来自 API；限制字符后才能安全写入 JSON。
+  if [[ ! "$uid" =~ ^[a-zA-Z0-9-]+$ || ! "$resource_version" =~ ^[0-9]+$ ]]; then
+    echo "ERROR $ns: Secret 身份或版本字段无效，未修改 Secret" >&2
     ((failed+=1))
     continue
   fi
+  printf '[{"op":"test","path":"/metadata/uid","value":"%s"},
+{"op":"test","path":"/metadata/resourceVersion","value":"%s"},
+{"op":"test","path":"/type","value":"kubernetes.io/tls"},
+{"op":"add","path":"/data/tls.crt","value":"%s"},
+{"op":"add","path":"/data/tls.key","value":"%s"}]\n' \
+    "$uid" "$resource_version" "$new_cert" "$new_key" > "$work_dir/patch.json"
   if kube patch secret "$SECRET_NAME" -n "$ns" --type=json --patch-file "$work_dir/patch.json" -o name; then
     echo "已更新 $ns/$SECRET_NAME: 未删除 Secret，未重启业务；请确认入口实际证书"
     ((updated+=1))

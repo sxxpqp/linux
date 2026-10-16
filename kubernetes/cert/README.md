@@ -34,7 +34,9 @@ Kubernetes 集群证书轮换与维护。
 | 查询后 Secret 被删除、重建或修改 | 本次更新失败，不覆盖别人的修改、不重新创建对象 |
 | 多次使用相同 BACKUP_DIR | 每次生成独立的 `run-时间-随机串` 子目录，不覆盖历史备份 |
 
-依赖：Bash、kubectl、openssl、jq、GNU date（Linux / Git Bash）。使用当前 kubeconfig，可用 `--context` 指定目标集群；执行过程中固定该 context。
+依赖：Bash、kubectl、openssl、GNU date（Linux / Git Bash），**不需要 jq**。使用当前 kubeconfig，可用 `--context` 指定目标集群；执行过程中固定该 context。
+
+这里更新的是**快过期的旧证书**，`--cert` 和 `--key` 要填写**续签后的新证书和新私钥**。脚本不要求旧证书仍然有效，也不会因为旧证书快过期而拒绝更新；有效期检查针对传入的新证书。脚本本身不申请或续签证书。
 
 ```bash
 # 先检查当前 kubectl context，并预览匹配对象
