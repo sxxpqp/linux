@@ -137,7 +137,7 @@ find "$CERTS_DIR" -name hosts.toml -exec echo "  {}" \;
 
 echo ""
 echo "验证:"
-echo "  crictl pull docker.io/library/nginx:alpine"
+echo "  crictl pull docker.io/library/busybox:1.36"
 echo "  crictl pull registry.k8s.io/pause:3.9"
-echo "  crictl pull quay.io/metallb/controller:v0.14.8"
-echo "  crictl pull ghcr.io/cloudnativelabs/gobgp:latest"
+echo "  crictl pull quay.io/prometheus/busybox:latest"
+echo "  crictl pull ghcr.io/dexidp/dex:v2.41.1"
