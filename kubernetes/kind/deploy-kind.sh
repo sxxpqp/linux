@@ -5,6 +5,8 @@
 set -euo pipefail
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 export KIND_EXPERIMENTAL_PROVIDER=docker
+# Git Bash 调用 docker.exe 时，保留传给容器的 /etc、/kind 等 Linux 路径。
+export MSYS_NO_PATHCONV=1
 
 action=${1:-help}
 name=${KIND_NAME:-linux-lab}
