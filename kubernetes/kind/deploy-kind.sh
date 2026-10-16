@@ -49,12 +49,13 @@ EOF
 fi
 [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || fail 'KIND_NAME 只能包含小写字母、数字和中间连字符。'
 config="${HOME}/.kube/kind-${name}.config"
+# 关闭 MSYS 路径转换后，原生 kind.exe/kubectl.exe 必须接收 Windows 路径。
+case "${OSTYPE:-}" in
+    msys*|cygwin*) config=$(cygpath -m "$config") ;;
+esac
 if [[ "$action" == config ]]; then
     [[ -f "$config" ]] || fail '没有测试集群 kubeconfig，请先 make kind-up。'
-    case "${OSTYPE:-}" in
-        msys*|cygwin*) cygpath -m "$config" ;;
-        *) printf '%s\n' "$config" ;;
-    esac
+    printf '%s\n' "$config"
     exit 0
 fi
 case "$action" in
