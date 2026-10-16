@@ -2,6 +2,15 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 KIND_NAME ?= linux-lab
+# 同时接受 WORKERS=2 和 workers=2，避免小写参数被静默忽略。
+ifneq ($(origin workers),undefined)
+ifneq ($(origin WORKERS),undefined)
+ifneq ($(strip $(WORKERS)),$(strip $(workers)))
+$(error WORKERS and workers have conflicting values)
+endif
+endif
+WORKERS ?= $(workers)
+endif
 WORKERS ?= 0
 FILE ?=
 IMAGE ?=

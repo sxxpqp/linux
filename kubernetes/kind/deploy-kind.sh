@@ -25,6 +25,7 @@ Windows 使用 Docker Desktop（Linux containers 模式）；Linux 使用 Docker
   make kind-install                  安装 kind v0.33.0（需要 Go 和可用的 GOPROXY）
   make kind-up                       创建/恢复集群，自动启用 kindnet CNI + Traefik Ingress
   make kind-up WORKERS=2              创建 1 control-plane + 2 worker（已有集群不改拓扑）
+  make kind-up workers=2              同上，WORKERS/workers 均支持，冲突值会报错
   make kind-status                   查看节点、Pod 和 StorageClass
   make kind-ingress                  前台转发 Ingress 到 localhost:8080/8443，Ctrl+C 停止转发
   make kind-check FILE=path/to.yaml   服务端 dry-run，校验实际 API/准入规则
