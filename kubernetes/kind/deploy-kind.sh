@@ -31,6 +31,14 @@ Windows 使用 Docker Desktop（Linux containers 模式）；Linux 使用 Docker
   make kind-load IMAGE=app:test       加载宿主 Docker 中已有的镜像
   make kind-logs                     导出诊断日志到当前目录的新临时目录
   make kind-down                     输入集群名确认后删除，包含集群内数据
+  make kind-uninstall                kind-down 的别名，只删除集群，保留 Docker/kind 工具
+  make -s kind-config                仅输出 kubeconfig 路径（不需要 Docker 在线）
+当前终端切换到测试集群（Linux / Git Bash）：
+  export KUBECONFIG="$(make -s kind-config)"
+  kubectl config current-context
+恢复默认配置（此前未设置 KUBECONFIG 时）：
+  unset KUBECONFIG
+若此前已设置 KUBECONFIG，请先保存原值，切回时恢复原值。
 可选 KIND_NAME=linux-lab；KIND_NODE_IMAGE 指定上游 kindest/node 镜像。
 独立 kubeconfig: ~/.kube/kind-<集群名>.config，不修改默认 context。
 默认 kindnet + local-path；不自动部署生产 CNI、Ingress 或业务服务。
@@ -40,6 +48,15 @@ EOF
     exit 0
 fi
 [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || fail 'KIND_NAME 只能包含小写字母、数字和中间连字符。'
+config="${HOME}/.kube/kind-${name}.config"
+if [[ "$action" == config ]]; then
+    [[ -f "$config" ]] || fail '没有测试集群 kubeconfig，请先 make kind-up。'
+    case "${OSTYPE:-}" in
+        msys*|cygwin*) cygpath -m "$config" ;;
+        *) printf '%s\n' "$config" ;;
+    esac
+    exit 0
+fi
 case "$action" in
     install)
         need go
@@ -53,7 +70,6 @@ need kind
 need docker
 docker info >/dev/null 2>&1 || fail 'Docker 不可用，请先启动 Docker，并确认当前用户有权限。'
 [[ $(docker info --format '{{.OSType}}') == linux ]] || fail '需要 Docker Linux containers。'
-config="${HOME}/.kube/kind-${name}.config"
 kube() { kubectl --kubeconfig "$config" --context "kind-$name" "$@"; }
 
 if [[ "$action" == down ]]; then
