@@ -2,14 +2,21 @@
 # 系统: Kubernetes (K8s)
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/cert/update-tls-secret-all-namespaces.sh
 # 用法: bash update-tls-secret-all-namespaces.sh --cert /path/fullchain.pem --key /path/privkey.pem [--apply]
+# 用途: 把续签后的新证书和私钥，替换到各 Namespace 中已有的同名 TLS Secret。
+# 更新时机: 建议在旧证书剩余 15 天内完成，剩余 7 天内按紧急事项处理。
+# 注意: 15/7 天是运维建议，不是脚本筛选条件；匹配的旧 Secret 都会被检查。
+# 不停机前提: 本脚本不删除 Secret、不重启 Pod；Ingress/应用需支持证书热加载。
+# 执行顺序: 检查新文件 → 固定目标集群 → 查找旧 Secret → 先备份 → 原地更新。
+# 返回状态: 0=预览或更新全部成功；1=执行失败；2=参数或证书检查失败。
 set -euo pipefail
 umask 077
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 
-SECRET_NAME="${SECRET_NAME:-wishfox}"
-CERT_FILE=""
-KEY_FILE=""
-APPLY=false
+# 一、可配置参数。环境变量只改变目标名称和备份位置，不会自动开启更新。
+SECRET_NAME="${SECRET_NAME:-wishfox}"  # 各 Namespace 中要查找的 Secret 名称。
+CERT_FILE=""                         # --cert: 续签后的 fullchain，第一张应为业务证书。
+KEY_FILE=""                          # --key: 与新证书匹配的私钥，不是旧私钥的固定路径。
+APPLY=false                          # 默认只预览；只有 --apply 才允许写入集群。
 BACKUP_DIR="${BACKUP_DIR:-./tls-secret-backups-$(date +%Y%m%d-%H%M%S)}"
 CONTEXT=""
 
@@ -22,6 +29,7 @@ usage() {
   echo "可设置 SECRET_NAME 和 BACKUP_DIR 环境变量。"
 }
 
+# 二、读取命令行参数，缺少参数值时立即退出，避免误把下一个选项当成文件。
 while (($#)); do
   case "$1" in
     --cert|--key|--context)
@@ -39,6 +47,7 @@ while (($#)); do
   esac
 done
 
+# 三、检查传入的新证书。旧证书即使快过期或已经过期，也不影响这里的检查。
 [[ -n "$CERT_FILE" && -r "$CERT_FILE" && -n "$KEY_FILE" && -r "$KEY_FILE" ]] || {
   echo "必须提供可读取的 --cert 和 --key 文件" >&2
   exit 2
@@ -57,6 +66,7 @@ not_before=${not_before#notBefore=}
 [[ $(date -d "$not_before" +%s) -le $(date +%s) ]] || {
   echo "新证书尚未生效，停止执行" >&2; exit 2;
 }
+# 比较公钥指纹，确认新证书和新私钥属于同一套；不在日志中输出私钥。
 cert_pub=$(openssl x509 -in "$CERT_FILE" -pubkey -noout | openssl pkey -pubin -outform DER | openssl dgst -sha256)
 key_pub=$(openssl pkey -in "$KEY_FILE" -pubout -outform DER | openssl dgst -sha256)
 [[ "$cert_pub" == "$key_pub" ]] || { echo "证书与私钥不匹配" >&2; exit 2; }
@@ -72,6 +82,7 @@ openssl x509 -in "$CERT_FILE" -noout -subject -dates
 # 临时文件和正式备份都可能包含私钥，只允许当前用户访问。
 work_dir=$(mktemp -d)
 trap 'rm -rf -- "$work_dir"' EXIT
+# Secret 的 data 字段使用 Base64；这是编码，不是加密，仍按私钥文件保护。
 openssl base64 -A -in "$CERT_FILE" > "$work_dir/cert.b64"
 openssl base64 -A -in "$KEY_FILE" > "$work_dir/key.b64"
 new_cert=$(< "$work_dir/cert.b64")
@@ -92,6 +103,7 @@ if "$APPLY"; then
   echo "本次原始 Secret 备份: $run_backup_dir（含私钥，请妥善保存）"
 fi
 
+# 四、逐个 Namespace 处理；某个对象失败会计数，继续检查其余对象。
 updated=0
 planned=0
 skipped=0
@@ -124,6 +136,7 @@ for ns in "${namespaces[@]}"; do
     ((failed+=1))
     continue
   fi
+  # 模板返回顺序: UID、版本、类型、是否不可修改、旧证书、旧私钥。
   uid=${secret_fields[0]}
   resource_version=${secret_fields[1]}
   type=${secret_fields[2]}
@@ -137,11 +150,13 @@ for ns in "${namespaces[@]}"; do
     ((failed+=1))
     continue
   fi
+  # 内容相同就不写入，避免重复触发控制器刷新。
   if [[ ${secret_fields[4]} == "$new_cert" && ${secret_fields[5]} == "$new_key" ]]; then
     echo "跳过 $ns: 已经是这份证书和私钥"
     ((skipped+=1))
     continue
   fi
+  # 预览在这里结束：不备份、不发更新请求，只打印将要处理的对象。
   if ! "$APPLY"; then
     echo "预览 $ns/$SECRET_NAME: 正式执行时会先备份，再原地替换证书和私钥"
     ((planned+=1))
@@ -156,6 +171,7 @@ for ns in "${namespaces[@]}"; do
   fi
   # 证书与私钥放在同一个原子请求里更新；test 操作防止误改并发变更的对象。
   # JSON Patch 只能更新现有对象，Secret 被删除时会失败，不会重新创建。
+  # UID 检查防止同名 Secret 已被重建；版本检查防止覆盖其他程序刚做的修改。
   # 这两个身份字段来自 API；限制字符后才能安全写入 JSON。
   if [[ ! "$uid" =~ ^[a-zA-Z0-9-]+$ || ! "$resource_version" =~ ^[0-9]+$ ]]; then
     echo "ERROR $ns: Secret 身份或版本字段无效，未修改 Secret" >&2
@@ -177,6 +193,7 @@ for ns in "${namespaces[@]}"; do
   fi
 done
 
+# 五、汇总只代表 Secret 的处理结果；HTTPS 入口是否已加载新证书需另行核对。
 echo "[3/3] 完成: 待更新=$planned 已更新=$updated 跳过=$skipped 失败=$failed"
 echo "本脚本不重启业务。Ingress/应用需要支持证书热加载；Secret 更新成功不等于 HTTPS 已加载新证书。"
 ((failed == 0))
