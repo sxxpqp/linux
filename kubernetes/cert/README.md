@@ -20,7 +20,21 @@ Kubernetes 集群证书轮换与维护。
 
 ### 跨 Namespace 更新 TLS Secret
 
-[update-tls-secret-all-namespaces.sh](update-tls-secret-all-namespaces.sh)：遍历全部 Namespace，仅更新已经存在且类型为 `kubernetes.io/tls` 的 `wishfox` Secret（可通过 `SECRET_NAME` 修改名称）。**默认只预览**，加 `--apply` 才会写入；正式更新前逐个备份 Secret JSON（包含私钥，请安全保存）。
+[update-tls-secret-all-namespaces.sh](update-tls-secret-all-namespaces.sh)：把一份新证书和私钥，更新到各 Namespace 中已有的同名 TLS Secret。默认名称是 `wishfox`，可以通过 `SECRET_NAME` 修改。
+
+**运行过程：检查证书 → 显示目标集群 → 查找已有 Secret → 先备份 → 原地更新。默认只预览，加 `--apply` 才修改。**
+
+| 情况 | 脚本怎么处理 |
+|---|---|
+| 没有这个 Secret，或类型不是 TLS | 跳过，不新建、不删除 |
+| 已经是相同证书和私钥 | 跳过，避免重复更新 |
+| 新证书过期、尚未生效，或私钥不匹配 | 停止，不更新任何 Secret |
+| Secret 不允许修改（immutable） | 报错并保留原样 |
+| 更新前备份失败 | 不更新这个 Secret |
+| 查询后 Secret 被删除、重建或修改 | 本次更新失败，不覆盖别人的修改、不重新创建对象 |
+| 多次使用相同 BACKUP_DIR | 每次生成独立的 `run-时间-随机串` 子目录，不覆盖历史备份 |
+
+依赖：Bash、kubectl、openssl、jq、GNU date（Linux / Git Bash）。使用当前 kubeconfig，可用 `--context` 指定目标集群；执行过程中固定该 context。
 
 ```bash
 # 先检查当前 kubectl context，并预览匹配对象
@@ -28,10 +42,27 @@ kubectl config current-context
 bash kubernetes/cert/update-tls-secret-all-namespaces.sh \
   --cert /path/fullchain.pem --key /path/privkey.pem
 
-# 核对预览结果后，明确授权实际更新
+# 核对 context 和预览名单后，正式更新（证书和私钥须是对应域名的一套文件）
 BACKUP_DIR=./tls-backup-$(date +%Y%m%d-%H%M%S) \
 bash kubernetes/cert/update-tls-secret-all-namespaces.sh \
   --cert /path/fullchain.pem --key /path/privkey.pem --apply
 ```
 
-> 需要读取 Namespace 和 Secret，以及更新 Secret 的 RBAC 权限。脚本验证证书与私钥匹配；跳过不存在的 Secret，不会新建。生产环境先在测试集群验证；更新后还需确认 Ingress/应用实际加载了新证书。备份目录不要提交到 Git。
+需要 `list namespaces`、`get secrets`、`patch secrets` 权限。每个 Secret 的证书和私钥通过同一个请求一起替换，保留名称、UID、标签、注解和其他数据。多个 Namespace 逐个更新，不是跨 Namespace 的整体事务；有失败时会返回非零状态，不会自动回滚已成功的对象。
+
+**关于不停机：**脚本不删除 Secret、不重启 Pod，也不改 Service 或 Ingress 路由，因此不会主动中断业务。Ingress 控制器或应用必须支持监听 Secret 并热加载证书，才能在不重启的情况下完成切换。环境变量中的 Secret 不会自动刷新；通过 `subPath` 挂载的 Secret 文件也不会自动更新。普通 Secret 卷更新有传播延迟，应用仍需重新读取文件。[Kubernetes 官方说明](https://kubernetes.io/docs/concepts/configuration/secret/)
+
+正式执行前确认新证书覆盖业务域名、证书链完整，且旧证书尚未过期。脚本检查第一张证书的有效期和密钥匹配，不代替公网信任链或域名验证。若 cert-manager 等控制器管理这个 Secret，应通过原控制器续证，避免手工更新被覆盖。
+
+更新后，**到实际 HTTPS 入口确认对外证书**，不要只看 Secret 更新成功：
+
+```bash
+# 将 example.com 换成业务域名；如有多个入口 IP，应逐个检查。
+openssl s_client -connect example.com:443 -servername example.com </dev/null 2>/dev/null |
+  openssl x509 -noout -subject -issuer -dates -fingerprint -sha256
+
+# 与本地新证书的指纹比较
+openssl x509 -in /path/fullchain.pem -noout -fingerprint -sha256
+```
+
+备份 JSON 包含私钥，不要提交到 Git。Linux 下目录权限为 700、文件权限为 600；Windows 还需通过 NTFS 权限保护备份。恢复时同样应原地更新证书数据，不要先删除 Secret。
