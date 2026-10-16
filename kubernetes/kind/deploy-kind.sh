@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# 系统: Linux / WSL2 (Bash + GNU Make + Docker Linux containers)
+# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/kind/deploy-kind.sh
+# 用法: bash kubernetes/kind/deploy-kind.sh up (在完整仓库中执行，或 make kind-up)
+set -euo pipefail
+export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
+export KIND_EXPERIMENTAL_PROVIDER=docker
+
+action=${1:-help}
+name=${KIND_NAME:-linux-lab}
+workers=${WORKERS:-0}
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+need() { command -v "$1" >/dev/null 2>&1 || fail "缺少 $1，请先安装；kind 可运行 make kind-install（需要 Go）。"; }
+
+if [[ "$action" == help ]]; then
+    cat <<'EOF'
+在仓库根目录运行（Linux / WSL2，Docker 已启动）：
+  make kind-install                  安装 kind v0.33.0（需要 Go 和可用的 GOPROXY）
+  make kind-up                       创建单节点集群，复用仓库 containerd mirror 脚本
+  make kind-up WORKERS=2              创建 1 control-plane + 2 worker（已有集群不改拓扑）
+  make kind-status                   查看节点、Pod 和 StorageClass
+  make kind-check FILE=path/to.yaml   服务端 dry-run，校验实际 API/准入规则
+  make kind-apply FILE=path/to.yaml   部署到指定 kind 集群
+  make kind-load IMAGE=app:test       加载宿主 Docker 中已有的镜像
+  make kind-logs                     导出诊断日志到当前目录的新临时目录
+  make kind-down                     输入集群名确认后删除，包含集群内数据
+可选 KIND_NAME=linux-lab；KIND_NODE_IMAGE 指定上游 kindest/node 镜像。
+独立 kubeconfig: ~/.kube/kind-<集群名>.config，不修改默认 context。
+默认 kindnet + local-path；不自动部署生产 CNI、Ingress 或业务服务。
+13.8 GB 内存建议先单节点；Docker Desktop/WSL2 的资源上限在宿主侧设置。
+check/apply 支持 YAML 文件或目录；CRD 需先安装，Jenkins $VARS 模板需先渲染。
+EOF
+    exit 0
+fi
+[[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || fail 'KIND_NAME 只能包含小写字母、数字和中间连字符。'
+case "$action" in
+    install)
+        need go
+        go install sigs.k8s.io/kind@v0.33.0
+        printf '安装完成，请确保 Go 的 bin 目录在 PATH 中。\n'
+        exit 0 ;;
+    up|status|check|apply|load|logs|down) ;;
+    *) fail "未知动作: $action（运行 help 查看用法）" ;;
+esac
+need kind
+need docker
+docker info >/dev/null 2>&1 || fail 'Docker 不可用，请先启动 Docker，并确认当前用户有权限。'
+[[ $(docker info --format '{{.OSType}}') == linux ]] || fail '需要 Docker Linux containers。'
+config="${HOME}/.kube/kind-${name}.config"
+kube() { kubectl --kubeconfig "$config" --context "kind-$name" "$@"; }
+
+if [[ "$action" == down ]]; then
+    [[ -t 0 ]] || fail '删除需要交互确认，请在终端运行。'
+    read -r -p "删除集群及其中全部数据，输入集群名 $name 确认: " answer
+    [[ "$answer" == "$name" ]] || fail '未确认，已取消。'
+    kind delete cluster --name "$name" --kubeconfig "$config"
+    exit 0
+fi
+
+if [[ "$action" == up ]]; then
+    need kubectl
+    [[ "$workers" =~ ^[0-2]$ ]] || fail 'WORKERS 允许 0、1、2（适用于小内存测试环境）。'
+    clusters=$(kind get clusters)
+    if ! grep -Fxq "$name" <<<"$clusters"; then
+        echo '[1/3] 创建 kind 集群...'
+        args=(create cluster --name "$name" --kubeconfig "$config" --wait 180s)
+        [[ -z ${KIND_NODE_IMAGE:-} ]] || args+=(--image "$KIND_NODE_IMAGE")
+        mkdir -p -- "$(dirname -- "$config")"
+        # kind 从 stdin 读取配置，避免在仓库留下临时 YAML。
+        {
+            printf 'kind: Cluster\napiVersion: kind.x-k8s.io/v1alpha4\nnodes:\n- role: control-plane\n'
+            for ((i=0; i<workers; i++)); do printf '%s\n' '- role: worker'; done
+        } | kind "${args[@]}" --config -
+    else
+        echo '[1/3] 集群已存在，保留现有拓扑。'
+        kind export kubeconfig --name "$name" --kubeconfig "$config"
+    fi
+    echo '[2/3] 复用仓库 mirrors.sh 配置节点镜像加速...'
+    nodes=$(kind get nodes --name "$name")
+    [[ -n "$nodes" ]] || fail '集群没有节点。'
+    while IFS= read -r node; do
+        # kind 自带 containerd；不在容器内运行宿主机 install.sh。
+        docker exec "$node" grep -Eq 'config_path[[:space:]]*=.*[/]etc/containerd/certs.d' /etc/containerd/config.toml \
+            || fail "$node 未启用 certs.d，请检查 kind 节点镜像的 containerd 配置。"
+        docker exec -i "$node" bash < "$root/docker/containerd/mirrors.sh"
+    done <<<"$nodes"
+    echo '[3/3] 等待节点与 DNS 就绪...'
+    kube wait --for=condition=Ready nodes --all --timeout=180s
+    kube -n kube-system rollout status deployment/coredns --timeout=180s
+    kube get nodes -o wide
+    printf '独立 kubeconfig: %s\n' "$config"
+    exit 0
+fi
+
+[[ -f "$config" ]] || fail '没有测试集群 kubeconfig，请先 make kind-up。'
+case "$action" in
+    status)
+        need kubectl
+        kube get nodes -o wide
+        kube get pods -A
+        kube get storageclass ;;
+    check|apply)
+        need kubectl
+        [[ -n ${FILE:-} && -e "$FILE" ]] || fail '请指定存在的 FILE=文件或目录。'
+        args=(apply -f "$FILE")
+        [[ "$action" != check ]] || args+=(--dry-run=server)
+        kube "${args[@]}" ;;
+    load)
+        [[ -n ${IMAGE:-} ]] || fail '请指定 IMAGE=app:tag。'
+        kind load docker-image --name "$name" "$IMAGE" ;;
+    logs)
+        logdir=$(mktemp -d "./kind-${name}-logs.XXXXXX")
+        kind export logs --name "$name" "$logdir" ;;
+esac
