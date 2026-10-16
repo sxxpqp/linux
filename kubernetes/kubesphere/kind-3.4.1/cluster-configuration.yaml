@@ -1,4 +1,5 @@
 # 通过 make install 在内存中注入本机密码后应用；关闭 DevOps/日志/服务网格以控制资源占用。
+# 默认账号admin 密码：P@88w0rd
 apiVersion: installer.kubesphere.io/v1alpha1
 kind: ClusterConfiguration
 metadata:
