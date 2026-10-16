@@ -1,4 +1,4 @@
-# 独立测试集群：kind create cluster --name kubesphere-341 --config <本文件>
+# 独立测试集群：在本目录执行 make up；完整部署执行 make deploy。
 # 使用 kind v0.17.0；保留默认 kubeconfig/context，创建时显式传 --kubeconfig。
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4

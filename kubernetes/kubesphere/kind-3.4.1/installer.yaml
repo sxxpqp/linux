@@ -1,4 +1,4 @@
-# KubeSphere 3.4.1 安装器；公开归档经审查，仅用于独立 kind 测试集群。
+# KubeSphere 3.4.1 安装器；通过本目录 make install 部署到独立 kind 测试集群。
 # 来源：https://git.01lb.vip/ops-public/public-config/-/raw/master/ks-installer/v3.4.1/kubesphere-installer.yaml
 # 上游 Docker Hub 镜像不可达时，预加载经平台验证的同版本发布镜像到相同本地标签。
 ---

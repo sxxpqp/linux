@@ -1,4 +1,4 @@
-# 仅用于独立 kind 测试；最小组件，关闭 DevOps/日志/服务网格以控制资源占用。
+# 通过 make install 在内存中注入本机密码后应用；关闭 DevOps/日志/服务网格以控制资源占用。
 apiVersion: installer.kubesphere.io/v1alpha1
 kind: ClusterConfiguration
 metadata:
