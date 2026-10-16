@@ -158,16 +158,16 @@ for ns in "${namespaces[@]}"; do
     continue
   fi
 
-  # 每个 Secret 更新前单独备份；绝不把 Secret JSON 打印到日志。
+  # 每个 Secret 更新前单独备份；从同一份快照导出 YAML，不再次查询集群。
   # 首次需要更新时才建时间目录，全部跳过时不产生空备份目录。
   if [[ -z "$run_backup_dir" ]]; then
     mkdir -p -- "$BACKUP_DIR"
     chmod 700 -- "$BACKUP_DIR"
     # 随机后缀避免同一秒多次运行覆盖历史备份。
     run_backup_dir=$(mktemp -d "$BACKUP_DIR/run-$(date +%Y%m%d-%H%M%S)-XXXXXX")
-    echo "本次原始 Secret 配置备份(JSON): $run_backup_dir（含私钥，请妥善保存）"
+    echo "本次原始 Secret 配置备份(YAML): $run_backup_dir（含私钥，请妥善保存）"
   fi
-  if ! (set -o noclobber; cat "$snapshot" > "$run_backup_dir/$ns-$SECRET_NAME.json"); then
+  if ! (set -o noclobber; kubectl patch --local -f "$snapshot" --type=json -p '[]' -o yaml > "$run_backup_dir/$ns-$SECRET_NAME.yaml"); then
     echo "ERROR $ns: 备份失败，跳过更新" >&2
     ((failed+=1))
     continue

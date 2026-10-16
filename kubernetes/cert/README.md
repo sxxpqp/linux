@@ -32,7 +32,7 @@ Kubernetes 集群证书轮换与维护。
 | Secret 不允许修改（immutable） | 报错并保留原样 |
 | 更新前备份失败 | 不更新这个 Secret |
 | 查询后 Secret 被删除、重建或修改 | 本次更新失败，不覆盖别人的修改、不重新创建对象 |
-| 需要更新时 | 默认在固定主目录 `./tls-secret-backups/` 下生成 `run-时间-随机串` 子目录，保存各 Namespace 的完整 Secret JSON；全部跳过时不创建空目录 |
+| 需要更新时 | 默认在固定主目录 `./tls-secret-backups/` 下生成 `run-时间-随机串` 子目录，保存各 Namespace 的完整 Secret YAML（如 `default-wishfox.yaml`）；全部跳过时不创建空目录 |
 
 依赖：Bash、kubectl、openssl、GNU date（Linux / Git Bash），**不需要 jq**。使用当前 kubeconfig，可用 `--context` 指定目标集群；执行过程中固定该 context。
 
@@ -67,4 +67,4 @@ openssl s_client -connect example.com:443 -servername example.com </dev/null 2>/
 openssl x509 -in /path/fullchain.pem -noout -fingerprint -sha256
 ```
 
-备份 JSON 包含私钥，不要提交到 Git。Linux 下目录权限为 700、文件权限为 600；Windows 还需通过 NTFS 权限保护备份。恢复时同样应原地更新证书数据，不要先删除 Secret。
+备份 YAML 包含私钥，不要提交到 Git。Linux 下目录权限为 700、文件权限为 600；Windows 还需通过 NTFS 权限保护备份。恢复时同样应原地更新证书数据，不要先删除 Secret。
