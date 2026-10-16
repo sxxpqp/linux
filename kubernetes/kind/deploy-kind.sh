@@ -70,6 +70,7 @@ if [[ "$action" == up ]]; then
         # kind 从 stdin 读取配置，避免在仓库留下临时 YAML。
         {
             printf 'kind: Cluster\napiVersion: kind.x-k8s.io/v1alpha4\n'
+            printf 'containerdConfigPatches:\n- |\n  [plugins."io.containerd.grpc.v1.cri".registry]\n    config_path = "/etc/containerd/certs.d"\n'
             if [[ $(docker info --format '{{.CgroupVersion}}') == 1 ]]; then
                 echo '检测到 cgroup v1：为测试节点设置 failCgroupV1=false；宿主建议升级 cgroup v2。' >&2
                 printf 'kubeadmConfigPatches:\n- |\n  kind: KubeletConfiguration\n  failCgroupV1: false\n'
@@ -79,7 +80,39 @@ if [[ "$action" == up ]]; then
         } | kind "${args[@]}" --config -
     else
         echo '[1/3] 集群已存在，保留现有拓扑。'
+        nodes=$(kind get nodes --name "$name")
+        [[ -n "$nodes" ]] || fail '集群没有节点。'
+        while IFS= read -r node; do
+            state=$(docker inspect --format '{{.State.Status}}' "$node")
+            case "$state" in
+                running) ;;
+                exited|created)
+                    echo "启动停止的测试节点: $node"
+                    docker start "$node" || fail "$node 启动失败，请查看 docker inspect $node 和 docker logs $node；未删除集群。" ;;
+                *) fail "$node 状态为 $state，请先检查 Docker；未删除集群。" ;;
+            esac
+            ready=false
+            for ((attempt=0; attempt<30; attempt++)); do
+                if docker exec "$node" test -s /etc/kubernetes/kubelet.conf 2>/dev/null; then
+                    ready=true
+                    break
+                fi
+                sleep 2
+            done
+            [[ "$ready" == true ]] || fail "$node 初始化不完整，请先 make kind-logs 检查；需要重建时 make kind-down 会要求确认。"
+        done <<<"$nodes"
         kind export kubeconfig --name "$name" --kubeconfig "$config"
+        ready=false
+        for ((attempt=0; attempt<30; attempt++)); do
+            if kube --request-timeout=2s get --raw=/readyz >/dev/null 2>&1; then
+                ready=true
+                break
+            fi
+            sleep 2
+        done
+        [[ "$ready" == true ]] || fail 'API 尚未就绪或上次初始化中断，请运行 make kind-logs 检查；未自动删除或重建集群。'
+        kube -n kube-system get daemonset/kindnet deployment/coredns >/dev/null \
+            || fail '上次 kind 初始化未完成（缺少 kindnet/CoreDNS）；请检查日志，确认后使用 make kind-down 重建。'
     fi
     echo '[2/3] 复用仓库 mirrors.sh 配置节点镜像加速...'
     nodes=$(kind get nodes --name "$name")
