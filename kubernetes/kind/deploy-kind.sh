@@ -35,17 +35,18 @@ Windows 使用 Docker Desktop（Linux containers 模式）；Linux 使用 Docker
   make kind-down                     输入集群名确认后删除，包含集群内数据
   make kind-uninstall                kind-down 的别名，只删除集群，保留 Docker/kind 工具
   make -s kind-config                仅输出 kubeconfig 路径（不需要 Docker 在线）
-  make -s kind-use                   输出 export 命令，需配合下面的 eval 在当前终端生效
-  make -s kind-unuse                 输出 unset 命令，不依赖配置文件或 Docker
+  make kind-use                      合并 kind 配置并切换 kubectl 当前 context
+  make kind-unuse                    恢复 kind-use 前的 context，不需要 Docker 在线
 当前终端切换到测试集群（Bash / Zsh / Git Bash / WSL）：
-  eval "$(make -s kind-use)"
+  make kind-use
   kubectl config current-context
-取消设置，恢复使用默认 ~/.kube/config：
-  eval "$(make -s kind-unuse)"
-make 子进程不能修改当前终端环境，直接 make kind-use 不会切换。
-kind-unuse 只 unset KUBECONFIG；若此前有自定义值，请先保存，切回时自行恢复。
+取消切换，恢复先前的 context：
+  make kind-unuse
+use/unuse 修改 kubeconfig，不修改终端环境变量，不需要 eval。
+默认操作 ~/.kube/config；已设置 KUBECONFIG 时操作该单个文件，不支持多文件列表。
+kind-use 首次切换前备份目标文件；重复切换仍保留最初的恢复点。
 可选 KIND_NAME=linux-lab；KIND_NODE_IMAGE 指定上游 kindest/node 镜像。
-独立 kubeconfig: ~/.kube/kind-<集群名>.config，不修改默认 context。
+kind-up 使用独立 ~/.kube/kind-<集群名>.config；只有 kind-use 才切换当前配置。
 默认 kindnet + local-path + ingress-nginx；Ingress 使用 ingressClassName: nginx。
 复用 docker/kind/ingress-nginx.yaml；master 映射宿主机 80/443，无需 port-forward。
 宿主机监听 0.0.0.0:80/443；端口须空闲，局域网可达性取决于宿主机防火墙。
@@ -55,23 +56,73 @@ check/apply 支持 YAML 文件或目录；CRD 需先安装，Jenkins $VARS 模�
 EOF
     exit 0
 fi
-if [[ "$action" == unuse ]]; then
-    printf 'unset KUBECONFIG\n'
-    exit 0
-fi
 [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || fail 'KIND_NAME 只能包含小写字母、数字和中间连字符。'
 config="${HOME}/.kube/kind-${name}.config"
 # 关闭 MSYS 路径转换后，原生 kind.exe/kubectl.exe 必须接收 Windows 路径。
 case "${OSTYPE:-}" in
     msys*|cygwin*) config=$(cygpath -m "$config") ;;
 esac
-if [[ "$action" == config || "$action" == use ]]; then
+if [[ "$action" == config ]]; then
     [[ -f "$config" ]] || fail '没有测试集群 kubeconfig，请先 make kind-up。'
-    if [[ "$action" == use ]]; then
-        printf 'export KUBECONFIG=%q\n' "$config"
-    else
-        printf '%s\n' "$config"
+    printf '%s\n' "$config"
+    exit 0
+fi
+if [[ "$action" == use || "$action" == unuse ]]; then
+    need kubectl
+    target=${KUBECONFIG:-${HOME}/.kube/config}
+    separator=:
+    case "${OSTYPE:-}" in
+        msys*|cygwin*) separator=';'; target=$(cygpath -u "$target") ;;
+    esac
+    # 多文件合并时 kubectl 的写入目标不唯一，不猜测要修改哪个文件。
+    [[ "$target" != *"$separator"* ]] || fail 'KUBECONFIG 是多文件列表；请先 unset KUBECONFIG 后重试。'
+    [[ ! -d "$target" && ! -L "$target" ]] || fail 'kubeconfig 目标是目录或符号链接，请指定普通文件。'
+    mkdir -p -- "$(dirname -- "$target")"
+    target="$(cd -- "$(dirname -- "$target")" && pwd)/$(basename -- "$target")"
+    [[ "$target" != *"$separator"* ]] || fail 'kubeconfig 路径含列表分隔符，无法安全合并。'
+    state="${target}.kind-use.previous-context"
+    cli_target=$target
+    case "${OSTYPE:-}" in
+        msys*|cygwin*) cli_target=$(cygpath -m "$target") ;;
+    esac
+    if [[ "$action" == unuse ]]; then
+        [[ -f "$state" ]] || fail '没有 kind-use 恢复记录，未修改配置。'
+        previous=$(cat -- "$state")
+        if [[ -n "$previous" ]]; then
+            kubectl --kubeconfig "$cli_target" config use-context "$previous"
+        else
+            kubectl --kubeconfig "$cli_target" config unset current-context
+        fi
+        rm -- "$state"
+        echo '已恢复切换前的 context；kind 配置仍保留，可再次 make kind-use。'
+        exit 0
     fi
+    [[ -f "$config" ]] || fail '没有测试集群 kubeconfig，请先 make kind-up。'
+    kubectl --kubeconfig "$config" --context "kind-$name" config view --minify >/dev/null \
+        || fail "kind 配置缺少有效的 kind-${name} context，未修改目标配置。"
+    # 临时合并文件含凭据，使用受限权限，不把 raw 配置打印到终端。
+    umask 077
+    merged=$(mktemp "${target}.kind-use.XXXXXX")
+    trap 'rm -f -- "$merged"' EXIT
+    cli_merged=$merged
+    case "${OSTYPE:-}" in
+        msys*|cygwin*) cli_merged=$(cygpath -m "$merged") ;;
+    esac
+    KUBECONFIG="${config}${separator}${cli_target}" kubectl config view --raw --flatten > "$merged"
+    kubectl --kubeconfig "$cli_merged" config use-context "kind-$name" >/dev/null
+    if [[ ! -e "$state" ]]; then
+        previous=$(kubectl --kubeconfig "$cli_target" config view -o jsonpath='{.current-context}')
+        # 保留原始文件供人工恢复；取消切换只恢复 context，不丢弃之后的配置修改。
+        if [[ -f "$target" ]]; then
+            backup=$(mktemp "${target}.before-kind-use.XXXXXX")
+            cp -- "$target" "$backup"
+            printf '原配置备份：%s\n' "$backup"
+        fi
+        printf '%s\n' "$previous" > "$state"
+    fi
+    mv -f -- "$merged" "$target"
+    trap - EXIT
+    printf '已切换到 kind-%s（配置：%s）。取消切换：make kind-unuse\n' "$name" "$target"
     exit 0
 fi
 case "$action" in
