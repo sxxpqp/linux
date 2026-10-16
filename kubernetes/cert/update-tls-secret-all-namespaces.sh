@@ -17,7 +17,7 @@ SECRET_NAME="${SECRET_NAME:-wishfox}"  # 各 Namespace 中要查找的 Secret �
 CERT_FILE=""                         # --cert: 续签后的 fullchain，第一张应为业务证书。
 KEY_FILE=""                          # --key: 与新证书匹配的私钥，不是旧私钥的固定路径。
 APPLY=false                          # 默认只预览；只有 --apply 才允许写入集群。
-BACKUP_DIR="${BACKUP_DIR:-./tls-secret-backups-$(date +%Y%m%d-%H%M%S)}"
+BACKUP_DIR="${BACKUP_DIR:-./tls-secret-backups}"
 CONTEXT=""
 
 usage() {
@@ -96,13 +96,7 @@ ns_output=${ns_output//$'\r'/}
 mapfile -t namespaces <<< "$ns_output"
 
 echo "[2/3] 查找已有 Secret: $SECRET_NAME | Namespace 数: ${#namespaces[@]} | 模式: $(if "$APPLY"; then echo 正式更新; else echo 仅预览; fi)"
-if "$APPLY"; then
-  mkdir -p -- "$BACKUP_DIR"
-  chmod 700 -- "$BACKUP_DIR"
-  # 即使复用 BACKUP_DIR 或同一秒执行多次，也不会覆盖上一次备份。
-  run_backup_dir=$(mktemp -d "$BACKUP_DIR/run-$(date +%Y%m%d-%H%M%S)-XXXXXX")
-  echo "本次原始 Secret 备份: $run_backup_dir（含私钥，请妥善保存）"
-fi
+run_backup_dir=""
 
 # 四、逐个 Namespace 处理；某个对象失败会计数，继续检查其余对象。
 updated=0
@@ -165,6 +159,14 @@ for ns in "${namespaces[@]}"; do
   fi
 
   # 每个 Secret 更新前单独备份；绝不把 Secret JSON 打印到日志。
+  # 首次需要更新时才建时间目录，全部跳过时不产生空备份目录。
+  if [[ -z "$run_backup_dir" ]]; then
+    mkdir -p -- "$BACKUP_DIR"
+    chmod 700 -- "$BACKUP_DIR"
+    # 随机后缀避免同一秒多次运行覆盖历史备份。
+    run_backup_dir=$(mktemp -d "$BACKUP_DIR/run-$(date +%Y%m%d-%H%M%S)-XXXXXX")
+    echo "本次原始 Secret 配置备份(JSON): $run_backup_dir（含私钥，请妥善保存）"
+  fi
   if ! (set -o noclobber; cat "$snapshot" > "$run_backup_dir/$ns-$SECRET_NAME.json"); then
     echo "ERROR $ns: 备份失败，跳过更新" >&2
     ((failed+=1))
@@ -196,5 +198,8 @@ done
 
 # 五、汇总只代表 Secret 的处理结果；HTTPS 入口是否已加载新证书需另行核对。
 echo "[3/3] 完成: 待更新=$planned 已更新=$updated 跳过=$skipped 失败=$failed"
+if "$APPLY" && [[ -z "$run_backup_dir" ]]; then
+  echo "本次没有需要更新的 Secret，未创建备份目录。"
+fi
 echo "本脚本不重启业务。Ingress/应用需要支持证书热加载；Secret 更新成功不等于 HTTPS 已加载新证书。"
 ((failed == 0))
