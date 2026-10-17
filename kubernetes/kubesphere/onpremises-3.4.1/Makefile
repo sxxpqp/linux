@@ -13,10 +13,13 @@ K = kubectl --kubeconfig "$(KUBE_CONFIG)" --context "$(CONTEXT)" --request-timeo
 .PHONY: help plan install guard status logs
 help:
 	@printf '%s\n' '先 cp nodes.example nodes.secret 并填写全部节点 SSH 地址' 'make plan CONTEXT=<context> [KUBE_CONFIG=<file>]   只读预检' 'make install CONTEXT=<context>   更新所有节点镜像源后安装 KS 3.4.1' 'make status / logs CONTEXT=<context>   查看现有安装' '可选: STORAGE_CLASS=<sc> NODES_FILE=<file> PASSWORD_FILE=<file> TIMEOUT=900s'
+# 1. 只读预检：集群版本、默认存储和全部节点连接。
 plan:
 	@bash "$(DIR)install.sh" $(ARGS)
+# 2. 预检通过后更新节点镜像源，再安装 ks-installer。
 install:
 	@bash "$(DIR)install.sh" $(ARGS) --apply
+# 辅助命令：确认目标 context 后查看状态和日志。
 guard:
 	@test -n "$(CONTEXT)" || { echo '必须指定 CONTEXT'; exit 1; }
 status: guard
