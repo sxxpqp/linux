@@ -30,6 +30,54 @@ deploy:
 	@$(MAKE) --no-print-directory -f "$(DIR)Makefile" mirrors
 	@$(MAKE) --no-print-directory -f "$(DIR)Makefile" ks-install
 
-# 辅助命令和旧命令统一转发。
-help status wait logs login use unuse down tools up guard images install:
-	@bash "$(DIR)install.sh" "$@"
+# 显示使用说明。
+help:
+	@bash "$(DIR)install.sh" help
+
+# 查看节点、Pod、PVC 和控制台。
+status:
+	@bash "$(DIR)install.sh" status
+
+# 等待核心服务和监控就绪。
+wait:
+	@bash "$(DIR)install.sh" wait
+
+# 查看 ks-installer 日志。
+logs:
+	@bash "$(DIR)install.sh" logs
+
+# 显示控制台地址和密码文件位置。
+login:
+	@bash "$(DIR)install.sh" login
+
+# 切换到该集群 context。
+use:
+	@bash "$(DIR)install.sh" use
+
+# 恢复切换前的 context。
+unuse:
+	@bash "$(DIR)install.sh" unuse
+
+# 交互确认后删除测试集群。
+down:
+	@bash "$(DIR)install.sh" down
+
+# 仅安装配套 kind 工具。
+tools:
+	@bash "$(DIR)install.sh" tools
+
+# 创建或恢复集群，与 kind 入口相同。
+up:
+	@bash "$(DIR)install.sh" up
+
+# 只读检查集群版本和端口。
+guard:
+	@bash "$(DIR)install.sh" guard
+
+# 仅加载安装器镜像。
+images:
+	@bash "$(DIR)install.sh" images
+
+# 仅提交安装器和组件配置；完整安装使用 ks-install。
+install:
+	@bash "$(DIR)install.sh" install

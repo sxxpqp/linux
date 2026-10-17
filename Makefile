@@ -45,8 +45,30 @@ kind-apply:
 kind-load:
 	@bash "$(KIND_SCRIPT)" load
 
-# 辅助命令统一转发。
-kind-status kind-check kind-logs kind-down kind-use kind-unuse:
-	@bash "$(KIND_SCRIPT)" "$(@:kind-%=%)"
+# 查看节点、Pod 和 StorageClass。
+kind-status:
+	@bash "$(KIND_SCRIPT)" status
 
-kind-uninstall: kind-down
+# 服务端 dry-run 校验 FILE 指定的清单。
+kind-check:
+	@bash "$(KIND_SCRIPT)" check
+
+# 导出集群诊断日志。
+kind-logs:
+	@bash "$(KIND_SCRIPT)" logs
+
+# 交互确认后删除集群。
+kind-down:
+	@bash "$(KIND_SCRIPT)" down
+
+# 切换到该集群 context。
+kind-use:
+	@bash "$(KIND_SCRIPT)" use
+
+# 恢复切换前的 context。
+kind-unuse:
+	@bash "$(KIND_SCRIPT)" unuse
+
+# 卸载测试集群，保留 Docker 和 kind 工具。
+kind-uninstall:
+	@bash "$(KIND_SCRIPT)" down
