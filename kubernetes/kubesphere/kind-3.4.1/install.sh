@@ -25,9 +25,12 @@ ensure_kind() {
 # 1. 创建集群；已有集群保留，等待 API 就绪。
 create_cluster() {
   ensure_kind
-  command -v kubectl >/dev/null
-  docker info >/dev/null
-  clusters=$("${KIND_BIN}" get clusters)
+  echo '检查依赖: kubectl、Docker'
+  command -v kubectl >/dev/null || { echo 'ERROR: 未找到 kubectl，请先安装 kubectl 并确认它位于当前用户的 PATH 中。' >&2; exit 1; }
+  command -v docker >/dev/null || { echo 'ERROR: 未找到 docker；kind 需要 Docker，不可仅使用宿主机 containerd。' >&2; exit 1; }
+  docker info >/dev/null || { echo 'ERROR: Docker 不可用，请检查 docker info 的报错和 Docker 服务状态。' >&2; exit 1; }
+  echo "检查 kind 集群: $KIND_NAME"
+  clusters=$("${KIND_BIN}" get clusters) || { echo 'ERROR: kind get clusters 失败，请检查上方输出。' >&2; exit 1; }
   if printf '%s\n' "$clusters" | grep -Fxq -- "${KIND_NAME}"; then
     echo '集群已存在，保留现有节点和数据。'
     state=$(docker inspect --format '{{.State.Status}}' "${KIND_NAME}-control-plane")
