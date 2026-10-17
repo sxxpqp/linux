@@ -10,6 +10,8 @@ APPLY=false
 CONFIG='' CONTEXT='' NODES='' STORAGE='' PASSWORD_FILE=''
 TIMEOUT=900s
 INSTALLER_SOURCE=docker.io/kubesphere/ks-installer:v3.4.1
+
+# 参数与公共函数
 die() { echo "错误: $*" >&2; exit 1; }
 usage() {
   cat <<'EOF'
@@ -24,38 +26,44 @@ KubeSphere 3.4.1 自建集群安装（全新安装，不升级现有实例）
 节点须已启用 config_path=/etc/containerd/certs.d；不修改现有 containerd 主配置。
 EOF
 }
-while (($#)); do
-  case "$1" in
-    --help|-h) usage; exit 0 ;;
-    --apply) APPLY=true; shift ;;
-    --kubeconfig|--context|--nodes-file|--storage-class|--password-file|--timeout|--installer-source)
-      (($# >= 2)) || die "$1 缺少值"
-      case "$1" in
-        --kubeconfig) CONFIG=$2 ;; --context) CONTEXT=$2 ;; --nodes-file) NODES=$2 ;;
-        --storage-class) STORAGE=$2 ;; --password-file) PASSWORD_FILE=$2 ;; --timeout) TIMEOUT=$2 ;;
-        --installer-source) INSTALLER_SOURCE=$2 ;;
-      esac
-      shift 2 ;;
-    *) die "未知参数 $1" ;;
-  esac
-done
-[[ -r "$CONFIG" && -n "$CONTEXT" && -r "$NODES" ]] || { usage; exit 1; }
-[[ "$TIMEOUT" =~ ^[1-9][0-9]*s$ ]] || die 'timeout 必须为正整数秒，例如 900s'
-[[ "$INSTALLER_SOURCE" =~ ^[a-zA-Z0-9][a-zA-Z0-9._:/@-]+$ ]] || die '非法安装器镜像引用'
-for tool in kubectl python3 ssh; do command -v "$tool" >/dev/null || die "缺少 $tool"; done
-K=(kubectl --kubeconfig "$CONFIG" --context "$CONTEXT" --request-timeout=30s)
-TEMPLATE="$DIR/../kind-3.4.1"
-MIRRORS="$ROOT/docker/containerd/mirrors.sh"
-[[ -r "$MIRRORS" && -r "$TEMPLATE/installer.yaml" && -r "$TEMPLATE/cluster-configuration.yaml" ]] || die '请在完整仓库内执行'
-WORK=$(mktemp -d)
-trap 'rm -rf "$WORK"' EXIT
-"${K[@]}" version -o json > "$WORK/version.json"
-"${K[@]}" get nodes -o json > "$WORK/nodes.json"
-"${K[@]}" get storageclasses -o json > "$WORK/storage.json"
-"${K[@]}" get namespace kubesphere-system --ignore-not-found -o name > "$WORK/existing"
-[[ ! -s "$WORK/existing" ]] || die 'kubesphere-system 已存在；本入口只支持全新安装，请用 status/logs 检查现有安装'
-[[ "$("${K[@]}" auth can-i '*' '*' --all-namespaces)" == yes ]] || die '需要 cluster-admin 权限'
-python3 - "$WORK" "$NODES" "$STORAGE" <<'PY'
+parse_args() {
+  while (($#)); do
+    case "$1" in
+      --help|-h) usage; exit 0 ;;
+      --apply) APPLY=true; shift ;;
+      --kubeconfig|--context|--nodes-file|--storage-class|--password-file|--timeout|--installer-source)
+        (($# >= 2)) || die "$1 缺少值"
+        case "$1" in
+          --kubeconfig) CONFIG=$2 ;; --context) CONTEXT=$2 ;; --nodes-file) NODES=$2 ;;
+          --storage-class) STORAGE=$2 ;; --password-file) PASSWORD_FILE=$2 ;; --timeout) TIMEOUT=$2 ;;
+          --installer-source) INSTALLER_SOURCE=$2 ;;
+        esac
+        shift 2 ;;
+      *) die "未知参数 $1" ;;
+    esac
+  done
+}
+
+remote() {
+  local target=$1; shift
+  ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" \
+    'if [ "$(id -u)" = 0 ]; then exec bash -s; else exec sudo -n bash -s; fi' "$@"
+}
+
+# 1. 检查集群、已有存储和全部节点连接；此阶段只读。
+check_cluster() {
+  [[ -r "$CONFIG" && -n "$CONTEXT" && -r "$NODES" ]] || { usage; exit 1; }
+  [[ "$TIMEOUT" =~ ^[1-9][0-9]*s$ ]] || die 'timeout 必须为正整数秒，例如 900s'
+  [[ "$INSTALLER_SOURCE" =~ ^[a-zA-Z0-9][a-zA-Z0-9._:/@-]+$ ]] || die '非法安装器镜像引用'
+  for tool in kubectl python3 ssh; do command -v "$tool" >/dev/null || die "缺少 $tool"; done
+  [[ -r "$MIRRORS" && -r "$TEMPLATE/installer.yaml" && -r "$TEMPLATE/cluster-configuration.yaml" ]] || die '请在完整仓库内执行'
+  "${K[@]}" version -o json > "$WORK/version.json"
+  "${K[@]}" get nodes -o json > "$WORK/nodes.json"
+  "${K[@]}" get storageclasses -o json > "$WORK/storage.json"
+  "${K[@]}" get namespace kubesphere-system --ignore-not-found -o name > "$WORK/existing"
+  [[ ! -s "$WORK/existing" ]] || die 'kubesphere-system 已存在；本入口只支持全新安装，请用 status/logs 检查现有安装'
+  [[ "$("${K[@]}" auth can-i '*' '*' --all-namespaces)" == yes ]] || die '需要 cluster-admin 权限'
+  python3 - "$WORK" "$NODES" "$STORAGE" <<'PY'
 import json, pathlib, re, sys
 w = pathlib.Path(sys.argv[1])
 def require(ok, msg):
@@ -95,16 +103,11 @@ require(re.fullmatch(r'[a-z0-9][a-z0-9.-]*', sc), '非法 StorageClass 名称')
 (w/'inventory').write_text(''.join(f'{n} {t}\n' for n,t in inventory.items()))
 print(f'集群版本: {v}; StorageClass: {sc}; 节点数: {len(nodes)}')
 PY
-STORAGE=$(cat "$WORK/storage")
-remote() {
-  local target=$1; shift
-  ssh -o BatchMode=yes -o ConnectTimeout=10 "$target" \
-    'if [ "$(id -u)" = 0 ]; then exec bash -s; else exec sudo -n bash -s; fi' "$@"
-}
-# 全部节点先只读预检，避免前几个节点写完才发现后续节点不能连接。
-while read -r node target; do
-  echo "预检 $node → $target"
-  remote "$target" <<'REMOTE' || die "$node 预检失败：检查 SSH/sudo、containerd CRI 和 config_path=/etc/containerd/certs.d"
+  STORAGE=$(cat "$WORK/storage")
+  # 全部节点先只读预检，避免前几个节点写完才发现后续节点不能连接。
+  while read -r node target; do
+    echo "预检 $node → $target"
+    remote "$target" <<'REMOTE' || die "$node 预检失败：检查 SSH/sudo、containerd CRI 和 config_path=/etc/containerd/certs.d"
 set -euo pipefail
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 for c in systemctl containerd crictl ctr tar; do command -v "$c" >/dev/null; done
@@ -113,16 +116,14 @@ containerd config dump | grep -E '^[[:space:]]*config_path = "/etc/containerd/ce
 crictl --runtime-endpoint unix:///run/containerd/containerd.sock info >/dev/null
 test -f /etc/containerd/config.toml
 REMOTE
-done < "$WORK/inventory"
-echo "顺序: 备份节点镜像源 → 执行 docker/containerd/mirrors.sh → 重启 containerd → CRI 拉取验证 → ks-installer"
-echo "安装器拉取源: ${INSTALLER_SOURCE}（清单保持上游名称）"
-if ! $APPLY; then
-  echo '预检通过；加 --apply 执行。不会修改 image 字段。'
-  exit 0
-fi
-# 只在 apply 时生成密码；保存在仓库外，不输出到日志。
-PASSWORD_FILE=${PASSWORD_FILE:-"$HOME/.kube/ks341-$(printf '%s' "$CONTEXT" | tr -c 'a-zA-Z0-9_.-' '_').secret"}
-python3 - "$PASSWORD_FILE" "$TEMPLATE/cluster-configuration.yaml" "$STORAGE" "$WORK/cluster.yaml" <<'PY'
+  done < "$WORK/inventory"
+}
+
+# 本机生成初始密码并渲染清单，不提交明文密码。
+prepare_config() {
+  # 只在 apply 时生成密码；保存在仓库外，不输出到日志。
+  PASSWORD_FILE=${PASSWORD_FILE:-"$HOME/.kube/ks341-$(printf '%s' "$CONTEXT" | tr -c 'a-zA-Z0-9_.-' '_').secret"}
+  python3 - "$PASSWORD_FILE" "$TEMPLATE/cluster-configuration.yaml" "$STORAGE" "$WORK/cluster.yaml" <<'PY'
 import json, os, pathlib, re, secrets, sys
 p = pathlib.Path(sys.argv[1]).expanduser()
 p.parent.mkdir(parents=True, exist_ok=True)
@@ -139,11 +140,15 @@ text = text.replace('    jwtSecret: ""', '    adminPassword: ' + json.dumps(pass
 fd = os.open(sys.argv[4], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 with os.fdopen(fd, 'w') as f: f.write(text)
 PY
-while read -r node target; do
-  echo "更新镜像源: $node"
-  # 先备份，再流式执行仓库中唯一的 mirrors.sh；不复制维护 mirror 映射。
-  {
-    cat <<'REMOTE'
+}
+
+# 2. 逐台备份并更新镜像源；任意节点失败即停止。
+configure_mirrors() {
+  while read -r node target; do
+    echo "更新镜像源: $node"
+    # 先备份，再流式执行仓库中唯一的 mirrors.sh；不复制维护 mirror 映射。
+    {
+      cat <<'REMOTE'
 set -euo pipefail
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
 backup=$(mktemp -d /var/backups/ks341-mirrors.XXXXXXXX)
@@ -151,9 +156,9 @@ cp -a /etc/containerd/config.toml "$backup/"
 if [ -d /etc/containerd/certs.d ]; then tar -C /etc/containerd -czf "$backup/certs.d.tar.gz" certs.d; fi
 echo "镜像源备份: $backup"
 REMOTE
-    cat "$MIRRORS"
-    printf 'INSTALLER_SOURCE=%q\n' "$INSTALLER_SOURCE"
-    cat <<'REMOTE'
+      cat "$MIRRORS"
+      printf 'INSTALLER_SOURCE=%q\n' "$INSTALLER_SOURCE"
+      cat <<'REMOTE'
 systemctl restart containerd
 systemctl is-active --quiet containerd
 crictl --runtime-endpoint unix:///run/containerd/containerd.sock info >/dev/null
@@ -172,15 +177,40 @@ if [ "$INSTALLER_SOURCE" != "$canonical" ]; then
   fi
 fi
 REMOTE
-  } | remote "$target"
-  "${K[@]}" wait --for=condition=Ready "node/$node" --timeout=180s
-done < "$WORK/inventory"
-"${K[@]}" apply -f "$TEMPLATE/installer.yaml"
-"${K[@]}" wait --for=condition=Established crd/clusterconfigurations.installer.kubesphere.io --timeout=60s
-"${K[@]}" apply -f "$WORK/cluster.yaml"
-"${K[@]}" -n kubesphere-system wait --for=jsonpath='{.status.core.status}'=enabled clusterconfiguration/ks-installer --timeout="$TIMEOUT"
-for component in ks-apiserver ks-controller-manager ks-console; do
-  "${K[@]}" -n kubesphere-system rollout status "deployment/$component" --timeout=180s
-done
-"${K[@]}" -n kubesphere-system get service ks-console
-echo "核心组件已就绪。控制台: http://<可访问的节点IP>:30880；用户 admin；密码文件: $PASSWORD_FILE"
+    } | remote "$target"
+    "${K[@]}" wait --for=condition=Ready "node/$node" --timeout=180s
+  done < "$WORK/inventory"
+}
+
+# 3. 提交安装清单并等待核心服务就绪。
+install_kubesphere() {
+  "${K[@]}" apply -f "$TEMPLATE/installer.yaml"
+  "${K[@]}" wait --for=condition=Established crd/clusterconfigurations.installer.kubesphere.io --timeout=60s
+  "${K[@]}" apply -f "$WORK/cluster.yaml"
+  "${K[@]}" -n kubesphere-system wait --for=jsonpath='{.status.core.status}'=enabled clusterconfiguration/ks-installer --timeout="$TIMEOUT"
+  for component in ks-apiserver ks-controller-manager ks-console; do
+    "${K[@]}" -n kubesphere-system rollout status "deployment/$component" --timeout=180s
+  done
+  "${K[@]}" -n kubesphere-system get service ks-console
+  echo "核心组件已就绪。控制台: http://<可访问的节点IP>:30880；用户 admin；密码文件: $PASSWORD_FILE"
+}
+
+# 主流程：检查 → 镜像源 → KubeSphere。默认只检查，--apply 才执行安装。
+parse_args "$@"
+K=(kubectl --kubeconfig "$CONFIG" --context "$CONTEXT" --request-timeout=30s)
+TEMPLATE="$DIR/../kind-3.4.1"
+MIRRORS="$ROOT/docker/containerd/mirrors.sh"
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+
+echo '[1/3] 检查集群、StorageClass 和全部节点'
+check_cluster
+if ! $APPLY; then
+  echo '预检通过。加 --apply 后执行：更新镜像源 → 安装 KubeSphere。'
+  exit 0
+fi
+prepare_config
+echo '[2/3] 更新全部节点镜像源并验证安装器拉取'
+configure_mirrors
+echo '[3/3] 安装 ks-installer 并等待 KubeSphere 就绪'
+install_kubesphere
