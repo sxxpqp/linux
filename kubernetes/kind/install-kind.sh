@@ -4,6 +4,10 @@
 # 用法: bash install-kind.sh [--version v0.33.0] [--bin-dir "$HOME/.local/bin"]
 set -euo pipefail
 export SYSTEMD_PAGER='' PAGER=cat SYSTEMD_LESS=''
+# 迁移入口：部署了 opskit 时由 Go 实现接管；旧机器仍可使用下方 Shell 安装。
+if command -v "${OPSKIT_BIN:-opskit}" >/dev/null 2>&1; then
+  exec "${OPSKIT_BIN:-opskit}" kind install --version v0.33.0 --bin-dir "$HOME/.local/bin" "$@"
+fi
 VERSION=v0.33.0
 BIN_DIR="$HOME/.local/bin"
 # 默认走仓库现有 Nexus release 代理；外网可显式设置为 https://github.com。
