@@ -14,15 +14,16 @@ action=${1:-help}
 name=${KIND_NAME:-linux-lab}
 workers=${WORKERS:-0}
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+export PATH="$HOME/.local/bin:$PATH"
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
-need() { command -v "$1" >/dev/null 2>&1 || fail "缺少 $1，请先安装；kind 可运行 make kind-install（需要 Go）。"; }
+need() { command -v "$1" >/dev/null 2>&1 || fail "缺少 $1，请先安装；kind 可运行 make kind-install（无需 Go）。"; }
 
 if [[ "$action" == help ]]; then
     cat <<'EOF'
 在 Linux / WSL2 / Windows Git Bash 中进入仓库根目录运行：
 前置依赖：Bash、GNU Make、kubectl，以及可用的 Docker Linux containers。
 Windows 使用 Docker Desktop（Linux containers 模式）；Linux 使用 Docker Engine。
-  make kind-install                  安装 kind v0.33.0（需要 Go 和可用的 GOPROXY）
+  make kind-install                  下载并校验 kind v0.33.0（无需 Go）
   make kind-up                       创建/恢复集群，kindnet + ingress-nginx，master 映射 80/443
   make kind-up WORKERS=2              创建 1 control-plane + 2 worker（已有集群不改拓扑）
   make kind-up workers=2              同上，WORKERS/workers 均支持，冲突值会报错
@@ -127,9 +128,7 @@ if [[ "$action" == use || "$action" == unuse ]]; then
 fi
 case "$action" in
     install)
-        need go
-        go install sigs.k8s.io/kind@v0.33.0
-        printf '安装完成，请确保 Go 的 bin 目录在 PATH 中。\n'
+        bash "$root/kubernetes/kind/install-kind.sh" --version v0.33.0
         exit 0 ;;
     up|status|check|apply|load|logs|down|ingress) ;;
     *) fail "未知动作: $action（运行 help 查看用法）" ;;

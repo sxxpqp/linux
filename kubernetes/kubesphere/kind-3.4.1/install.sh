@@ -11,17 +11,15 @@ KUBE_CONFIG=${KUBE_CONFIG:-$HOME/.kube/kind-$KIND_NAME.config}
 PASSWORD_FILE=${PASSWORD_FILE:-$HOME/.kube/$KIND_NAME.admin-password}
 TOOLS_DIR=${TOOLS_DIR:-$HOME/.cache/linux-kubesphere-341/bin}
 KIND_BIN="$TOOLS_DIR/kind"
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) KIND_BIN="$TOOLS_DIR/kind.exe"; export MSYS_NO_PATHCONV=1 ;; esac
+export KIND_EXPERIMENTAL_PROVIDER=docker
 INSTALLER_SOURCE=${INSTALLER_SOURCE:-registry.cn-beijing.aliyuncs.com/kubesphereio/ks-installer:v3.4.1}
 INSTALLER_IMAGE=docker.io/kubesphere/ks-installer:v3.4.1
 K=(kubectl --kubeconfig "$KUBE_CONFIG" --context "kind-$KIND_NAME")
 
 # 安装固定版本的 kind 工具。
 ensure_kind() {
-  if ! test -x "${KIND_BIN}" || ! "${KIND_BIN}" version | grep -q 'kind v0.17.0 '; then
-    command -v go >/dev/null || { echo 'ERROR: 安装配套 kind 需要 Go。' >&2; exit 1; }
-    mkdir -p "${TOOLS_DIR}"
-    GOBIN="${TOOLS_DIR}" go install sigs.k8s.io/kind@v0.17.0
-  fi
+  bash "$ROOT/kubernetes/kind/install-kind.sh" --version v0.17.0 --bin-dir "$TOOLS_DIR"
 }
 
 # 1. 创建集群；已有集群保留，等待 API 就绪。
@@ -184,7 +182,7 @@ main() {
         '3. make ks-install  安装 KubeSphere 并等待就绪' \
         'make deploy         按以上三步串行执行' \
         '辅助命令: status wait logs login use unuse down' \
-        '依赖: Docker、kubectl、Go（安装 kind）、openssl、Python 3' \
+        '依赖: Docker、kubectl、curl、SHA256 工具、openssl、Python 3（无需 Go）' \
         '控制台: http://127.0.0.1:30880；login 显示密码文件位置' ;;
     *) echo "ERROR: 未知命令 $1" >&2; return 1 ;;
   esac
