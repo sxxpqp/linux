@@ -28,7 +28,7 @@ make ks-install  # 3. 安装 ks-installer 并等待 KubeSphere 就绪
 
 第二步复用 `docker/containerd/mirrors.sh --kind-config`，先备份 kind 节点配置，移除旧 registry.mirrors 并启用 certs.d，然后写加速源、逐节点重启 containerd 并验证拉取；任何节点失败就停止。普通节点执行不带参数的 `mirrors.sh` 时行为不变。安装器镜像继续使用原有 `INSTALLER_SOURCE`，清单 image 保持上游名称。控制台 `http://127.0.0.1:30880`；`make status` / `make logs` 查看状态，`make login` 显示密码文件位置。原 `up` / `install` 等命令保留兼容，日常使用上面三个入口。
 
-`make kind` 通过 `kubernetes/kind/install-kind.sh` 下载配套 kind v0.17.0 并校验 SHA256，无需 Go。支持 Linux/macOS 的 amd64、arm64，以及 Windows Git Bash amd64（WSL 按 Linux 处理）。Windows 还需 Bash、GNU Make、Docker Linux containers 及其余流程依赖。
+`make kind` 优先复用工具目录或 PATH 中已有的 kind，不更新、不重新下载；仅未安装时通过 `kubernetes/kind/install-kind.sh` 下载配套 kind v0.17.0 并校验 SHA256，无需 Go。支持 Linux/macOS 的 amd64、arm64，以及 Windows Git Bash amd64（WSL 按 Linux 处理）。Windows 还需 Bash、GNU Make、Docker Linux containers 及其余流程依赖。
 
 单独安装通用 kind v0.33.0 可在仓库根目录执行 `make kind-install`，默认安装到 `~/.local/bin`。发布包默认走 Nexus `raw-github` 代理；外网可通过 `KIND_DOWNLOAD_BASE=https://github.com` 覆盖下载源。脚本不修改 shell 配置，终端直接使用需执行 `export PATH="$HOME/.local/bin:$PATH"`，根目录 Makefile 的 kind 流程自动识别该目录。
 

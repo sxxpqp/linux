@@ -17,8 +17,17 @@ INSTALLER_SOURCE=${INSTALLER_SOURCE:-registry.cn-beijing.aliyuncs.com/kubesphere
 INSTALLER_IMAGE=docker.io/kubesphere/ks-installer:v3.4.1
 K=(kubectl --kubeconfig "$KUBE_CONFIG" --context "kind-$KIND_NAME")
 
-# 安装固定版本的 kind 工具。
+# 优先复用已有 kind，仅在未安装时下载配套版本。
 ensure_kind() {
+  if [[ -x "$KIND_BIN" ]]; then
+    echo "复用已有 kind: $KIND_BIN"
+    return
+  fi
+  if command -v kind >/dev/null 2>&1; then
+    KIND_BIN=$(command -v kind)
+    echo "复用已有 kind: $KIND_BIN"
+    return
+  fi
   bash "$ROOT/kubernetes/kind/install-kind.sh" --version v0.17.0 --bin-dir "$TOOLS_DIR"
 }
 
