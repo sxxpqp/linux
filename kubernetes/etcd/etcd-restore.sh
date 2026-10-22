@@ -1,4 +1,12 @@
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/etcd/etcd-restore.sh
+#!/usr/bin/env bash
+set -euo pipefail
+# 防止把单节点恢复示例误用于三 Master stacked etcd
+if [[ "${ETCD_RESTORE_ACK_SINGLE_NODE:-}" != "I_UNDERSTAND_SINGLE_NODE_ONLY" ]]; then
+  echo "STOP: 此脚本仅适用于明确核实的单节点 etcd 灾难恢复；三 Master stacked etcd 禁止使用。" >&2
+  echo "确认单节点拓扑、备份和停机方案后，才可设置 ETCD_RESTORE_ACK_SINGLE_NODE=I_UNDERSTAND_SINGLE_NODE_ONLY。" >&2
+  exit 1
+fi
 # 1. 确认snapshot.db路径（替换为你的实际路径，比如/root/snapshot.db）
 SNAPSHOT_PATH="/home/kh/snapshot.db" # 替换为实际路径
 # 定义核心参数（根据你的集群调整）
@@ -31,6 +39,8 @@ if [ -d $ETCD_DATA_DIR ]; then
 fi
 #rm -rf $ETCD_DATA_DIR/*
 
+[[ -s "$SNAPSHOT_PATH" ]] || { echo "STOP: 快照不存在或为空" >&2; exit 1; }
+[[ ! -e "$ETCD_DATA_DIR" ]] || { echo "STOP: 目标数据目录已存在，拒绝覆盖" >&2; exit 1; }
 # 2. 执行快照恢复（核心命令）
 /usr/local/bin/etcdctl --endpoints=${ENDPOINTS} \
 	--cacert=${CA_CERT} \
