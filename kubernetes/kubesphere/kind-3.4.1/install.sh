@@ -11,7 +11,15 @@ KUBE_CONFIG=${KUBE_CONFIG:-$HOME/.kube/kind-$KIND_NAME.config}
 PASSWORD_FILE=${PASSWORD_FILE:-$HOME/.kube/$KIND_NAME.admin-password}
 TOOLS_DIR=${TOOLS_DIR:-$HOME/.cache/linux-kubesphere-341/bin}
 KIND_BIN="$TOOLS_DIR/kind"
-case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) KIND_BIN="$TOOLS_DIR/kind.exe"; export MSYS_NO_PATHCONV=1 ;; esac
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    KIND_BIN="$TOOLS_DIR/kind.exe"
+    # 保留容器内路径原样；传给 Windows kind/kubectl 的本地路径显式转换。
+    export MSYS_NO_PATHCONV=1
+    DIR=$(cygpath -am "$DIR")
+    KUBE_CONFIG=$(cygpath -am "$KUBE_CONFIG")
+    ;;
+esac
 export KIND_EXPERIMENTAL_PROVIDER=docker
 INSTALLER_SOURCE=${INSTALLER_SOURCE:-registry.cn-beijing.aliyuncs.com/kubesphereio/ks-installer:v3.4.1}
 INSTALLER_IMAGE=docker.io/kubesphere/ks-installer:v3.4.1
