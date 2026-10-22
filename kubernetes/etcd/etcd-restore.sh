@@ -1,56 +1,43 @@
-# 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/etcd/etcd-restore.sh
 #!/usr/bin/env bash
+# 单节点 etcd 灾难恢复专用。三 Master stacked etcd 请使用独立的集群级恢复方案。
 set -euo pipefail
-# 防止把单节点恢复示例误用于三 Master stacked etcd
-if [[ "${ETCD_RESTORE_ACK_SINGLE_NODE:-}" != "I_UNDERSTAND_SINGLE_NODE_ONLY" ]]; then
-  echo "STOP: 此脚本仅适用于明确核实的单节点 etcd 灾难恢复；三 Master stacked etcd 禁止使用。" >&2
-  echo "确认单节点拓扑、备份和停机方案后，才可设置 ETCD_RESTORE_ACK_SINGLE_NODE=I_UNDERSTAND_SINGLE_NODE_ONLY。" >&2
-  exit 1
+
+die() { printf '[etcd-restore] ERROR: %s\n' "$*" >&2; exit 1; }
+log() { printf '[etcd-restore] %s\n' "$*"; }
+
+[[ "${ETCD_RESTORE_ACK_SINGLE_NODE:-}" == "I_UNDERSTAND_SINGLE_NODE_ONLY" ]] || die "仅允许明确确认的单节点恢复；需设置 ETCD_RESTORE_ACK_SINGLE_NODE=I_UNDERSTAND_SINGLE_NODE_ONLY"
+[[ "${EUID}" -eq 0 ]] || die "必须由 root 执行"
+for var in SNAPSHOT_PATH ETCD_NAME NODE_IP ETCD_DATA_DIR; do
+  [[ -n "${!var:-}" ]] || die "必须显式设置 $var，禁止使用脚本内置生产路径"
+done
+[[ "$ETCD_NAME" =~ ^[a-zA-Z0-9._-]+$ ]] || die "ETCD_NAME 格式不合法"
+[[ "$NODE_IP" =~ ^[0-9a-fA-F:.]+$ ]] || die "NODE_IP 仅支持明确的 IP 地址"
+[[ "$ETCD_DATA_DIR" == /* && "$ETCD_DATA_DIR" != "/" ]] || die "ETCD_DATA_DIR 必须为非根绝对路径"
+[[ -f "$SNAPSHOT_PATH" && -s "$SNAPSHOT_PATH" ]] || die "快照不存在或为空"
+[[ ! -e "$ETCD_DATA_DIR" ]] || die "数据目录已存在，拒绝覆盖；请先离线备份并迁移原目录"
+[[ -f /etc/kubernetes/manifests/etcd.yaml ]] || die "未发现 kubeadm stacked etcd manifest；拒绝猜测拓扑"
+
+# 拒绝运行中恢复：kubelet 可能重新创建静态 Pod，必须人工停用并验证。
+if command -v crictl >/dev/null 2>&1; then
+  [[ -z "$(crictl ps -q --name '^etcd$')" ]] || die "etcd 容器仍在运行，先完成停机和恢复预案"
+else
+  die "缺少 crictl，无法确认 etcd 是否仍在运行"
 fi
-# 1. 确认snapshot.db路径（替换为你的实际路径，比如/root/snapshot.db）
-SNAPSHOT_PATH="/home/kh/snapshot.db" # 替换为实际路径
-# 定义核心参数（根据你的集群调整）
-ETCD_NAME="kh"  # etcd节点名称（与集群原有名称一致，可从etcd配置中查）
-NODE_IP="192.168.214.128" # etcd节点IP地址 （与集群原有IP一致）
+[[ "${ETCD_RESTORE_ACK_STOPPED:-}" == "I_VERIFIED_ETCD_STOPPED" ]] || die "还需设置 ETCD_RESTORE_ACK_STOPPED=I_VERIFIED_ETCD_STOPPED"
 
-# 2. 确认etcdctl版本（需与etcd版本一致）
-/usr/local/bin/etcdctl version
-# 输出示例（需保证API版本为3）：
-# etcdctl version: 3.5.9
-# API version: 3.5
+ETCDUTL_BIN="${ETCDUTL_BIN:-/usr/local/bin/etcdutl}"
+[[ -x "$ETCDUTL_BIN" ]] || die "缺少 etcdutl：$ETCDUTL_BIN（etcd 3.5+ 推荐使用 etcdutl）"
+"$ETCDUTL_BIN" snapshot status "$SNAPSHOT_PATH" -w table || die "快照校验失败"
 
-ETCD_DATA_DIR="/var/lib/etcd"  # etcd默认数据目录（恢复后会覆盖此目录）
 INITIAL_CLUSTER="${ETCD_NAME}=https://${NODE_IP}:2380"
-INITIAL_ADVERTISE_PEER_URLS="https://${NODE_IP}:2380"
-ENDPOINTS="https://${NODE_IP}:2379"
-CA_CERT="/etc/kubernetes/pki/etcd/ca.crt"
-SERVER_CERT="/etc/kubernetes/pki/etcd/server.crt"
-SERVER_KEY="/etc/kubernetes/pki/etcd/server.key"
+log "即将执行单节点快照恢复：name=$ETCD_NAME, peer=$NODE_IP, data-dir=$ETCD_DATA_DIR"
+[[ "${ETCD_RESTORE_ACK_TARGET:-}" == "$ETCD_DATA_DIR" ]] || die "必须设置 ETCD_RESTORE_ACK_TARGET 为完整目标数据目录，以确认恢复目标"
 
-# 1. 清空原有etcd数据目录（先备份过，放心删除）
-if [ -d $ETCD_DATA_DIR ]; then
-#  rm -rf $ETCD_DATA_DIR/*
-# 提醒用户，请手动删除数据目录下的文件
-  echo "请手动删除 $ETCD_DATA_DIR 目录下的所有文件后再运行此脚本！"
-  #通过mv $ETCD_DATA_DIR /tmp/'etcd-backup-$(date +%Y%m%d%H%M%S) 进行备份
-  echo "备份 $ETCD_DATA_DIR 目录到 /tmp/etcd-backup-$(date +%Y%m%d%H%M%S)"
-  #   mv $ETCD_DATA_DIR /tmp/etcd-backup-$(date +%Y%m%d%H%M%S)
-  exit 1
-fi
-#rm -rf $ETCD_DATA_DIR/*
+"$ETCDUTL_BIN" snapshot restore "$SNAPSHOT_PATH" \
+  --name "$ETCD_NAME" \
+  --data-dir "$ETCD_DATA_DIR" \
+  --initial-cluster "$INITIAL_CLUSTER" \
+  --initial-advertise-peer-urls "https://${NODE_IP}:2380"
 
-[[ -s "$SNAPSHOT_PATH" ]] || { echo "STOP: 快照不存在或为空" >&2; exit 1; }
-[[ ! -e "$ETCD_DATA_DIR" ]] || { echo "STOP: 目标数据目录已存在，拒绝覆盖" >&2; exit 1; }
-# 2. 执行快照恢复（核心命令）
-/usr/local/bin/etcdctl --endpoints=${ENDPOINTS} \
-	--cacert=${CA_CERT} \
-	--cert=${SERVER_CERT} \
-	--key=${SERVER_KEY} \
-	snapshot restore ${SNAPSHOT_PATH} \
-	--name=${ETCD_NAME} \
-	--data-dir=${ETCD_DATA_DIR} \
-	--initial-cluster=${INITIAL_CLUSTER} \
-	--initial-advertise-peer-urls=${INITIAL_ADVERTISE_PEER_URLS}
-
-# 3. 修复etcd数据目录权限（必须！否则etcd启动失败）
-chmod 700 $ETCD_DATA_DIR
+chmod 700 "$ETCD_DATA_DIR"
+log "恢复到新数据目录完成。请核对 etcd manifest 的 data-dir、成员拓扑和 TLS，再人工启动并验收。"
