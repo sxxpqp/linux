@@ -1,3 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# 生产安全闸门：旧版顺序先 API 后 etcd，且异常退出可能遗留 manifest。
+# 暂停自动执行，等待逐节点 follower-first、etcd-first 的完整重构与测试。
+echo "STOP: 旧版三 Master 证书轮换脚本存在重建顺序及失败恢复风险，已禁用自动执行。" >&2
+echo "请先参阅 kubernetes/cert/k8s-cert-rotation-3masters.md，人工验证 etcd 3/3、证书 SAN 和逐台恢复方案。" >&2
+exit 1
+
 # 下载: https://nexus.ihome.sxxpqp.top:8443/repository/raw-githubusercontent/sxxpqp/linux/refs/heads/main/kubernetes/cert/k8s-cert-rotation.sh
 # ============ 前置检查 ============
 # 0. 确认 etcdctl 在主机上(kubeadm 默认不装,容器里有但主机没有)

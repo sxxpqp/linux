@@ -5,6 +5,14 @@
 # 用途: 单 master 测试集群上验证证书轮换脚本逻辑;生产 3 master 请用 k8s-cert-rotation.sh
 # 文档: kubernetes/cert/k8s-cert-rotation-single-master.md
 
+# 安全保护：旧版单 Master 自动流程缺少 manifest 失败恢复机制，
+# 且下载 etcdctl 使用 --no-check-certificate。待完成隔离环境测试前拒绝运行。
+if [[ "${K8S_CERT_ROTATION_UNSAFE_ACK:-}" != "I_ACCEPT_UNTESTED_ROTATION" ]]; then
+  echo "STOP: 单 Master 证书轮换旧流程未经安全验收，已阻止自动执行。" >&2
+  echo "仅隔离测试环境可设置 K8S_CERT_ROTATION_UNSAFE_ACK=I_ACCEPT_UNTESTED_ROTATION。" >&2
+  exit 1
+fi
+
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -37,14 +45,14 @@ if ! command -v etcdctl >/dev/null 2>&1; then
 
     INSTALLED=0
     # 1) Nexus raw-github 代理(优先,内网稳定)
-    if wget --no-check-certificate -q "$NEXUS_URL" -O /tmp/etcd.tar.gz && [ -s /tmp/etcd.tar.gz ]; then
+    if wget -q "$NEXUS_URL" -O /tmp/etcd.tar.gz && [ -s /tmp/etcd.tar.gz ]; then
         tar -xzf /tmp/etcd.tar.gz -C /usr/local/bin/ --strip-components=1 etcd-${ETCD_VER}-linux-amd64/etcdctl \
             && INSTALLED=1 && echo "  ✓ 从 Nexus 安装 etcdctl"
     fi
     # 2) chfs 备用
     if [ $INSTALLED -eq 0 ]; then
         echo "  [WARN] Nexus 拉取失败,尝试 chfs..."
-        if wget --no-check-certificate -q "$CHFS_URL" -O /tmp/etcd.tar.gz && [ -s /tmp/etcd.tar.gz ]; then
+        if wget -q "$CHFS_URL" -O /tmp/etcd.tar.gz && [ -s /tmp/etcd.tar.gz ]; then
             tar -xzf /tmp/etcd.tar.gz -C /usr/local/bin/ --strip-components=1 etcd-${ETCD_VER}-linux-amd64/etcdctl \
                 && INSTALLED=1 && echo "  ✓ 从 chfs 安装 etcdctl"
         fi
@@ -66,7 +74,7 @@ if ! command -v etcdctl >/dev/null 2>&1; then
     rm -f /tmp/etcd.tar.gz
     if [ $INSTALLED -eq 0 ]; then
         echo "  [FAIL] 三种方式都失败,请手动安装:"
-        echo "    wget --no-check-certificate $NEXUS_URL"
+        echo "    wget $NEXUS_URL"
         echo "    tar -xzf $PKG -C /usr/local/bin/ --strip-components=1 etcd-${ETCD_VER}-linux-amd64/etcdctl"
         exit 1
     fi
