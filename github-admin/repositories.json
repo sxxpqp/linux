@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "owner": "sxxpqp",
+  "description": "Read-only inventory declaration, not a delete/archive instruction.",
+  "protected": [
+    {
+      "repo": "sxxpqp/opskit",
+      "purpose": "Core Go operations toolkit"
+    },
+    {
+      "repo": "sxxpqp/linux",
+      "purpose": "Linux and Kubernetes operations knowledge base"
+    },
+    {
+      "repo": "sxxpqp/opskit-mirror",
+      "purpose": "Docker registry mirror/proxy"
+    },
+    {
+      "repo": "sxxpqp/opskit-cloud",
+      "purpose": "General download/proxy service"
+    },
+    {
+      "repo": "sxxpqp/headscale-derp-stack",
+      "purpose": "Headscale/DERP/Headplane deploy manifests"
+    },
+    {
+      "repo": "sxxpqp/mysql-s3-backup",
+      "purpose": "MySQL to S3 backup"
+    },
+    {
+      "repo": "sxxpqp/file-s3-backup",
+      "purpose": "Files to S3 backup"
+    }
+  ],
+  "upstream_references": [
+    {
+      "previous_repo": "sxxpqp/kubernetes",
+      "upstream": "kubernetes/kubernetes",
+      "observed_status": "not_visible",
+      "checked_on": "2026-11-02"
+    },
+    {
+      "previous_repo": "sxxpqp/ceph",
+      "upstream": "ceph/ceph",
+      "observed_status": "not_visible",
+      "checked_on": "2026-11-02"
+    },
+    {
+      "previous_repo": "sxxpqp/harbor",
+      "upstream": "goharbor/harbor",
+      "observed_status": "not_visible",
+      "checked_on": "2026-11-02"
+    },
+    {
+      "previous_repo": "sxxpqp/vitess",
+      "upstream": "vitessio/vitess",
+      "observed_status": "not_visible",
+      "checked_on": "2026-11-02"
+    },
+    {
+      "previous_repo": "sxxpqp/ragflow",
+      "upstream": "infiniflow/ragflow",
+      "observed_status": "not_visible",
+      "checked_on": "2026-11-02"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+reports/
+.env
+*.local.json
+*.secret.yaml
