@@ -1,3 +1,7 @@
 {
-    "ansible.python.interpreterPath": "c:\\Python311\\python.exe"
+    "ansible.python.interpreterPath": "c:\\Python311\\python.exe",
+    "extensions.gallery": {
+        "serviceUrl": "https://vscode.bj.bcebos.com/_apis/public/gallery",
+        "itemUrl": "https://vscode.bj.bcebos.com/_apis/public/gallery/publishers/{publisher}/vsextensions/{name}/{version}/vspackage"
+    }
 }
